@@ -1,9 +1,9 @@
-const CACHE_NAME = 'hltrade-v99';
+const CACHE_NAME = 'hltrade-v100';
 const ASSETS = [
-  '/','/index.html','/hl/hl.css','/hl/hl.js','/hl/chart.js','/hl/manifest.json',
-  '/hl/images/oil.svg','/hl/images/gold.svg','/hl/images/silver.svg','/hl/images/100.png',
-  '/hl/images/balance.png','/hl/images/history.png','/hl/images/diposit.png',
-  '/hl/images/withdraw.png','/hl/images/calendar.png',
+  '/','/index.html','/hl.css','/hl.js','/chart.js','/manifest.json',
+  '/images/oil.svg','/images/gold.svg','/images/silver.svg','/images/100.png',
+  '/images/balance.png','/images/history.png','/images/diposit.png',
+  '/images/withdraw.png','/images/calendar.png',
   'https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js',
   'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js'
 ];
