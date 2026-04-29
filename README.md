@@ -6,6 +6,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -33,11 +34,12 @@
 ├── index.html
 ├── manifest.json
 ├── md
-│   └── files.json
+│   ├── files.json
+│   └── us.md
 ├── md.html
 ├── sw.js
 └── tree.txt
 
-3 directories, 23 files
+3 directories, 24 files
 ```
 <!-- TREE END -->
