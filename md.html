@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Content</title>
+  <link rel="icon" href="/images/btc.png" type="image/png"/>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html {
+      scroll-behavior: auto;
+      scroll-padding-top: 24px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      line-height: 1.8; color: #222; background: #fff;
+      font-size: 18px; padding: 30px 20px;
+      max-width: 900px; margin: 0 auto; text-align: center;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body { color: #eee; background: #121212; }
+      a { color: #4fc3f7; } table { border-color: #444; } th, td { border-color: #555; }
+    }
+
+    #content { text-align: initial; margin: 0 auto; }
+
+    /* العناوين الرئيسية فقط (h1 و h2) */
+    h1 {
+      margin: 1.5em 0 1em; color: #0074d9; text-align: center;
+      position: relative; display: flex;
+      align-items: center; justify-content: center;
+      flex-wrap: wrap; gap: 10px; /* المسافة بين النص ورابط 🔗 */
+    }
+
+    /* العناوين الفرعية (بدون أيقونة الربط) */
+    h2, h3, h4, h5, h6 {
+      margin: 1.2em 0 0.8em; color: #4caf50; text-align: center;
+    }
+
+    .heading-link {
+      font-size: 0.5em;
+      text-decoration: none;
+      opacity: 0.3;
+      vertical-align: middle;
+      transition: opacity 0.15s;
+      user-select: none;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .heading-link:hover { opacity: 1; }
+
+    .copy-toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0074d9;
+      color: #fff;
+      padding: 8px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 9999;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+    .copy-toast.show { opacity: 1; }
+
+    p, ul, ol, pre { margin-bottom: 1em; }
+    a { color: #0056b3; text-decoration: underline; }
+    img { max-width: 100%; border-radius: 8px; margin: 15px auto; display: block; }
+
+    table { width: 100%; border-collapse: collapse; margin: 20px auto; text-align: center; }
+    th, td { border: 1px solid #ccc; padding: 10px; }
+    th { background: #0074d9; color: white; }
+
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+    pre { background: #f5f5f5; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.95em; text-align: left; }
+
+    @media (prefers-color-scheme: dark) {
+      code { background: #333; } pre { background: #222; }
+      .copy-toast { background: #4fc3f7; color: #000; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="content">Loading...</div>
+  <div class="copy-toast" id="copyToast">Link copied</div>
+
+  <script>
+    let allowedFiles = [];
+
+    fetch('md/files.json')
+      .then(r => r.json())
+      .then(files => {
+        allowedFiles = files;
+        loadContent();
+      })
+      .catch(() => {
+        document.getElementById('content').innerHTML =
+          '<p style="color:red;text-align:center;">Error loading file map.</p>';
+      });
+
+    function parseHash() {
+      let raw = window.location.hash.substring(1);
+      try { raw = decodeURIComponent(raw); } catch (e) {}
+      const idx = raw.indexOf('/');
+      if (idx === -1) return { file: raw, anchor: '' };
+      return { file: raw.substring(0, idx), anchor: raw.substring(idx + 1) };
+    }
+
+    function loadContent() {
+      const { file, anchor } = parseHash();
+      const contentDiv = document.getElementById('content');
+
+      if (!file) { window.location.hash = 'us'; return; }
+      if (!allowedFiles.includes(file)) { window.location.hash = 'us'; return; }
+
+      if (anchor) {
+        history.replaceState(null, '', '#' + file);
+      }
+
+      contentDiv.innerHTML = '<p style="text-align:center;color:#888;">Loading...</p>';
+
+      fetch('md/' + file + '.md')
+        .then(r => { if (!r.ok) throw new Error(); return r.text(); })
+        .then(text => renderMarkdown(text, contentDiv, file, anchor))
+        .catch(() => { window.location.hash = 'us'; });
+    }
+
+    function slugify(text) {
+      return text
+        .trim()
+        .replace(/[^\p{L}\p{N}\s-]/gu, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .toLowerCase() || 'section';
+    }
+
+    function renderMarkdown(text, element, fileHash, anchorId) {
+      const firstLine = text.trim().split('\n').find(l => l.trim() !== '');
+      const isRtl = /[\u0600-\u06FF]/.test(firstLine || '');
+
+      element.style.direction = isRtl ? 'rtl' : 'ltr';
+      element.style.textAlign = isRtl ? 'right' : 'left';
+
+      element.innerHTML = marked.parse(text);
+      document.title = fileHash;
+
+      /* إضافة id + زر 🔗 للعناوين الرئيسية فقط (h1, h2) */
+      const headings = element.querySelectorAll('h1');
+      const idCount = {};
+
+      headings.forEach(h => {
+        let id = slugify(h.textContent);
+        idCount[id] = (idCount[id] || 0) + 1;
+        if (idCount[id] > 1) id += '-' + idCount[id];
+        h.id = id;
+
+        const a = document.createElement('a');
+        a.href = '#' + fileHash + '/' + id;
+        a.className = 'heading-link';
+        a.textContent = '🔗';
+        a.title = 'Copy link';
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          const full = location.origin + location.pathname + '#' + fileHash + '/' + id;
+          history.replaceState(null, '', '#' + fileHash + '/' + id);
+          navigator.clipboard.writeText(full)
+            .then(showToast)
+            .catch(showToast);
+        });
+
+        h.appendChild(a);
+      });
+
+      if (anchorId) {
+        history.replaceState(null, '', '#' + fileHash + '/' + anchorId);
+
+        function tryScroll() {
+          const el = document.getElementById(anchorId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'instant', block: 'start' });
+            return true;
+          }
+          return false;
+        }
+
+        tryScroll();
+        requestAnimationFrame(tryScroll);
+        setTimeout(tryScroll, 50);
+        setTimeout(tryScroll, 150);
+        setTimeout(tryScroll, 400);
+      }
+    }
+
+    function showToast() {
+      const t = document.getElementById('copyToast');
+      t.classList.add('show');
+      clearTimeout(t._t);
+      t._t = setTimeout(() => t.classList.remove('show'), 1400);
+    }
+
+    window.addEventListener('hashchange', loadContent);
+  </script>
+</body>
+</html>
