@@ -1,0 +1,68 @@
+name: Auto Update Project Tree
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  update-structure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update files.json map
+        run: |
+          mkdir -p md
+          echo -n "[" > md/files.json
+          FIRST=true
+          for f in md/*.md; do
+            if [ -f "$f" ]; then
+              NAME=$(basename "$f" .md)
+              if [ "$FIRST" = true ]; then
+                FIRST=false
+              else
+                echo -n "," >> md/files.json
+              fi
+              echo -n "\"$NAME\"" >> md/files.json
+            fi
+          done
+          echo "]" >> md/files.json
+
+      - name: Update README.md structure
+        run: |
+          tree -I '.git|.github|node_modules' --charset utf-8 > tree.txt
+          
+          # بناء الهيكل الجديد مع إضافة العنوان داخل العلامات
+          echo "<!-- TREE START -->" > new_tree.txt
+          echo "" >> new_tree.txt
+          echo "# 📂 هيكل المشروع" >> new_tree.txt
+          echo "" >> new_tree.txt
+          echo '```text' >> new_tree.txt
+          cat tree.txt >> new_tree.txt
+          echo '```' >> new_tree.txt
+          echo "<!-- TREE END -->" >> new_tree.txt
+          
+          if [ ! -f README.md ]; then
+            cat new_tree.txt > README.md
+          else
+            if grep -q "<!-- TREE START -->" README.md; then
+              sed -i '/<!-- TREE START -->/,/<!-- TREE END -->/d' README.md
+            fi
+            echo "" >> README.md
+            cat new_tree.txt >> README.md
+          fi
+          
+          rm -f tree.txt new_tree.txt
+
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md md/files.json
+          git diff --staged --quiet || git commit -m "🔄 Auto-update structure & map"
+          git push
