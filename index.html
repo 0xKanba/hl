@@ -16,16 +16,16 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/hl/hl.css">
-  <link rel="preload" as="image" href="/hl/images/oil.svg">
-  <link rel="preload" as="image" href="/hl/images/gold.svg">
-  <link rel="preload" as="image" href="/hl/images/silver.svg">
-  <link rel="preload" as="image" href="/hl/images/100.png">
-  <link rel="preload" as="image" href="/hl/images/balance.png">
-  <link rel="preload" as="image" href="/hl/images/history.png">
-  <link rel="preload" as="image" href="/hl/images/diposit.png">
-  <link rel="preload" as="image" href="/hl/images/withdraw.png">
-  <link rel="preload" as="image" href="/hl/images/calendar.png">
+  <link rel="stylesheet" href="/hl.css">
+  <link rel="preload" as="image" href="/images/oil.svg">
+  <link rel="preload" as="image" href="/images/gold.svg">
+  <link rel="preload" as="image" href="/images/silver.svg">
+  <link rel="preload" as="image" href="/images/100.png">
+  <link rel="preload" as="image" href="/images/balance.png">
+  <link rel="preload" as="image" href="/images/history.png">
+  <link rel="preload" as="image" href="/images/diposit.png">
+  <link rel="preload" as="image" href="/images/withdraw.png">
+  <link rel="preload" as="image" href="/images/calendar.png">
     <link rel="manifest" href="/hl/manifest.json">
     <meta name="theme-color" content="#c96442">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -512,13 +512,13 @@
 <!-- Scripts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-<script src="/hl/hl.js"></script>
-<script src="/hl/chart.js"></script>
-<script src="/hl/c.js"></script>
+<script src="/hl.js"></script>
+<script src="/chart.js"></script>
+<script src="/c.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/hl/sw.js')
+      navigator.serviceWorker.register('/sw.js')
         .then(reg => console.log('SW Registered'))
         .catch(err => console.log('SW Registration Failed', err));
     });
