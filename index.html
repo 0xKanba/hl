@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HLTrade">
+  <meta name="theme-color" content="#c96442">
+  <title>HL Trade · Hyperliquid Terminal</title>
+  <link rel="icon" href="/images/btc.png" type="image/png"/>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/hl/hl.css">
+  <link rel="preload" as="image" href="/hl/images/oil.svg">
+  <link rel="preload" as="image" href="/hl/images/gold.svg">
+  <link rel="preload" as="image" href="/hl/images/silver.svg">
+  <link rel="preload" as="image" href="/hl/images/100.png">
+  <link rel="preload" as="image" href="/hl/images/balance.png">
+  <link rel="preload" as="image" href="/hl/images/history.png">
+  <link rel="preload" as="image" href="/hl/images/diposit.png">
+  <link rel="preload" as="image" href="/hl/images/withdraw.png">
+  <link rel="preload" as="image" href="/hl/images/calendar.png">
+    <link rel="manifest" href="/hl/manifest.json">
+    <meta name="theme-color" content="#c96442">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="HLTrade">
+    <!-- أيقونة iOS (اصنعها 180×180 وضعها في /hl/icon-180.png) -->
+    <link rel="apple-touch-icon" href="/hl/icon-512.png">
+
+</head>
+<body>
+
+<!-- ══════════════════════════════
+     شاشة الدخول
+══════════════════════════════ -->
+<div class="screen" id="loginScreen">
+  <div class="login-brand">
+    <div class="login-icon">⚡</div>
+    <div class="login-title">HL<em>Trade</em></div>
+  </div>
+  <div class="login-card">
+    <div class="login-header">تداول مباشر الذهب الفضة و النفط</div>
+    <label class="field-label" for="privateKey">المفتاح الخاص</label>
+    <div class="key-wrapper">
+      <input class="key-input" id="privateKey" type="password" placeholder="0x4a3b..." autocomplete="off">
+      <button class="key-toggle" id="toggleKey" type="button">👁</button>
+    </div>
+    <button class="login-btn" id="loginBtn">دخول — بدء التداول ←</button>
+    <div class="login-note">
+      <strong>🔒 المفتاح يُحفظ محلياً فقط</strong><br>
+      التوقيعات في متصفحك · لا خوادم خارجية
+    </div>
+    <button class="create-wallet-btn" id="createWalletBtn">
+      ليس لديك محفظة؟ أنشئ واحدة مجاناً ←
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     التطبيق الرئيسي
+══════════════════════════════ -->
+<div class="screen hidden" id="appScreen">
+
+  <nav class="nav">
+    <div class="nav-left">
+      <div class="nav-logo" id="navLogo" style="cursor:pointer">⚡ HL<em>Trade</em></div>
+      <a href="https://shop.kanba.pw" target="_blank" rel="noopener" class="nav-status" style="text-decoration:none; color:inherit;" title="ابدأ على Hyperliquid">
+        <span class="status-dot"></span>مباشر
+      </a>
+    </div>
+    <div class="nav-right">
+      <div class="nav-clock" id="mainClock" style="margin-left:10px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-secondary);"></div>
+      <button id="btnLock" style="background:none; border:none; color:var(--text-secondary); font-size:16px; margin-left:10px; cursor:pointer;" title="قفل التطبيق">🔒</button>
+      <div class="nav-address" id="navAddress" title="انقر للنسخ">—</div>
+    </div>
+  </nav>
+
+  <div class="tabs">
+    <button class="tab" data-asset="XAU">
+      <div class="tab-left"><img class="tab-img" src="/hl/images/gold.svg" alt="XAU" loading="eager" style="filter:sepia(1) saturate(2) hue-rotate(10deg)"></div>
+      <div class="tab-right"><span class="tab-price" id="priceXAU">—</span></div>
+    </button>
+    <button class="tab" data-asset="NQ">
+      <div class="tab-left"><img class="tab-img" src="/hl/images/100.png" alt="NQ" loading="eager"></div>
+      <div class="tab-right"><span class="tab-price" id="priceNQ">—</span></div>
+    </button>
+    <button class="tab" data-asset="GOLD">
+      <div class="tab-left"><img class="tab-img" src="/hl/images/gold.svg" alt="GOLD" loading="eager"></div>
+      <div class="tab-right"><span class="tab-price" id="priceGOLD">—</span></div>
+    </button>
+    <button class="tab" data-asset="SILVER">
+      <div class="tab-left"><img class="tab-img" src="/hl/images/silver.svg" alt="SILVER" loading="eager"></div>
+      <div class="tab-right"><span class="tab-price" id="priceSILVER">—</span></div>
+    </button>
+    <button class="tab" data-asset="CL">
+      <div class="tab-left"><img class="tab-img" src="/hl/images/oil.svg" alt="CL" loading="eager"></div>
+      <div class="tab-right"><span class="tab-price" id="priceCL">—</span></div>
+    </button>
+    <button class="tab tab-chart" id="tabChart">
+      <div class="tab-left"><span style="font-size:22px;line-height:1">📈</span></div>
+      <div class="tab-right"><span class="tab-price">رسم</span></div>
+    </button>
+  </div>
+
+  <main class="main">
+    <!-- عمود التداول -->
+    <div class="col-left">
+      <div class="price-card" id="priceCard">
+        <!-- يسار: صورة الأصل -->
+        <div class="price-img-wrap" id="priceImgWrap">
+          <img id="priceAssetImg" src="/hl/images/oil.svg" alt="asset" loading="eager">
+        </div>
+        <!-- يمين: البيانات -->
+        <div class="price-data">
+          <div class="price-asset" id="priceAssetName">نفط خام</div>
+          <div class="price-value" id="priceValue">—</div>
+          <div class="price-delta" id="priceDelta"></div>
+          <div class="price-session hidden" id="priceSession">
+            <span class="ps-chg" id="psChg"></span>
+            <span class="ps-divider">|</span>
+            <span class="ps-h" id="psH"></span>
+            <span class="ps-divider">|</span>
+            <span class="ps-l" id="psL"></span>
+          </div>
+          <div class="price-meta-row">
+            <span class="price-bid-ask" id="priceBidAsk"></span>
+            <span class="price-timer" id="priceTimer">↻ —</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="trade-panel">
+        <div class="panel-header">تنفيذ صفقة · <span id="tradeAssetName">نفط خام</span></div>
+        <div class="qty-presets" id="qtyPresets"></div>
+        <div class="qty-input-row">
+          <input type="number" class="qty-input" id="qtyInput" placeholder="0.00" min="0" step="any">
+          <button class="qty-100" id="qty100">100%</button>
+          <span class="qty-unit" id="qtyUnit">برميل</span>
+        </div>
+        <div class="trade-buttons">
+          <button class="btn-trade btn-buy" id="btnBuy">
+            <span class="btn-label">شراء ↑</span>
+            <span class="btn-price" id="buyPrice">—</span>
+          </button>
+          <button class="btn-trade btn-sell" id="btnSell">
+            <span class="btn-label">بيع ↓</span>
+            <span class="btn-price" id="sellPrice">—</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- عمود الصفقات -->
+    <div class="col-right">
+      <div class="positions-card">
+        <div class="positions-header">
+          <span class="positions-title">الصفقات المفتوحة</span>
+          <span class="positions-count" id="positionsCount">0</span>
+          <span class="positions-pnl" id="totalPnl"></span>
+          <button class="btn-close-all hidden" id="btnCloseAll">إغلاق الكل ✕</button>
+        </div>
+        <div class="positions-list" id="positionsList">
+          <div class="positions-empty">📂 لا توجد صفقات مفتوحة</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <button class="footer-btn" id="btnBalance">
+      <img class="footer-img" src="/hl/images/balance.png" alt="" loading="eager">
+      <span class="footer-lbl">رصيد</span>
+    </button>
+    <button class="footer-btn" id="btnHistory">
+      <img class="footer-img" src="/hl/images/history.png" alt="" loading="eager">
+      <span class="footer-lbl">تاريخ</span>
+    </button>
+    <button class="footer-btn" id="btnCalendar">
+      <img class="footer-img" src="/hl/images/calendar.png" alt="" loading="eager">
+      <span class="footer-lbl">تقويم</span>
+    </button>
+    <button class="footer-btn" id="btnDeposit">
+      <img class="footer-img" src="/hl/images/diposit.png" alt="" loading="eager">
+      <span class="footer-lbl">إيداع</span>
+    </button>
+    <button class="footer-btn" id="btnWithdraw">
+      <img class="footer-img" src="/hl/images/withdraw.png" alt="" loading="eager">
+      <span class="footer-lbl">سحب</span>
+    </button>
+    <button class="footer-btn footer-logout" id="btnLogout">
+      <span style="font-size:clamp(18px,4vw,24px);line-height:1;display:block;margin-bottom:2px;">🚪</span>
+      <span class="footer-lbl">خروج</span>
+    </button>
+  </footer>
+</div>
+
+<!-- شاشة الرسم البياني (تُبنى من chart.js) -->
+<div id="chartScreen" class="chart-screen hidden"></div>
+
+<!-- ══════════════════════════════
+     MODALS
+══════════════════════════════ -->
+<div class="modal-overlay overlay-fs" id="modalConfirm">
+  <div class="modal modal-fs">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title" id="confirmTitle">تأكيد الصفقة</h3>
+    <p class="modal-subtitle" id="confirmSubtitle"></p>
+    <div class="confirm-details" id="confirmDetails"></div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="confirmCancel">إلغاء ✕</button>
+      <button class="btn-modal btn-confirm" id="confirmExecute">تأكيد ←</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay overlay-fs" id="modalClose">
+  <div class="modal modal-fs">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title" id="closeTitle">إغلاق الصفقة</h3>
+    <p class="modal-subtitle">سيتم الإغلاق فوراً بالسعر الحالي</p>
+    <div class="confirm-details" id="closeDetails"></div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="closeCancel">إبقاء</button>
+      <button class="btn-modal btn-confirm btn-danger" id="closeExecute">إغلاق الآن ✕</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay overlay-fs" id="modalCloseAll">
+  <div class="modal modal-fs">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">⚠️ إغلاق جميع الصفقات</h3>
+    <p class="modal-subtitle">سيتم إغلاق كل المراكز المفتوحة فوراً</p>
+    <div class="confirm-details" id="closeAllDetails"></div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="closeAllCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-danger" id="closeAllExecute">إغلاق الكل ✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TP Modal ═══ -->
+<div class="modal-overlay overlay-fs" id="modalTP">
+  <div class="modal modal-fs">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title" id="tpTitle">🎯 جني الربح</h3>
+    <p class="modal-subtitle" id="tpSubtitle"></p>
+    <div class="confirm-details" id="tpCurrentDetails"></div>
+    <div class="form-group">
+      <label>الربح المستهدف بالدولار ($)</label>
+      <input type="number" class="form-input" id="tpAmount" placeholder="مثال: 10" min="0.1" step="any" inputmode="decimal">
+      <div class="calc-preview" id="tpPreview">سعر التفعيل: —</div>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="tpCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-success" id="tpExecute">✅ تعيين الربح</button>
+    </div>
+    <div id="tpDeleteRow" class="delete-row hidden">
+      <button class="btn-delete-tpsl" id="tpDelete">🗑 إلغاء هدف الربح الحالي</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SL Modal ═══ -->
+<div class="modal-overlay overlay-fs" id="modalSL">
+  <div class="modal modal-fs">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title" id="slTitle">🛡 وقف الخسارة</h3>
+    <p class="modal-subtitle" id="slSubtitle"></p>
+    <div class="confirm-details" id="slCurrentDetails"></div>
+    <div class="form-group">
+      <label>الخسارة المسموح بها بالدولار ($)</label>
+      <input type="number" class="form-input" id="slAmount" placeholder="مثال: 5" min="0.1" step="any" inputmode="decimal">
+      <div class="calc-preview" id="slPreview">سعر الوقف: —</div>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="slCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-danger" id="slExecute">⛔ تعيين الوقف</button>
+    </div>
+    <div id="slDeleteRow" class="delete-row hidden">
+      <button class="btn-delete-tpsl" id="slDelete">🗑 إلغاء وقف الخسارة الحالي</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalBalance">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">🚀 الرصيد</h3>
+    <div class="balance-content" id="balanceContent">
+      <div class="balance-loading">⏳ جاري جلب الرصيد...</div>
+    </div>
+    <div class="modal-buttons modal-buttons-center">
+      <button class="btn-modal btn-cancel" id="balanceClose">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalHistory">
+  <div class="modal" style="display:flex;flex-direction:column;">
+    <h3 class="modal-title">📜 تاريخ الصفقات</h3>
+    <p class="modal-subtitle" id="historySubtitle">جاري التحميل...</p>
+    <div class="history-list" id="historyList">
+      <div class="balance-loading">⏳ جاري جلب التاريخ...</div>
+    </div>
+    <div class="modal-buttons modal-buttons-center" style="padding-top:16px;margin-top:auto;flex-shrink:0;">
+      <button class="btn-modal btn-cancel" id="historyClose">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalDeposit">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">💵 إيداع USDC</h3>
+    <div class="form-group">
+      <label>المبلغ بالدولار (USDC)</label>
+      <input type="number" class="form-input" id="depositAmount" placeholder="100" min="8">
+    </div>
+    <p class="form-note">يُرسل USDC من Arbitrum عبر الجسر الرسمي · الحد الأدنى $8 · 1-3 دقائق</p>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="depositCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-success" id="depositExecute">إيداع ✓</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalWithdraw">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">📤 سحب USDC</h3>
+
+    <!-- تحذير الرسوم — أحمر بارز -->
+    <div class="withdraw-fee-warn">
+      ⚠️ رسوم السحب <strong>$1 دولار</strong> تُخصم تلقائياً من المبلغ
+      <br>مثال: تكتب <strong>21</strong> → يصلك صافي <strong>20 USDC</strong>
+    </div>
+
+    <div class="form-group">
+      <label>المبلغ الذي ستُرسله (USDC)</label>
+      <input type="number" class="form-input" id="withdrawAmount" placeholder="100" min="1">
+    </div>
+
+    <!-- معاينة تلقائية -->
+    <div class="withdraw-preview hidden" id="withdrawPreview">
+      <div class="wp-row">
+        <span>📤 ترسل</span>
+        <span class="wp-val" id="wpSend">—</span>
+      </div>
+      <div class="wp-row">
+        <span>💸 رسوم Hyperliquid</span>
+        <span class="wp-val red">- $1.00</span>
+      </div>
+      <div class="wp-row wp-net">
+        <span>✅ يصلك صافي</span>
+        <span class="wp-val green" id="wpNet">—</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>عنوان المحفظة على Arbitrum</label>
+      <input type="text" class="form-input" id="withdrawAddress" placeholder="0x... أو كاش" dir="ltr">
+    </div>
+
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="withdrawCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-success" id="withdrawExecute">📤 سحب</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalLogout">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="logout-content">
+      <div class="logout-icon">🔐</div>
+      <h3 class="modal-title">تسجيل الخروج</h3>
+      <p class="logout-text">سيتم حذف المفتاح الخاص من الذاكرة والمتصفح.<br>صفقاتك المفتوحة <strong>تبقى نشطة</strong> على Hyperliquid.</p>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="logoutCancel">بقاء — إلغاء</button>
+      <button class="btn-modal btn-confirm btn-danger" id="logoutExecute">خروج 🔒</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال الشرح -->
+<div class="modal-overlay" id="modalAbout">
+  <div class="modal" style="max-width: 600px;">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title" style="text-align: center; font-size: 24px; color: var(--ac);">كيف يعمل HLTrade؟ ⚡</h3>
+    <div class="about-content" style="padding: 10px; line-height: 1.8; font-size: 15px;">
+      <p style="background: var(--ac-dim); padding: 10px; border-radius: 12px; margin-bottom: 10px;">
+        <span style="font-size: 20px;">👶</span> تخيل أنك في متجر ألعاب كبير! يمكنك شراء الألعاب عندما تكون رخيصة وبيعها عندما يرتفع سعرها لتربح قطع حلوى أكثر!
+      </p>
+      <ul style="list-style: none; padding: 0;">
+        <li style="margin-bottom: 8px;">✅ <strong>المفتاح الخاص:</strong> هو مفتاح خزنتك السرية، لا تعطيه لأحد!</li>
+        <li style="margin-bottom: 8px;">✅ <strong>شراء (Buy):</strong> تراهن أن السعر سيصعد للأعلى 🚀</li>
+        <li style="margin-bottom: 8px;">✅ <strong>بيع (Sell):</strong> تراهن أن السعر سينزل للأسفل 📉</li>
+        <li style="margin-bottom: 8px;">✅ <strong>الرافعة المالية:</strong> كأنك تستعير قوة خارقة لتتداول بمبالغ أكبر من رصيدك!</li>
+        <li style="margin-bottom: 8px;">✅ <strong>جني الربح:</strong> يغلق الصفقة تلقائياً عندما تربح ما يكفي من الحلوى 🍬</li>
+        <li style="margin-bottom: 8px;">✅ <strong>وقف الخسارة:</strong> يحميك من خسارة الكثير إذا سار السعر في الاتجاه الخاطئ 🛡️</li>
+      </ul>
+      <p style="text-align: center; font-weight: bold; color: var(--up); margin-top: 10px;">تداول بذكاء واستمتع بالرحلة! ✨</p>
+    </div>
+    <div class="modal-buttons modal-buttons-center">
+      <button class="btn-modal btn-confirm btn-success" id="aboutClose">فهمت! دعنا نتداول 🚀</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalPIN">
+  <div class="lock-screen">
+    <div class="lock-header">
+      <div class="lock-icon">🔐</div>
+      <h3 class="lock-title">HL Trade</h3>
+      <p class="lock-subtitle">أدخل رمز PIN للمتابعة</p>
+    </div>
+    
+    <div class="pin-dots" id="pinDots">
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+
+    <div class="numpad">
+      <button class="num-btn" onclick="appendPin('1')">1</button>
+      <button class="num-btn" onclick="appendPin('2')">2</button>
+      <button class="num-btn" onclick="appendPin('3')">3</button>
+      <button class="num-btn" onclick="appendPin('4')">4</button>
+      <button class="num-btn" onclick="appendPin('5')">5</button>
+      <button class="num-btn" onclick="appendPin('6')">6</button>
+      <button class="num-btn" onclick="appendPin('7')">7</button>
+      <button class="num-btn" onclick="appendPin('8')">8</button>
+      <button class="num-btn" onclick="appendPin('9')">9</button>
+      <button class="num-btn num-empty"></button>
+      <button class="num-btn" onclick="appendPin('0')">0</button>
+      <button class="num-btn num-del" onclick="backspacePin()">⌫</button>
+    </div>
+
+    <div class="lock-footer">
+      <button id="pinLogout" class="lock-logout-btn">نسيت الرمز؟ تسجيل الخروج</button>
+      <button id="pinCancel" class="lock-cancel-btn">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال نسيان الرمز (يجب أن يكون بعد مودال PIN ليظهر فوقه) -->
+<div class="modal-overlay" id="modalForgotPIN" style="z-index: 9999;">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="logout-content">
+      <div class="logout-icon">⚠️</div>
+      <h3 class="modal-title">هل نسيت الرمز؟</h3>
+      <p class="logout-text">لتسجيل الخروج، يجب حذف جميع البيانات المحلية (المفتاح الخاص ورمز PIN).<br><strong>هذا الإجراء لا يمكن التراجع عنه!</strong></p>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="forgotCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-danger" id="forgotStep1">تأكيد الخروج</button>
+      <button class="btn-modal btn-confirm btn-danger hidden" id="forgotStep2">تأكيد نهائي 🔒</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalSetPIN">
+  <div class="lock-screen">
+    <div class="lock-header">
+      <div class="lock-icon">🔑</div>
+      <h3 class="lock-title">تعيين رمز PIN</h3>
+      <p class="lock-subtitle">قم بتعيين رمز PIN لحماية صفقاتك وسحوباتك</p>
+    </div>
+    
+    <div class="pin-dots" id="setPinDots">
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+
+    <div class="numpad">
+      <button class="num-btn" onclick="appendSetPin('1')">1</button>
+      <button class="num-btn" onclick="appendSetPin('2')">2</button>
+      <button class="num-btn" onclick="appendSetPin('3')">3</button>
+      <button class="num-btn" onclick="appendSetPin('4')">4</button>
+      <button class="num-btn" onclick="appendSetPin('5')">5</button>
+      <button class="num-btn" onclick="appendSetPin('6')">6</button>
+      <button class="num-btn" onclick="appendSetPin('7')">7</button>
+      <button class="num-btn" onclick="appendSetPin('8')">8</button>
+      <button class="num-btn" onclick="appendSetPin('9')">9</button>
+      <button class="num-btn num-empty"></button>
+      <button class="num-btn" onclick="appendSetPin('0')">0</button>
+      <button class="num-btn num-del" onclick="backspaceSetPin()">⌫</button>
+    </div>
+
+    <div class="lock-footer">
+      <button id="setPinCancel" class="lock-cancel-btn">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
+
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="/hl/hl.js"></script>
+<script src="/hl/chart.js"></script>
+<script src="/hl/c.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/hl/sw.js')
+        .then(reg => console.log('SW Registered'))
+        .catch(err => console.log('SW Registration Failed', err));
+    });
+  }
+</script>
+</body>
+</html>
