@@ -2,7 +2,7 @@
    sw.js — Service Worker v2.0
    المسارات: جذر / بدل /hl/
 ═══════════════════════════════════════ */
-const CACHE_NAME = 'hltrade-v201';
+const CACHE_NAME = 'hltrade-v203';
 
 const ASSETS = [
   '/',
