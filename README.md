@@ -20,6 +20,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -27,8 +28,6 @@
 ```text
 .
 ├── README.md
-├── c.js
-├── chart.js
 ├── hl.css
 ├── icon-192x192.png
 ├── icon-512x512.png
@@ -75,6 +74,6 @@
 ├── x2.png
 └── x3.png
 
-4 directories, 45 files
+4 directories, 43 files
 ```
 <!-- TREE END -->
