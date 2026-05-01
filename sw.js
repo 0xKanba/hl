@@ -27,6 +27,7 @@ const ASSETS = [
   '/js/app.js',
   '/js/chart.js',
   '/js/c.js',
+   '/js/button.js',
   /* صور */
   '/images/oil.svg',
   '/images/gold.svg',
@@ -38,8 +39,8 @@ const ASSETS = [
   '/images/withdraw.png',
   '/images/calendar.png',
   '/images/btc21.png',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
   /* CDN */
   'https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js',
   'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js'
