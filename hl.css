@@ -1031,3 +1031,45 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; }
   color: var(--text-secondary); margin-left: 10px;
   white-space: nowrap;
 }
+
+
+/* ════════════════════════════════════════
+   GPU ACCELERATION OPTIMIZATIONS
+════════════════════════════════════════ */
+
+/* تفعيل GPU للعناصر الحركية */
+.tab, .price-card, .position-item, .btn-trade,
+.modal-overlay, .positions-card, .footer-btn {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* تحسين الحركات */
+@supports (backdrop-filter: blur(1px)) {
+  .modal-overlay.open {
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+}
+
+/* تقليل الظلال الثقيلة */
+.tab.active {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+/* تحسين الـ Canvas rendering */
+canvas {
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+/* تحسين الـ transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* تقليل الـ repaints */
+.price-value, .pos-pnl, .tab-price {
+  contain: layout style paint;
+}
