@@ -10,6 +10,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -36,6 +37,23 @@
 │   └── withdraw.png
 ├── index.html
 ├── js
+│   ├── account.js
+│   ├── api.js
+│   ├── app.js
+│   ├── assets.js
+│   ├── auth.js
+│   ├── c.js
+│   ├── chart.js
+│   ├── config.js
+│   ├── pin.js
+│   ├── positions.js
+│   ├── prices.js
+│   ├── session.js
+│   ├── state.js
+│   ├── tpsl.js
+│   ├── trading.js
+│   ├── utils.js
+│   └── ws.js
 ├── manifest.json
 ├── md
 │   ├── files.json
@@ -45,6 +63,6 @@
 ├── sw.js
 └── tree.txt
 
-4 directories, 25 files
+4 directories, 42 files
 ```
 <!-- TREE END -->
