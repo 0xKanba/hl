@@ -2,8 +2,8 @@
   "name": "HL Trade",
   "short_name": "HLtrade",
   "description": "تداول مؤسسي لامركزي بسرعة فائقة وسيولة عميقة",
-  "start_url": "/hl/",
-  "scope": "/hl/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#1a1916",
@@ -12,13 +12,13 @@
   "dir": "rtl",
   "icons": [
     {
-      "src": "/hl/icon-192x192.png",
+      "src": "/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/hl/icon-512x512.png",
+      "src": "/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
@@ -26,21 +26,21 @@
   ],
   "screenshots": [
     {
-      "src": "/hl/x1.png",
+      "src": "/x1.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Mobile"
     },
     {
-      "src": "/hl/x2.png",
+      "src": "/x2.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Mobile"
     },
     {
-      "src": "/hl/x3.png",
+      "src": "/x3.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
