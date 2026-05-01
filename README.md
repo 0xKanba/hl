@@ -11,6 +11,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -21,7 +22,6 @@
 ├── c.js
 ├── chart.js
 ├── hl.css
-├── hl.js
 ├── icon-192.png
 ├── icon-512.png
 ├── images
@@ -63,6 +63,6 @@
 ├── sw.js
 └── tree.txt
 
-4 directories, 42 files
+4 directories, 41 files
 ```
 <!-- TREE END -->
