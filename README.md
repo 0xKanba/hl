@@ -13,6 +13,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -25,7 +26,6 @@
 ├── hl.css
 ├── icon-192.png
 ├── icon-192x192.png
-├── icon-512.png
 ├── icon-512x512.png
 ├── images
 │   ├── 100.png
@@ -69,6 +69,6 @@
 ├── x2.png
 └── x3.png
 
-4 directories, 46 files
+4 directories, 45 files
 ```
 <!-- TREE END -->
