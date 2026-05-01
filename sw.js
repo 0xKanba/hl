@@ -1,15 +1,17 @@
 /* ═══════════════════════════════════════
-   sw.js — Service Worker v2.0
-   المسارات: جذر / بدل /hl/
-═══════════════════════════════════════ */
-const CACHE_NAME = 'hltrade-v203';
+   sw.js — Service Worker v2.1 (محسّن)
+   استراتيجية تخزين متقدمة
+════════════════════════════════════════ */
+
+const CACHE_NAME = 'hltrade-v204';
+const API_CACHE = 'hltrade-api-v1';
+const IMAGE_CACHE = 'hltrade-images-v1';
 
 const ASSETS = [
   '/',
   '/index.html',
   '/hl.css',
   '/manifest.json',
-  /* JS modules */
   '/js/config.js',
   '/js/state.js',
   '/js/utils.js',
@@ -24,29 +26,18 @@ const ASSETS = [
   '/js/assets.js',
   '/js/pin.js',
   '/js/auth.js',
-  '/js/app.js',
   '/js/chart.js',
   '/js/c.js',
-   '/js/button.js',
-  /* صور */
-  '/images/oil.svg',
-  '/images/gold.svg',
-  '/images/silver.svg',
-  '/images/100.png',
-  '/images/balance.png',
-  '/images/history.png',
-  '/images/diposit.png',
-  '/images/withdraw.png',
-  '/images/calendar.png',
-  '/images/btc21.png',
-  '/icon-192x192.png',
-  '/icon-512x512.png',
-  /* CDN */
-  'https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js',
-  'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js'
+  '/js/button.js',
+  // ملفات جديدة
+  '/js/gpu-accelerate.js',
+  '/js/data-cache.js',
+  '/js/progressive-api.js',
+  '/js/price-worker.js',
+  '/js/performance-monitor.js'
 ];
 
-/* تثبيت — تحميل الأصول */
+// التثبيت
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME)
@@ -55,31 +46,69 @@ self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-/* تنشيط — حذف الكاش القديم */
+// التنشيط
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(ks =>
-      Promise.all(ks.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(
+        ks.filter(k => k !== CACHE_NAME && k !== API_CACHE && k !== IMAGE_CACHE)
+          .map(k => caches.delete(k))
+      )
     )
   );
   self.clients.claim();
 });
 
-/* جلب — Cache First مع استثناء API */
+// جلب الموارد
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  const u = new URL(e.request.url);
-  /* استثناء: API calls تذهب مباشرة للشبكة */
-  if (u.hostname === 'api.hyperliquid.xyz' || u.hostname === 'arb1.arbitrum.io') return;
 
+  const url = new URL(e.request.url);
+
+  // ✅ API calls: Network First, then Cache
+  if (url.hostname === 'api.hyperliquid.xyz' || url.hostname === 'arb1.arbitrum.io') {
+    return e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          if (res && res.status === 200) {
+            caches.open(API_CACHE).then(c => c.put(e.request, res.clone()));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request) || new Response('Offline', { status: 503 }))
+    );
+  }
+
+  // ✅ صور: Cache First
+  if (/\.(jpg|jpeg|png|gif|svg|webp)$/.test(url.pathname)) {
+    return e.respondWith(
+      caches.match(e.request)
+        .then(cached => cached || fetch(e.request)
+          .then(res => {
+            if (res && res.status === 200) {
+              caches.open(IMAGE_CACHE).then(c => c.put(e.request, res.clone()));
+            }
+            return res;
+          })
+        )
+        .catch(() => new Response('Image not found', { status: 404 }))
+    );
+  }
+
+  // ✅ Assets: Cache with Background Update
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (res && res.status === 200 && res.type !== 'opaque')
-          caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone()));
-        return res;
-      }).catch(() => cached);
-    })
+    caches.match(e.request)
+      .then(cached => {
+        const fetchPromise = fetch(e.request)
+          .then(res => {
+            if (res && res.status === 200) {
+              caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone()));
+            }
+            return res;
+          });
+
+        return cached || fetchPromise;
+      })
+      .catch(() => caches.match('/index.html'))
   );
 });
