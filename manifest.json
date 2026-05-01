@@ -1,6 +1,6 @@
 {
-  "name": "HL Trade · Hyperliquid simple",
-  "short_name": "HLtrade",
+  "name": "HL Trade · Hyperliquid",
+  "short_name": "HLTrade",
   "description": "تداول مباشر على Hyperliquid × RWA",
   "start_url": "/",
   "scope": "/",
@@ -11,20 +11,9 @@
   "lang": "ar",
   "dir": "rtl",
   "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
-  "screenshots": [],
   "categories": ["finance"],
   "prefer_related_applications": false
 }
