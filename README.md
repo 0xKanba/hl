@@ -9,6 +9,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -34,6 +35,7 @@
 │   ├── silver.svg
 │   └── withdraw.png
 ├── index.html
+├── js
 ├── manifest.json
 ├── md
 │   ├── files.json
@@ -43,6 +45,6 @@
 ├── sw.js
 └── tree.txt
 
-3 directories, 25 files
+4 directories, 25 files
 ```
 <!-- TREE END -->
