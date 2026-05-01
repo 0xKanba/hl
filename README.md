@@ -27,6 +27,9 @@
 
 
 
+
+
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -59,9 +62,14 @@
 │   ├── c.js
 │   ├── chart.js
 │   ├── config.js
+│   ├── data-cache.js
+│   ├── gpu-accelerate.js
+│   ├── performance-monitor.js
 │   ├── pin.js
 │   ├── positions.js
+│   ├── price-worker.js
 │   ├── prices.js
+│   ├── progressive-api.js
 │   ├── session.js
 │   ├── state.js
 │   ├── tpsl.js
@@ -80,6 +88,6 @@
 ├── x2.png
 └── x3.png
 
-4 directories, 43 files
+4 directories, 48 files
 ```
 <!-- TREE END -->
