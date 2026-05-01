@@ -513,35 +513,22 @@
   <div class="loader-text" id="loaderText">جاري...</div>
 </div>
 
-<!-- ══════════════════════════════
-     SCRIPTS — بالترتيب الصحيح
-══════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════
+     ضع هذا الكود في index.html بدلاً من قسم SCRIPTS
+     القديم من <!-- CDN Libraries --> حتى نهاية الصفحة
+══════════════════════════════════════════════════ -->
+
+<!-- Preload JS أساسي — يُحمَّل مسبقاً بدون تأخير -->
+<link rel="preload" as="script" href="/js/config.js">
+<link rel="preload" as="script" href="/js/state.js">
+<link rel="preload" as="script" href="/js/utils.js">
+<link rel="preload" as="script" href="/js/ws.js">
+
 <!-- CDN Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 
-
-  <!-- ══════════════════════════════
-     PERFORMANCE OPTIMIZATION SCRIPTS
-══════════════════════════════ -->
-
-<!-- GPU Acceleration (يجب أن يكون أولاً) -->
-<script src="/js/gpu-accelerate.js"></script>
-
-<!-- Data Caching System -->
-<script src="/js/data-cache.js"></script>
-
-<!-- Progressive API Fetching -->
-<script src="/js/progressive-api.js"></script>
-
-<!-- Performance Monitoring -->
-<script src="/js/performance-monitor.js"></script>
-
-<!-- Price Worker (ملف منفصل) -->
-<!-- لا نحتاج لتحميله هنا، سيتم استدعاؤه داخلياً -->
-
-  
 <!-- Core: ثوابت وحالة (يجب أن تكون أولاً) -->
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
@@ -570,16 +557,15 @@
 
 <!-- App Init (يجب أن يكون آخراً) -->
 <script src="/js/app.js"></script>
-
-<script src="/js/button.js"></script>	
+<script src="/js/button.js"></script>
 
 <!-- Service Worker -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
-      .then(() => console.log('✅ SW Registered'))
-      .catch(err => console.warn('SW Failed:', err));
+      .then(r => console.log('✅ SW v3.0'))
+      .catch(() => {});
   });
 }
 </script>
