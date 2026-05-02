@@ -44,6 +44,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -93,11 +94,10 @@
 ├── md.html
 ├── sw.js
 ├── tree.txt
-├── txt.css
 ├── x1.png
 ├── x2.png
 └── x3.png
 
-4 directories, 44 files
+4 directories, 43 files
 ```
 <!-- TREE END -->
