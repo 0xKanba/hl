@@ -1,10 +1,12 @@
+<div align="center">
+
 # HL simple trading 
 
 https://dhl.kanba.pw/
 
 https://hl.kanba.pw/
 
-
+</div>
 
 
 
