@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  
   <meta charset="UTF-8">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -22,7 +21,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 
   <!-- CSS -->
-    <link rel="stylesheet" href="/txt.css">
   <link rel="stylesheet" href="/hl.css">
 
   <!-- Preload images -->
@@ -76,7 +74,7 @@
     <div class="nav-left" id="navLogo" style="cursor:pointer">
       <span class="nav-logo-icon">💧</span>
       <span class="nav-logo-text">سيولة</span>
-      <a href="https://app.hyperliquid.xyz/join/KANBA" target="_blank" rel="noopener"
+      <a href="https://shop.kanba.pw/" target="_blank" rel="noopener"
          class="nav-status" style="text-decoration:none;color:inherit;">
         <span class="status-dot"></span>مباشر
       </a>
@@ -522,9 +520,6 @@
   <div class="loader-text" id="loaderText">جاري...</div>
 </div>
 
-
-
-<!-- Preload JS أساسي — يُحمَّل مسبقاً بدون تأخير -->
 <link rel="preload" as="script" href="/js/config.js">
 <link rel="preload" as="script" href="/js/state.js">
 <link rel="preload" as="script" href="/js/utils.js">
@@ -570,7 +565,7 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
-      .then(r => console.log('✅ SW v3.1'))
+      .then(r => console.log('✅ SW v3.0'))
       .catch(() => {});
   });
 }
