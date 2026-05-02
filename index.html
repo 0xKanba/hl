@@ -68,10 +68,14 @@
 ══════════════════════════════ -->
 <div class="screen hidden" id="appScreen">
 
+  <!-- ══════════════════════════════════════════════
+     استبدل قسم <nav class="nav"> كاملاً بهذا
+══════════════════════════════════════════════ -->
   <nav class="nav">
-    <div class="nav-left">
-      <div class="nav-logo" id="navLogo" style="cursor:pointer">⚡ HL<em>Trade</em></div>
-      <a href="https://shop.kanba.pw/" target="_blank" rel="noopener"
+    <div class="nav-left" id="navLogo" style="cursor:pointer">
+      <span class="nav-logo-icon">💧</span>
+      <span class="nav-logo-text">سيولة</span>
+      <a href="https://app.hyperliquid.xyz/join/KANBA" target="_blank" rel="noopener"
          class="nav-status" style="text-decoration:none;color:inherit;">
         <span class="status-dot"></span>مباشر
       </a>
@@ -79,7 +83,10 @@
     <div class="nav-right">
       <div class="nav-clock" id="mainClock"></div>
       <button id="btnLock" title="قفل التطبيق">🔒</button>
-      <div class="nav-address" id="navAddress" title="انقر للنسخ">—</div>
+      <div class="nav-address-wrap">
+        <div class="nav-address" id="navAddress" title="انقر للنسخ">—</div>
+        <button class="nav-copy-btn" id="navCopyBtn" title="نسخ العنوان">⧉</button>
+      </div>
     </div>
   </nav>
 
