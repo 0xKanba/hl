@@ -11,13 +11,13 @@
   const btn = document.createElement('button');
   btn.id        = 'pwaInstallBtn';
   btn.innerHTML = '⬇️ تثبيت التطبيق';
-  btn.setAttribute('aria-label', 'تثبيت HLTrade على الجهاز');
+  btn.setAttribute('aria-label', 'تثبيت على الجهاز');
 
   const style = document.createElement('style');
   style.textContent = `
 #pwaInstallBtn {
   position: fixed;
-  top: 21px;          /* فوق الفوتر */
+  button: 21px;          /* فوق الفوتر */
   left: 50%;
   transform: translateX(-50%) translateY(20px);
   z-index: 900;
