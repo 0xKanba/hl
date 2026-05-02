@@ -73,11 +73,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('slAmount').oninput  = recalcSlPreview;
 
   /* ════ الرصيد ════ */
-  $('btnBalance').onclick = () => State.wallet && showBalance();
+  $('btnBalance').onclick   = () => State.wallet && showBalance();
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
 
   /* ════ التاريخ ════ */
-  $('btnHistory').onclick  = () => State.wallet && showHistory();
+  $('btnHistory').onclick   = () => State.wallet && showHistory();
   $('historyClose').onclick = () => closeModal('modalHistory');
 
   /* ════ التقويم ════ */
@@ -87,14 +87,14 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /* ════ الإيداع ════ */
-  $('btnDeposit').onclick    = () => State.wallet && openModal('modalDeposit');
-  $('depositCancel').onclick = () => closeModal('modalDeposit');
-  $('depositExecute').onclick= () => requirePin(doDeposit);
+  $('btnDeposit').onclick     = () => State.wallet && openModal('modalDeposit');
+  $('depositCancel').onclick  = () => closeModal('modalDeposit');
+  $('depositExecute').onclick = () => requirePin(doDeposit);
 
   /* ════ السحب ════ */
-  $('btnWithdraw').onclick    = () => State.wallet && openModal('modalWithdraw');
-  $('withdrawCancel').onclick = () => closeModal('modalWithdraw');
-  $('withdrawExecute').onclick= () => requirePin(doWithdraw);
+  $('btnWithdraw').onclick     = () => State.wallet && openModal('modalWithdraw');
+  $('withdrawCancel').onclick  = () => closeModal('modalWithdraw');
+  $('withdrawExecute').onclick = () => requirePin(doWithdraw);
 
   $('withdrawAmount').addEventListener('input', function () {
     const amt  = parseFloat(this.value || 0);
@@ -107,26 +107,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (netEl)  netEl.textContent  = `$${Math.max(0, amt - 1).toFixed(2)} USDC`;
   });
 
-  $('withdrawAddress').addEventListener('click',  function () { this.select(); });
-  $('withdrawAddress').addEventListener('input',  function () {
+  $('withdrawAddress').addEventListener('click', function () { this.select(); });
+  $('withdrawAddress').addEventListener('input', function () {
     if (this.value.trim() === 'كاش') this.value = '0x0640F5Bfc50AC53eC68C435a60cB0ffF5C555FAD';
   });
 
   /* ════ الخروج ════ */
   $('btnLogout').onclick    = () => State.wallet && openModal('modalLogout');
   $('logoutCancel').onclick = () => closeModal('modalLogout');
-  $('logoutExecute').onclick= doLogout;
+  $('logoutExecute').onclick = doLogout;
 
-  /* ════ نسخ العنوان ════ */
-  $('navAddress').onclick = () =>
-    State.wallet && navigator.clipboard?.writeText(State.wallet.address)
-      .then(() => toast('تم نسخ العنوان', 'info', 2000));
+  /* ════ نسخ العنوان — زر مستقل + نقر العنوان ════ */
+  function _copyAddress() {
+    if (!State.wallet) return;
+    navigator.clipboard?.writeText(State.wallet.address)
+      .then(() => toast('✅ تم نسخ العنوان', 'info', 2000))
+      .catch(() => toast('تعذّر النسخ — انسخ يدوياً', 'err'));
+  }
+  $('navAddress').onclick  = _copyAddress;
+  $('navCopyBtn')?.addEventListener('click', _copyAddress);
 
   /* ════ القفل اليدوي ════ */
   $('btnLock').onclick = () => lockApp(true);
 
-  /* ════ شاشة "كيف يعمل" ════ */
-  $('navLogo').onclick  = () => openModal('modalAbout');
+  /* ════ شعار "سيولة" → عن التطبيق ════ */
+  $('navLogo').onclick    = () => openModal('modalAbout');
   $('aboutClose').onclick = () => closeModal('modalAbout');
 
   /* ════ PIN modals ════ */

@@ -311,9 +311,9 @@ document.body.insertAdjacentHTML('beforeend',`
     <div id="calMain" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
       <div class="cal-stats" id="calStats"></div>
       <div class="cal-nav">
-        <button class="cal-nav-btn" id="calPrev">›</button>
+        <button class="cal-nav-btn" id="calPrev">‹</button>
         <span class="cal-month" id="calMonth">—</span>
-        <button class="cal-nav-btn" id="calNext">‹</button>
+        <button class="cal-nav-btn" id="calNext">›</button>
       </div>
       <div class="cal-ghdr" id="calGhdr"></div>
       <div class="cal-grid-wrap">

@@ -1,7 +1,14 @@
 {
-  "name": "HL Trade",
-  "short_name": "HLtrade",
-  "description": "تداول مؤسسي لامركزي بسرعة فائقة وسيولة عميقة",
+  "name": "سيولة",
+  "short_name": "سيولة",
+  "description": "سيولة وبساطة للاستثمار والتداول",
+  "name_localized": {
+    "en": {
+      "name": "HL Simple",
+      "short_name": "HLSimple",
+      "description": "HL simple invest or trading"
+    }
+  },
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -30,21 +37,21 @@
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Mobile"
+      "label": "سيولة - تداول"
     },
     {
       "src": "/x2.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Mobile"
+      "label": "سيولة - رسم"
     },
     {
       "src": "/x3.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Mobile"
+      "label": "سيولة - محفظة"
     }
   ],
   "categories": ["finance"],
