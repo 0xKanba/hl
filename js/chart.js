@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════
-   HL Trade · chart.js v6.0 — TradingView Mobile Pro
-   ✅ UTC+3 محور الأسفل (tickMarkFormatter) + AM/PM
-   ✅ RANGES ×30 — تاريخ أعمق بكثير
-   ✅ لا Volume — تركيز كامل على الشموع
-   ✅ خط أعلى/أدنى سعر اليوم من 1 AM UTC+3
-   ✅ نسبة تغيير السعر منذ افتتاح الجلسة
+   HL Trade · chart.js v7.0 — TradingView Pro
+   ✅ Crosshair يعرض تاريخ + وقت كامل UTC+3
+   ✅ نصوص أكثر إضاءة وسُمكاً
+   ✅ نقرتان لإعادة الضبط الافتراضي
+   ✅ حرية كاملة في التمرير والتكبير
+   ✅ خط التصفية + خطوط TP/SL + خط الدخول
 ═══════════════════════════════════════════════════════════════ */
 
 const ChartModule = (function () {
@@ -13,17 +13,15 @@ const ChartModule = (function () {
   const HL_WS  = 'wss://api.hyperliquid.xyz/ws';
   const UTC3   = 3 * 3600; // ثواني — offset ثابت
 
-  // ×30 من السابق — تاريخ عميق مع مرونة كاملة للتمرير
   const RANGES = {
-    '1m':  90  * 3600000,    // 90h   = 5400 شمعة
-    '5m':  360 * 3600000,    // 360h  = 4320 شمعة
-    '15m': 900 * 3600000,    // 900h  = 3600 شمعة (37.5 يوم)
-    '1h':  3600* 3600000,    // 3600h = 3600 شمعة (150 يوم)
-    '4h':  14400*3600000,    // 600 يوم
-    '1d':  43200*3600000,    // 4.9 سنة
+    '1m':  90   * 3600000,
+    '5m':  360  * 3600000,
+    '15m': 900  * 3600000,
+    '1h':  3600 * 3600000,
+    '4h':  14400* 3600000,
+    '1d':  43200* 3600000,
   };
 
-  // barSpacing مثالي لكل فترة على الموبايل
   const IV_SPACING = { '1m':4, '5m':5, '15m':6, '1h':7, '4h':9, '1d':13 };
 
   let _chart        = null;
@@ -33,8 +31,8 @@ const ChartModule = (function () {
   let _slLine       = null;
   let _dayHiLine    = null;
   let _dayLoLine    = null;
-  let _liqLine      = null;  // ✅ خط التصفية
-  let _candles      = [];   // cache للـ day stats
+  let _liqLine      = null;
+  let _candles      = [];
   let _ws           = null;
   let _wsTimer      = null;
   let _visible      = false;
@@ -43,6 +41,8 @@ const ChartModule = (function () {
   let _resizeObs    = null;
   let _lastClose    = 0;
   let _clockTimer   = null;
+  let _dayTimer     = null;
+  let _gestInit     = false;
 
   /* ════════════
      CSS
@@ -82,38 +82,32 @@ const ChartModule = (function () {
 }
 .c-back:active { opacity:.7; }
 
-.c-asset-info { display:flex; align-items:center; gap:5px; margin-right: 10px; }
+.c-asset-info { display:flex; align-items:center; gap:5px; margin-right:10px; }
 .c-asset-icon { font-size:16px; line-height:1; }
-.c-asset-name { font-size:13px; font-weight:900; }
+.c-asset-name { font-size:14px; font-weight:900; color:var(--text-primary); }
 .c-cur-price {
   font-family:'IBM Plex Mono',monospace;
-  font-size:14px; font-weight:700; color:var(--text-primary);
+  font-size:15px; font-weight:800; color:var(--text-primary);
 }
 
 /* ساعة — على اليسار */
 .c-clock {
   display:flex; flex-direction:column; align-items:flex-start;
-  pointer-events:none;
-  margin-left: 10px;
+  pointer-events:none; margin-left:10px;
 }
 .c-clock-time {
   font-family:'IBM Plex Mono',monospace;
-  font-size:13px; font-weight:700; color:var(--text-primary);
+  font-size:12px; font-weight:700; color:var(--text-secondary);
   white-space:nowrap; line-height:1.2;
-}
-.c-clock-date {
-  font-family:'IBM Plex Mono',monospace;
-  font-size:9px; color:var(--text-muted); white-space:nowrap;
-  letter-spacing:.4px;
 }
 
 .c-fs-btn {
-  background: var(--bg-elev); border: 1px solid var(--border);
-  border-radius: 8px; padding: 4px 8px; font-size: 14px;
-  color: var(--text-secondary);
+  background:var(--bg-elev); border:1px solid var(--border);
+  border-radius:8px; padding:4px 8px; font-size:14px;
+  color:var(--text-secondary);
 }
 
-.c-ws { font-size:12px; flex-shrink:0; margin-right: 5px; }
+.c-ws { font-size:12px; flex-shrink:0; margin-right:5px; }
 
 /* ── فترات ── */
 .c-intervals {
@@ -124,7 +118,7 @@ const ChartModule = (function () {
 .iv-btn {
   flex:1; padding:6px 4px; border-radius:999px;
   border:1.5px solid var(--border); background:var(--bg-elev);
-  color:var(--text-muted); font-size:11px; font-weight:700;
+  color:var(--text-secondary); font-size:12px; font-weight:800;
   font-family:'IBM Plex Mono',monospace;
   text-align:center; transition:all .15s; cursor:pointer;
 }
@@ -153,15 +147,14 @@ const ChartModule = (function () {
 .cbt-dir { font-size:18px; line-height:1; }
 .cbt-px  { font-family:'IBM Plex Mono',monospace; font-size:10px; opacity:.75; }
 
-/* حقل الكمية — في المنتصف بضبط */
 .cbt-mid {
-  display:flex; flex-direction:column; align-items:center; justify-content: center; gap:3px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
   flex:1.2;
 }
 .cbt-qty-lbl { font-size:9px; color:var(--text-muted); font-weight:700; letter-spacing:1px; text-transform:uppercase; }
-.cbt-qty-row { display:flex; align-items:center; justify-content: center; gap:4px; width:100%; }
+.cbt-qty-row { display:flex; align-items:center; justify-content:center; gap:4px; width:100%; }
 .cbt-qty-in {
-  width: 80px; font-family:'IBM Plex Mono',monospace;
+  width:80px; font-family:'IBM Plex Mono',monospace;
   font-size:20px; font-weight:700; text-align:center;
   direction:ltr; background:var(--bg-input);
   border:2px solid var(--ac-dim); border-radius:12px;
@@ -194,12 +187,12 @@ const ChartModule = (function () {
 
 /* ── Legend OHLC ── */
 .c-legend {
-  padding:4px 12px; background:var(--bg-card);
+  padding:5px 12px; background:var(--bg-card);
   border-top:1px solid var(--border);
   font-family:'IBM Plex Mono',monospace;
-  font-size:10px; color:var(--text-muted);
+  font-size:12px; font-weight:700; color:var(--text-secondary);
   display:flex; gap:10px; flex-wrap:wrap;
-  flex-shrink:0; min-height:22px; align-items:center;
+  flex-shrink:0; min-height:26px; align-items:center;
 }
 
 /* ── Confirmation overlay ── */
@@ -229,8 +222,8 @@ const ChartModule = (function () {
 }
 .cf-row { display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border); }
 .cf-row:last-child { border:none; }
-.cf-key { font-size:11px;color:var(--text-secondary);font-weight:600; }
-.cf-val { font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700; }
+.cf-key { font-size:11px;color:var(--text-secondary);font-weight:700; }
+.cf-val { font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800; }
 .cf-val.g { color:#2da44e; }
 .cf-val.r { color:#e5534b; }
 .cf-val.w { color:var(--warn); }
@@ -266,7 +259,7 @@ const ChartModule = (function () {
     if(typeof ASSETS!=='undefined'&&ASSETS[s]?.coin) return ASSETS[s].coin;
     return `xyz:${s}`;
   };
-  const ai   = s => (typeof ASSETS!=='undefined'&&ASSETS[s])||{pxDp:2,szDp:2,name:s,icon:'📊',unit:'',lev:10,presets:[1],idx:0,cross:true};
+  const ai = s => (typeof ASSETS!=='undefined'&&ASSETS[s])||{pxDp:2,szDp:2,name:s,icon:'📊',unit:'',lev:10,presets:[1],idx:0,cross:true};
   const setStatus = t => { const e=document.getElementById('_cWs'); if(e) e.textContent=t; };
   const isDark = () => window.matchMedia('(prefers-color-scheme:dark)').matches;
   const fp = (n,s) => (+n).toFixed(ai(s||_sym).pxDp);
@@ -280,6 +273,38 @@ const ChartModule = (function () {
   }
 
   /* ════════════
+     تنسيق التاريخ والوقت UTC+3
+  ════════════ */
+  const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  /* وقت فقط: 03:45 PM */
+  function fmtTime3(tick) {
+    const d  = new Date((tick + UTC3) * 1000);
+    const hh = d.getUTCHours(), mm = d.getUTCMinutes();
+    const ap = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 || 12;
+    return `${String(h12).padStart(2,'0')}:${String(mm).padStart(2,'0')} ${ap}`;
+  }
+
+  /* تاريخ فقط: Jan 12 */
+  function fmtDate3(tick) {
+    const d = new Date((tick + UTC3) * 1000);
+    return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  }
+
+  /* تاريخ + وقت كامل للـ Crosshair: Mon · 12 Jan · 03:45 PM */
+  function fmtFull3(tick) {
+    const d   = new Date((tick + UTC3) * 1000);
+    const hh  = d.getUTCHours(), mm = d.getUTCMinutes();
+    const ap  = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 || 12;
+    const day = DAYS[d.getUTCDay()];
+    const mon = MONTHS[d.getUTCMonth()];
+    return `${day} ${d.getUTCDate()} ${mon} ${d.getUTCFullYear()} · ${String(h12).padStart(2,'0')}:${String(mm).padStart(2,'0')} ${ap} +3`;
+  }
+
+  /* ════════════
      ساعة UTC+3
   ════════════ */
   function getIvMs(iv) {
@@ -290,35 +315,31 @@ const ChartModule = (function () {
     return 60 * 1000;
   }
 
-  let _dayTimer = null; // تحديث H/L/% كل 5 ثوانٍ
-
   function startClock() {
     stopClock();
     const tick = () => {
-      // UTC + 3 hours
       const now = new Date(Date.now() + 3 * 3600 * 1000);
       const timeStr = now.toLocaleTimeString('en-US', {
-        hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC'
+        hour12:true, hour:'2-digit', minute:'2-digit', second:'2-digit', timeZone:'UTC'
       });
       const t = document.getElementById('_cClockT');
       if (t) t.textContent = timeStr;
 
-      // Countdown
-      const ivMs = getIvMs(_interval);
+      // Countdown للشمعة التالية
+      const ivMs  = getIvMs(_interval);
       const nowMs = Date.now();
-      const diff = Math.ceil(nowMs / ivMs) * ivMs - nowMs;
-      const cdH = Math.floor(diff / 3600000);
-      const cdM = Math.floor((diff % 3600000) / 60000);
-      const cdS = Math.floor((diff % 60000) / 1000);
-      let cdStr = cdH > 0 ? `${cdH}:` : '';
-      cdStr += `${String(cdM).padStart(2,'0')}:${String(cdS).padStart(2,'0')}`;
-      const cdEl = document.getElementById('_cCountdown');
+      const diff  = Math.ceil(nowMs / ivMs) * ivMs - nowMs;
+      const cdH   = Math.floor(diff / 3600000);
+      const cdM   = Math.floor((diff % 3600000) / 60000);
+      const cdS   = Math.floor((diff % 60000) / 1000);
+      let cdStr   = cdH > 0 ? `${cdH}:` : '';
+      cdStr      += `${String(cdM).padStart(2,'0')}:${String(cdS).padStart(2,'0')}`;
+      const cdEl  = document.getElementById('_cCountdown');
       if (cdEl) cdEl.textContent = cdStr;
     };
     tick();
     _clockTimer = setInterval(tick, 1000);
 
-    // تحديث H/L/% كل 5 ثوانٍ تلقائياً
     if (_dayTimer) clearInterval(_dayTimer);
     _dayTimer = setInterval(() => { drawDayStats(); }, 5000);
   }
@@ -335,7 +356,6 @@ const ChartModule = (function () {
     );
     el.addEventListener('wheel', e => { if(e.ctrlKey) e.preventDefault(); }, {passive:false});
   }
-  let _gestInit = false;
 
   function toggleFullscreen() {
     const el = document.getElementById('chartScreen');
@@ -344,6 +364,42 @@ const ChartModule = (function () {
     } else {
       document.exitFullscreen?.() || document.webkitExitFullscreen?.() || document.mozCancelFullScreen?.();
     }
+  }
+
+  /* ════════════
+     إعادة الضبط — نقرتان
+  ════════════ */
+  let _lastTap = 0;
+
+  function setupDoubleTap(el) {
+    // للموبايل: نقرتان سريعتان
+    el.addEventListener('touchend', () => {
+      const now = Date.now();
+      if (now - _lastTap < 350) {
+        resetView();
+        _lastTap = 0;
+      } else {
+        _lastTap = now;
+      }
+    }, { passive: true });
+
+    // للديسكتوب: double-click
+    el.addEventListener('dblclick', () => {
+      resetView();
+    });
+  }
+
+  function resetView() {
+    if (!_chart) return;
+    _chart.timeScale().scrollToRealTime();
+    _chart.timeScale().applyOptions({ barSpacing: IV_SPACING[_interval] || 7 });
+    // إعادة auto-scale للسعر
+    if (_series) {
+      _chart.applyOptions({
+        rightPriceScale: { autoScale: true }
+      });
+    }
+    if (typeof toast !== 'undefined') toast('↻ إعادة ضبط الرسم', 'info', 1200);
   }
 
   /* ════════════
@@ -392,8 +448,8 @@ const ChartModule = (function () {
 
   function updateBtnPx() {
     if (!_lastClose) return;
-    const a = ai(_sym);
-    const bp=document.getElementById('_cBuyPx'), sp=document.getElementById('_cSellPx');
+    const a  = ai(_sym);
+    const bp = document.getElementById('_cBuyPx'), sp = document.getElementById('_cSellPx');
     if (bp) bp.textContent = '$'+(_lastClose*1.0005).toFixed(a.pxDp);
     if (sp) sp.textContent = '$'+(_lastClose*0.9995).toFixed(a.pxDp);
   }
@@ -408,24 +464,19 @@ const ChartModule = (function () {
     if (!qty||qty<=0) return typeof toast!=='undefined'?toast('أدخل الكمية','err'):null;
     const a   = ai(_sym);
     const TROY_LOCAL = 31.1035;
-    const isGram = _sym === 'XAU';
-    // midDisp = سعر العرض (غرام أو أونصة)
+    const isGram  = _sym === 'XAU';
     const midDisp = _lastClose||(typeof State!=='undefined'?State.prices[_sym]?.mid:0);
     if (!midDisp) return typeof toast!=='undefined'?toast('لا يوجد سعر','err'):null;
-    // midOz = سعر الأونصة للحسابات الصحيحة
-    const midOz = isGram ? midDisp * TROY_LOCAL : midDisp;
-    // qtyOz = كمية الأونصات للحسابات
-    const qtyOz = isGram ? qty / TROY_LOCAL : qty;
-    const usd = (midOz * qtyOz).toFixed(2);
-    const mgn = (midOz * qtyOz / a.lev).toFixed(2);
-    // سعر التصفية بوحدة العرض (غرام أو أونصة)
-    const liqOz = isBuy ? midOz*(1-1/a.lev) : midOz*(1+1/a.lev);
+    const midOz   = isGram ? midDisp * TROY_LOCAL : midDisp;
+    const qtyOz   = isGram ? qty / TROY_LOCAL : qty;
+    const usd     = (midOz * qtyOz).toFixed(2);
+    const mgn     = (midOz * qtyOz / a.lev).toFixed(2);
+    const liqOz   = isBuy ? midOz*(1-1/a.lev) : midOz*(1+1/a.lev);
     const liqDisp = isGram ? (liqOz/TROY_LOCAL).toFixed(a.pxDp) : liqOz.toFixed(a.pxDp);
-    const mid = midDisp; // للاستخدام في fp()
     hideCf();
-    const wrap=document.getElementById('_cWrap');
+    const wrap = document.getElementById('_cWrap');
     if (!wrap) return;
-    const ov=document.createElement('div');
+    const ov = document.createElement('div');
     ov.id='_cfOv'; ov.className='cf-ov';
     ov.innerHTML=`
       <div class="cf-card">
@@ -434,7 +485,7 @@ const ChartModule = (function () {
         <div class="cf-sub">رافعة ${a.lev}x · تأكيد قبل التنفيذ</div>
         <div class="cf-rows">
           <div class="cf-row"><span class="cf-key">الكمية</span><span class="cf-val">${fs(qty)} ${a.unit}</span></div>
-          <div class="cf-row"><span class="cf-key">السعر</span><span class="cf-val">${fp(mid)} $</span></div>
+          <div class="cf-row"><span class="cf-key">السعر</span><span class="cf-val">${fp(midDisp)} $</span></div>
           <div class="cf-row"><span class="cf-key">القيمة</span><span class="cf-val">≈ $${usd}</span></div>
           <div class="cf-row"><span class="cf-key">الهامش</span><span class="cf-val w">≈ $${mgn}</span></div>
           <div class="cf-row"><span class="cf-key">التصفية</span><span class="cf-val ${isBuy?'r':'g'}">≈ ${liqDisp} $</span></div>
@@ -449,28 +500,25 @@ const ChartModule = (function () {
     document.getElementById('_cfC').onclick = hideCf;
     document.getElementById('_cfX').onclick = () => {
       if (typeof requirePin !== 'undefined') {
-        requirePin(() => execTrade(isBuy, qty));
+        requirePin(() => execTradeChart(isBuy, qty));
       } else {
-        execTrade(isBuy, qty);
+        execTradeChart(isBuy, qty);
       }
     };
   }
 
   function hideCf() { document.getElementById('_cfOv')?.remove(); }
 
-  async function execTrade(isBuy, qty) {
+  async function execTradeChart(isBuy, qty) {
     if (typeof State==='undefined'||!State.wallet) return;
     const btn=document.getElementById('_cfX');
     if (btn) { btn.disabled=true; btn.innerHTML='<span class="cf-spin"></span>'; }
     const TROY_LOCAL = 31.1035;
     const isGram = _sym === 'XAU';
-    // a: للـ API نستخدم GOLD (أونصة) لأن idx و szDp صحيحان
-    const a = isGram ? (typeof ASSETS!=='undefined'?ASSETS['GOLD']:ai(_sym)) : ai(_sym);
-    // mid: سعر الغرام (_lastClose) → نضرب × TROY للحصول على سعر الأونصة للـ API
-    const midGram = _lastClose||(typeof State!=='undefined'?State.prices['XAU']?.mid:0);
-    const midOz   = isGram ? midGram*TROY_LOCAL : (_lastClose||(typeof State!=='undefined'?State.prices[_sym]?.mid:0));
+    const a      = isGram ? (typeof ASSETS!=='undefined'?ASSETS['GOLD']:ai(_sym)) : ai(_sym);
+    const midGram= _lastClose||(typeof State!=='undefined'?State.prices['XAU']?.mid:0);
+    const midOz  = isGram ? midGram*TROY_LOCAL : (_lastClose||(typeof State!=='undefined'?State.prices[_sym]?.mid:0));
     if (!midOz) { hideCf(); return; }
-    // qty: المستخدم يدخل غرامات → نحول لأونصات للـ API
     const qtyOz = isGram ? qty/TROY_LOCAL : qty;
     try {
       try { await hlExchange({type:'updateLeverage',asset:a.idx,isCross:a.cross,leverage:a.lev}); } catch{}
@@ -490,32 +538,29 @@ const ChartModule = (function () {
   }
 
   /* ════════════
-     يوم السوق — افتتاح 1 AM UTC+3 يومياً
+     إحصائيات اليوم
   ════════════ */
   function getSessionStartSec() {
-    // 1 AM UTC+3 = 22:00 UTC اليوم السابق في التقويم الميلادي
-    const nowUTC3ms = Date.now() + UTC3 * 1000;
-    const d = new Date(nowUTC3ms);
-    // منتصف الليل UTC+3 اليوم + 1 ساعة = 1 AM UTC+3
+    const nowUTC3ms  = Date.now() + UTC3 * 1000;
+    const d          = new Date(nowUTC3ms);
     const midnightUTC3 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-    return Math.floor((midnightUTC3 + 3600_000) / 1000) - UTC3; // نحوّل لـ UTC ثانية
+    return Math.floor((midnightUTC3 + 3600_000) / 1000) - UTC3;
   }
 
   function computeDayStats() {
     const start = getSessionStartSec();
-    const sc = _candles.filter(c => c.time >= start);
+    const sc    = _candles.filter(c => c.time >= start);
     if (!sc.length) return null;
-    const open = sc[0].open;
-    const high = Math.max(...sc.map(c => c.high));
-    const low  = Math.min(...sc.map(c => c.low));
-    const cur  = _lastClose || sc[sc.length - 1].close;
-    const pct  = ((cur - open) / open * 100);
+    const open  = sc[0].open;
+    const high  = Math.max(...sc.map(c => c.high));
+    const low   = Math.min(...sc.map(c => c.low));
+    const cur   = _lastClose || sc[sc.length - 1].close;
+    const pct   = ((cur - open) / open * 100);
     return { open, high, low, cur, pct };
   }
 
   function drawDayStats() {
     if (!_series) return;
-    // مسح الخطوط القديمة
     if (_dayHiLine) { try { _series.removePriceLine(_dayHiLine); } catch {} _dayHiLine = null; }
     if (_dayLoLine) { try { _series.removePriceLine(_dayLoLine); } catch {} _dayLoLine = null; }
 
@@ -527,13 +572,12 @@ const ChartModule = (function () {
     const pct = st.pct.toFixed(2);
     const up  = st.pct >= 0;
 
-    // لا خطوط على الرسم — فقط علامات نصية في الشريط السفلي
     if (el) {
       el.innerHTML =
-        `<span style="color:var(--text-muted);font-size:9px;font-family:monospace;">12AM+3</span>` +
-        `<span style="color:#26a69a;font-size:11px;font-weight:700;font-family:monospace;">▲ ${st.high.toFixed(dp)}</span>` +
-        `<span style="color:#ef5350;font-size:11px;font-weight:700;font-family:monospace;">▼ ${st.low.toFixed(dp)}</span>` +
-        `<span style="color:${up?'#26a69a':'#ef5350'};font-size:13px;font-weight:900;font-family:monospace;">${up?'+':''}${pct}%</span>`;
+        `<span style="color:var(--text-muted);font-size:10px;font-family:monospace;font-weight:700;">12AM+3</span>` +
+        `<span style="color:#26a69a;font-size:12px;font-weight:800;font-family:monospace;">▲ ${st.high.toFixed(dp)}</span>` +
+        `<span style="color:#ef5350;font-size:12px;font-weight:800;font-family:monospace;">▼ ${st.low.toFixed(dp)}</span>` +
+        `<span style="color:${up?'#26a69a':'#ef5350'};font-size:14px;font-weight:900;font-family:monospace;">${up?'+':''}${pct}%</span>`;
     }
   }
 
@@ -545,86 +589,83 @@ const ChartModule = (function () {
     if (_resizeObs) { try{_resizeObs.disconnect();}catch{} }
     const dark = isDark();
 
+    /* ألوان — نصوص أكثر إضاءة */
     const BG   = dark ? '#131722' : '#ffffff';
-    const TXT  = dark ? '#b2b5be' : '#131722';
-    const GRID = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)';
+    const TXT  = dark ? '#d1d4dc' : '#131722';   // ← أفتح من #b2b5be
+    const GRID = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
     const BDR  = dark ? '#2a2e39' : '#e0e3eb';
 
-    // مساعد UTC+3 للمحور
-    const fmt3 = (tick, showDate) => {
-      const d = new Date((tick + UTC3) * 1000);
-      if (showDate) {
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+    /* ─── مساعد تنسيق المحور الأسفل ─── */
+    const tickFmt = (tick, type) => {
+      // type: 0=Year 1=Month 2=Day 3=Time 4=TimeWithSeconds
+      if (type >= 3) return fmtTime3(tick);
+      if (type === 2) return fmtDate3(tick);
+      if (type === 1) {
+        const d = new Date((tick + UTC3) * 1000);
+        return MONTHS[d.getUTCMonth()];
       }
-      const hh = d.getUTCHours(), mm = d.getUTCMinutes();
-      const ap = hh >= 12 ? 'PM' : 'AM';
-      const h12 = hh % 12 || 12;
-      return `${String(h12).padStart(2,'0')}:${String(mm).padStart(2,'0')} ${ap}`;
+      return new Date((tick + UTC3) * 1000).getUTCFullYear().toString();
     };
 
     _chart = LightweightCharts.createChart(container, {
       width:  container.clientWidth,
       height: container.clientHeight,
       layout: {
-        background: { type: 'solid', color: BG },
-        textColor: TXT, fontSize: 11,
+        background: { type:'solid', color:BG },
+        textColor:  TXT,
+        fontSize:   13,                          // ← أكبر من 11
         fontFamily: "'IBM Plex Mono',monospace",
       },
       grid: {
-        vertLines: { color: GRID, style: LightweightCharts.LineStyle.Solid },
-        horzLines: { color: GRID, style: LightweightCharts.LineStyle.Solid },
+        vertLines: { color:GRID, style:LightweightCharts.LineStyle.Solid },
+        horzLines: { color:GRID, style:LightweightCharts.LineStyle.Solid },
       },
       crosshair: {
         mode: LightweightCharts.CrosshairMode.Normal,
         vertLine: {
           width: 1,
-          color: dark ? 'rgba(197,200,207,0.5)' : 'rgba(19,23,34,0.4)',
+          color: dark ? 'rgba(197,200,207,0.7)' : 'rgba(19,23,34,0.5)',
           style: LightweightCharts.LineStyle.Dashed,
-          labelBackgroundColor: dark ? '#363a45' : '#9598a1',
+          labelBackgroundColor: dark ? '#2962ff' : '#1565c0',  // ← أزرق بارز
+          labelVisible: true,
         },
         horzLine: {
           width: 1,
-          color: dark ? 'rgba(197,200,207,0.5)' : 'rgba(19,23,34,0.4)',
+          color: dark ? 'rgba(197,200,207,0.7)' : 'rgba(19,23,34,0.5)',
           style: LightweightCharts.LineStyle.Dashed,
-          labelBackgroundColor: dark ? '#363a45' : '#9598a1',
+          labelBackgroundColor: dark ? '#2962ff' : '#1565c0',  // ← أزرق بارز
+          labelVisible: true,
         },
       },
       rightPriceScale: {
-        borderColor: BDR,
-        scaleMargins: { top: 0.06, bottom: 0.06 }, // بلا حجم — شموع تملأ الشاشة
-        minimumWidth: 80,
+        borderColor:   BDR,
+        scaleMargins:  { top:0.06, bottom:0.06 },
+        minimumWidth:  80,
         borderVisible: true,
+        autoScale:     true,
       },
       timeScale: {
-        borderColor: BDR,
-        timeVisible: true,
-        secondsVisible: false,
-        rightOffset: 8,
-        barSpacing: IV_SPACING[_interval] || 7,
-        minBarSpacing: 2,
+        borderColor:                BDR,
+        timeVisible:                true,
+        secondsVisible:             false,
+        rightOffset:                8,
+        barSpacing:                 IV_SPACING[_interval] || 7,
+        minBarSpacing:              2,
         lockVisibleTimeRangeOnResize: false,
-        fixLeftEdge: true,
-        borderVisible: true,
-        // ✅ هذا هو الإصلاح الحقيقي لمحور الأسفل — tickMarkFormatter
-        tickMarkFormatter: (tick, type) => {
-          // type: 0=Year 1=Month 2=Day 3=Time 4=TimeWithSeconds
-          if (type >= 3) return fmt3(tick, false);          // وقت AM/PM UTC+3
-          if (type === 2) return fmt3(tick, true);           // يوم+شهر
-          if (type === 1) {
-            const d = new Date((tick + UTC3) * 1000);
-            return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
-          }
-          return new Date((tick + UTC3) * 1000).getUTCFullYear().toString();
-        },
+        fixLeftEdge:                true,
+        borderVisible:              true,
+        tickMarkFormatter:          tickFmt,
       },
       handleScroll: {
-        mouseWheel: true, pressedMouseMove: true,
-        horzTouchDrag: true, vertTouchDrag: false,
+        mouseWheel:      true,
+        pressedMouseMove:true,
+        horzTouchDrag:   true,
+        vertTouchDrag:   true,   // ← حرية كاملة
       },
       handleScale: {
-        mouseWheel: true, pinch: true,
-        axisPressedMouseMove: { time: true, price: false },
+        mouseWheel:  true,
+        pinch:       true,
+        axisPressedMouseMove: { time:true, price:true },  // ← سحب المحورين
       },
       localization: {
         locale: 'en-US',
@@ -632,13 +673,13 @@ const ChartModule = (function () {
           minimumFractionDigits: ai(_sym).pxDp,
           maximumFractionDigits: ai(_sym).pxDp,
         }),
-        // crosshair label UTC+3
-        timeFormatter: (tick) => fmt3(tick, false),
+        /* crosshair label المحور السفلي — تاريخ + وقت كامل */
+        timeFormatter: (tick) => fmtFull3(tick),
       },
       attributionLogo: false,
     });
 
-    // Candlestick — TradingView classic
+    /* ─── الشموع ─── */
     _series = _chart.addCandlestickSeries({
       upColor:         '#26a69a',
       downColor:       '#ef5350',
@@ -650,6 +691,7 @@ const ChartModule = (function () {
       wickVisible:     true,
     });
 
+    /* ─── Crosshair Legend — تاريخ + وقت + OHLC ─── */
     _chart.subscribeCrosshairMove(param => {
       const el = document.getElementById('_cLegend');
       if (!el) return;
@@ -660,68 +702,78 @@ const ChartModule = (function () {
       const up  = bar.close >= bar.open;
       const cl  = up ? '#26a69a' : '#ef5350';
       const chg = (((bar.close - bar.open) / bar.open) * 100).toFixed(2);
+
+      /* ✅ تاريخ + وقت كامل UTC+3 */
       el.innerHTML =
-        `<span style="color:var(--text-muted);font-size:9px;">${fmt3(param.time,false)} +3</span>` +
-        `<span style="color:${cl};font-weight:900">O&nbsp;${bar.open.toFixed(dp)}</span>` +
-        `<span style="color:${cl}">H&nbsp;${bar.high.toFixed(dp)}</span>` +
-        `<span style="color:${cl}">L&nbsp;${bar.low.toFixed(dp)}</span>` +
-        `<span style="color:${cl}">C&nbsp;${bar.close.toFixed(dp)}</span>` +
-        `<span style="color:${cl}">${chg > 0 ? '+' : ''}${chg}%</span>`;
+        `<span style="color:var(--text-secondary);font-size:11px;font-weight:700;">${fmtFull3(param.time)}</span>` +
+        `<span style="color:${cl};font-weight:900;font-size:13px;">O&nbsp;${bar.open.toFixed(dp)}</span>` +
+        `<span style="color:${cl};font-size:13px;">H&nbsp;${bar.high.toFixed(dp)}</span>` +
+        `<span style="color:${cl};font-size:13px;">L&nbsp;${bar.low.toFixed(dp)}</span>` +
+        `<span style="color:${cl};font-size:13px;">C&nbsp;${bar.close.toFixed(dp)}</span>` +
+        `<span style="color:${cl};font-weight:900;font-size:13px;">${chg > 0 ? '+' : ''}${chg}%</span>`;
     });
 
+    /* ─── Resize Observer ─── */
     _resizeObs = new ResizeObserver(() => {
       if (_chart && container)
-        _chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+        _chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
     });
     _resizeObs.observe(container);
+
+    /* ─── نقرتان لإعادة الضبط ─── */
+    setupDoubleTap(container);
   }
 
+  /* ════════════
+     جلب الشموع
+  ════════════ */
   async function fetchCandles(sym, iv) {
-    const now=Date.now(), start=now-(RANGES[iv]||RANGES['1h']);
-    // ✅ XAU (غرام ذهب): نقسم أسعار الشموع على TROY لعرض سعر الغرام
+    const now   = Date.now();
+    const start = now - (RANGES[iv]||RANGES['1h']);
     const TROY_LOCAL = 31.1035;
     const isGram = sym === 'XAU';
     try {
-      const r=await fetch(HL_API+'/info',{method:'POST',headers:{'Content-Type':'application/json'},
+      const r   = await fetch(HL_API+'/info',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({type:'candleSnapshot',req:{coin:coin(sym),interval:iv,startTime:start,endTime:now}})});
-      const raw=await r.json();
+      const raw = await r.json();
       if(!Array.isArray(raw)||!raw.length) return [];
       return raw.map(c=>({
-        time: Math.floor(c.t/1000),
-        open: isGram ? +c.o/TROY_LOCAL : +c.o,
-        high: isGram ? +c.h/TROY_LOCAL : +c.h,
-        low:  isGram ? +c.l/TROY_LOCAL : +c.l,
-        close:isGram ? +c.c/TROY_LOCAL : +c.c,
+        time:  Math.floor(c.t/1000),
+        open:  isGram ? +c.o/TROY_LOCAL : +c.o,
+        high:  isGram ? +c.h/TROY_LOCAL : +c.h,
+        low:   isGram ? +c.l/TROY_LOCAL : +c.l,
+        close: isGram ? +c.c/TROY_LOCAL : +c.c,
       })).sort((a,b)=>a.time-b.time);
     } catch(e){console.warn('[Chart]',e.message);return [];}
   }
 
+  /* ════════════
+     خطوط المراكز
+  ════════════ */
   function clearLines(){
     _entryLines.forEach(l=>{try{_series.removePriceLine(l);}catch{}}); _entryLines=[];
     if(_tpLine) {try{_series.removePriceLine(_tpLine);}catch{} _tpLine=null;}
     if(_slLine) {try{_series.removePriceLine(_slLine);}catch{} _slLine=null;}
     if(_liqLine){try{_series.removePriceLine(_liqLine);}catch{} _liqLine=null;}
   }
+
   function drawLines(){
     if(!_series||typeof State==='undefined') return;
     clearLines();
     const TROY_LOCAL = 31.1035;
     for(const p of (State.positions||[])){
       const rawCoin = p.position.coin.includes(':') ? p.position.coin.split(':')[1] : p.position.coin;
-      // ✅ إصلاح: GOLD في الـ API = XAU في الـ UI — يجب مطابقتهما
-      const posSym = rawCoin === 'GOLD' ? 'XAU' : rawCoin;
+      const posSym  = rawCoin === 'GOLD' ? 'XAU' : rawCoin;
       if(posSym !== _sym) continue;
 
-      const pos = p.position;
-      const sziOz = +pos.szi;
-      const isGram = _sym === 'XAU';
-      // entryPx من API بالأونصة دائماً → للرسم نقسم على TROY إذا غرام
+      const pos     = p.position;
+      const sziOz   = +pos.szi;
+      const isGram  = _sym === 'XAU';
       const entryOz = +(pos.entryPx||0);
       const entryDisp = isGram ? entryOz/TROY_LOCAL : entryOz;
-      // curPx: _lastClose هو بالغرام (لأن chart يعرض غرام) — للحساب بالأونصة نضرب
-      const curDisp = _lastClose || (isGram ? (typeof State!=='undefined'?State.prices['XAU']?.mid:0) : (typeof State!=='undefined'?State.prices[_sym]?.mid:0)) || entryDisp;
-      const curOz = isGram ? curDisp * TROY_LOCAL : curDisp;
-      const pnl = (curOz - entryOz) * sziOz;
+      const curDisp = _lastClose || (isGram ? State.prices['XAU']?.mid : State.prices[_sym]?.mid) || entryDisp;
+      const curOz   = isGram ? curDisp * TROY_LOCAL : curDisp;
+      const pnl     = (curOz - entryOz) * sziOz;
 
       if(entryDisp > 0){
         const sign = pnl >= 0 ? '+' : '';
@@ -748,11 +800,11 @@ const ChartModule = (function () {
           title:`🛡 SL (-$${slPnl.toFixed(2)})`
         });
       }
-      // ✅ خط التصفية — بصيغة Hyperliquid الرسمية
+
+      /* خط التصفية */
       if(typeof calcLiqPrice !== 'undefined' && typeof ASSETS !== 'undefined'){
-        const symForLiq = posSym; // 'XAU', 'CL', etc
-        const aLiq = ASSETS[symForLiq]||ASSETS['GOLD']||{lev:20,cross:false};
-        const bal  = (typeof State!=='undefined'&&State.balance?.total)||0;
+        const aLiq = ASSETS[posSym]||ASSETS['GOLD']||{lev:20,cross:false};
+        const bal  = State.balance?.total||0;
         const liqOz = calcLiqPrice(entryOz, sziOz, bal, aLiq.cross, aLiq.lev);
         if(liqOz!==null && liqOz > 0){
           const liqDisp = isGram ? liqOz/TROY_LOCAL : liqOz;
@@ -762,7 +814,7 @@ const ChartModule = (function () {
             lineStyle:   LightweightCharts.LineStyle.Dotted,
             color:       '#ff6b35',
             axisLabelVisible: true,
-            title:       `⚡ Liq ~$${liqDisp.toFixed(2)}`,
+            title:       `⚡ Liq ~$${liqDisp.toFixed(ai(_sym).pxDp)}`,
           });
         }
       }
@@ -770,25 +822,30 @@ const ChartModule = (function () {
     }
   }
 
+  /* ════════════
+     WebSocket
+  ════════════ */
   function wsConnect(){
     wsClose(); clearTimeout(_wsTimer);
     const TROY_LOCAL = 31.1035;
     try{
       _ws=new WebSocket(HL_WS);
-      _ws.onopen=()=>{ _ws.send(JSON.stringify({method:'subscribe',subscription:{type:'candle',coin:coin(_sym),interval:_interval}})); setStatus('🟢'); };
+      _ws.onopen=()=>{
+        _ws.send(JSON.stringify({method:'subscribe',subscription:{type:'candle',coin:coin(_sym),interval:_interval}}));
+        setStatus('🟢');
+      };
       _ws.onmessage=e=>{
         try{
           const msg=JSON.parse(e.data);
           if(msg.channel!=='candle'||!msg.data||!_series) return;
           const c=msg.data;
           const isGram=_sym==='XAU';
-          // ✅ XAU: قسمة على TROY لعرض سعر الغرام في الرسم البياني
           const bar={
-            time:Math.floor(c.t/1000),
-            open: isGram?+c.o/TROY_LOCAL:+c.o,
-            high: isGram?+c.h/TROY_LOCAL:+c.h,
-            low:  isGram?+c.l/TROY_LOCAL:+c.l,
-            close:isGram?+c.c/TROY_LOCAL:+c.c,
+            time:  Math.floor(c.t/1000),
+            open:  isGram?+c.o/TROY_LOCAL:+c.o,
+            high:  isGram?+c.h/TROY_LOCAL:+c.h,
+            low:   isGram?+c.l/TROY_LOCAL:+c.l,
+            close: isGram?+c.c/TROY_LOCAL:+c.c,
           };
           _series.update(bar);
           if (_candles.length && _candles[_candles.length-1].time === bar.time) {
@@ -796,7 +853,7 @@ const ChartModule = (function () {
           } else if (_candles.length && bar.time > _candles[_candles.length-1].time) {
             _candles.push(bar);
           }
-          setPrice(bar.close); // سعر الغرام مباشرة
+          setPrice(bar.close);
           drawLines();
           drawDayStats();
         }catch{}
@@ -807,20 +864,19 @@ const ChartModule = (function () {
   }
   function wsClose(){ if(_ws){try{_ws.close();}catch{} _ws=null;} clearTimeout(_wsTimer); }
 
+  /* ════════════
+     تحميل
+  ════════════ */
   async function load(sym, iv){
     if(!_chart||!_series) return;
     setStatus('⏳');
     const px=document.getElementById('_cPrice'); if(px) px.textContent='—';
     const candles=await fetchCandles(sym,iv);
     if(!candles.length){setStatus('❌');return;}
-
-    _candles = candles; // cache للـ day stats
+    _candles = candles;
     _series.setData(candles);
-
-    // barSpacing ديناميكي + scroll للنهاية
     _chart.timeScale().applyOptions({ barSpacing: IV_SPACING[iv] || 7 });
     _chart.timeScale().scrollToRealTime();
-
     _lastClose=candles[candles.length-1].close;
     setPrice(_lastClose);
     drawLines();
@@ -829,6 +885,9 @@ const ChartModule = (function () {
     wsConnect();
   }
 
+  /* ════════════
+     بناء الشاشة
+  ════════════ */
   function ensureScreen(){
     const screen=document.getElementById('chartScreen');
     if(!screen||document.getElementById('_cWrap')) return;
@@ -844,14 +903,13 @@ const ChartModule = (function () {
             </div>
           </div>
           <div class="c-nav-group">
-            <button class="c-fs-btn" id="_cLock" style="border:none; background:none; font-size:16px;">🔒</button>
+            <button class="c-fs-btn" id="_cLock" style="border:none;background:none;font-size:16px;">🔒</button>
             <button class="c-fs-btn" id="_cFs">⛶</button>
             <span class="c-ws" id="_cWs">⏳</span>
           </div>
         </div>
-        
         <div class="c-nav-row">
-          <div class="c-intervals" style="margin:0; flex:1; justify-content:flex-start;">
+          <div class="c-intervals" style="margin:0;flex:1;justify-content:flex-start;border-bottom:none;">
             <button class="iv-btn" data-iv="1m">1m</button>
             <button class="iv-btn" data-iv="5m">5m</button>
             <button class="iv-btn" data-iv="15m">15m</button>
@@ -859,18 +917,18 @@ const ChartModule = (function () {
             <button class="iv-btn" data-iv="4h">4H</button>
             <button class="iv-btn" data-iv="1d">1D</button>
           </div>
-          <div class="c-clock" style="margin:0; display:flex; align-items:center; gap:8px;">
-            <span id="_cCountdown" style="color:var(--ac); font-weight:700; font-size:12px; font-family:monospace; min-width:45px; text-align:left;">—</span>
-            <span class="c-clock-time" id="_cClockT" style="font-size:12px; opacity:.8;">—</span>
+          <div style="display:flex;align-items:center;gap:8px;margin-left:10px;">
+            <span id="_cCountdown" style="color:var(--ac);font-weight:800;font-size:12px;font-family:monospace;min-width:48px;text-align:left;">—</span>
+            <span class="c-clock-time" id="_cClockT" style="font-size:12px;">—</span>
           </div>
         </div>
       </div>
       <div class="c-wrap" id="_cWrap">
         <div class="c-inner" id="_cInner"></div>
         <div id="_cDayStat" style="
-          display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-          padding:3px 10px; background:var(--bg-card);
-          border-top:1px solid var(--border); flex-shrink:0;
+          display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+          padding:4px 12px;background:var(--bg-card);
+          border-top:1px solid var(--border);flex-shrink:0;
           font-family:'IBM Plex Mono',monospace;
         "></div>
         <div class="c-legend" id="_cLegend"></div>
@@ -878,12 +936,7 @@ const ChartModule = (function () {
     document.getElementById('_cBack').onclick=()=>ChartModule.close();
     document.getElementById('_cFs').onclick=toggleFullscreen;
     document.getElementById('_cLock').onclick=()=>{
-      if(typeof lockApp === 'function') {
-        lockApp();
-      } else {
-        if(typeof State!=='undefined') State.lastPinTime = 0;
-        if(typeof toast!=='undefined') toast('تم قفل التطبيق يدوياً 🔒', 'info');
-      }
+      if(typeof lockApp==='function') lockApp();
     };
     document.querySelectorAll('.iv-btn').forEach(b=>b.onclick=()=>ChartModule.switchInterval(b.dataset.iv));
   }
@@ -895,9 +948,12 @@ const ChartModule = (function () {
     if(nm) nm.textContent=a.name;
   }
 
+  /* ════════════
+     API عامة
+  ════════════ */
   function open(sym){
     _sym=sym||(typeof State!=='undefined'?State.asset:'CL');
-    _visible=true;
+    _visible=true; _gestInit=false;
     ensureScreen();
     const screen=document.getElementById('chartScreen');
     screen?.classList.remove('hidden');
@@ -913,7 +969,7 @@ const ChartModule = (function () {
   function close(){
     _visible=false;
     wsClose(); hideCf(); stopClock();
-    if (document.fullscreenElement) document.exitFullscreen?.();
+    if(document.fullscreenElement) document.exitFullscreen?.();
     document.getElementById('chartScreen')?.classList.add('hidden');
     const lg=document.getElementById('_cLegend'); if(lg) lg.innerHTML='';
     const ds=document.getElementById('_cDayStat'); if(ds) ds.innerHTML='';
@@ -941,5 +997,5 @@ const ChartModule = (function () {
     if(_visible&&_series) drawLines();
   }
 
-  return {open,close,switchInterval,switchAssetChart,refreshLines};
+  return { open, close, switchInterval, switchAssetChart, refreshLines };
 })();
