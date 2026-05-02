@@ -1,3 +1,62 @@
+<div align="center">
+
+# HL simple trading 
+
+https://dhl.kanba.pw/
+
+https://hl.kanba.pw/
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -14,12 +73,9 @@
 ```text
 .
 ├── README.md
-├── c.js
-├── chart.js
 ├── hl.css
-├── hl.js
-├── icon-192.png
-├── icon-512.png
+├── icon-192x192.png
+├── icon-512x512.png
 ├── images
 │   ├── 100.png
 │   ├── balance.png
@@ -32,14 +88,37 @@
 │   ├── silver.svg
 │   └── withdraw.png
 ├── index.html
+├── js
+│   ├── account.js
+│   ├── api.js
+│   ├── app.js
+│   ├── assets.js
+│   ├── auth.js
+│   ├── button.js
+│   ├── c.js
+│   ├── chart.js
+│   ├── config.js
+│   ├── pin.js
+│   ├── positions.js
+│   ├── prices.js
+│   ├── session.js
+│   ├── state.js
+│   ├── tpsl.js
+│   ├── trading.js
+│   ├── utils.js
+│   └── ws.js
 ├── manifest.json
 ├── md
 │   ├── files.json
+│   ├── tree.md
 │   └── us.md
 ├── md.html
 ├── sw.js
-└── tree.txt
+├── tree.txt
+├── x1.png
+├── x2.png
+└── x3.png
 
-3 directories, 24 files
+4 directories, 43 files
 ```
 <!-- TREE END -->
