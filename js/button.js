@@ -17,7 +17,7 @@
   style.textContent = `
 #pwaInstallBtn {
   position: fixed;
-  bottom: 21px;          /* فوق الفوتر */
+  bottom: 89px;          /* فوق الفوتر */
   left: 50%;
   transform: translateX(-50%) translateY(20px);
   z-index: 900;
