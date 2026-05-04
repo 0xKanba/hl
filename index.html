@@ -58,24 +58,18 @@
 <!-- ══ التطبيق الرئيسي ══ -->
 <div class="screen hidden" id="appScreen">
 
-  <!-- NAV: كل زر منفصل -->
+  <!-- NAV -->
   <nav class="nav">
-    <!-- يسار: شعار يفتح الشرح + زر مباشر للرابط الخارجي -->
     <div class="nav-left">
-      <!-- ✅ "سيولة" وحده يفتح الشرح -->
       <button class="nav-logo-btn" id="navLogo">
         <span class="nav-logo-icon">💧</span>
         <span class="nav-logo-text">سيولة</span>
       </button>
-      <!-- ✅ "مباشر" وحده رابط خارجي -->
       <a href="https://shop.kanba.pw/"
-         target="_blank" rel="noopener"
-         class="nav-status">
+         target="_blank" rel="noopener" class="nav-status">
         <span class="status-dot"></span>مباشر
       </a>
     </div>
-
-    <!-- يمين: ساعة + قفل + عنوان + نسخ -->
     <div class="nav-right">
       <button id="btnLock" title="قفل التطبيق">🔒</button>
       <div class="nav-address-wrap">
@@ -85,13 +79,13 @@
     </div>
   </nav>
 
-  <!-- ✅ شريط التاريخ والوقت — بين NAV والتابات -->
-  <div class="datetime-bar" id="datetimeBar" title="انقر لعرض التقويم">
+  <!-- شريط التاريخ والوقت -->
+  <div class="datetime-bar" id="datetimeBar" title="انقر لعرض أسماء الأشهر">
     <span class="dt-clock" id="dtClock">—</span>
     <span class="dt-hint">📅</span>
   </div>
 
-  <!-- ✅ جدول الأشهر — يظهر عند النقر على شريط التاريخ -->
+  <!-- جدول الأشهر -->
   <div class="months-panel hidden" id="monthsPanel">
     <div class="months-grid">
       <div class="month-item"><span class="m-num">1</span><span class="m-name">يناير</span><span class="m-en">Jan</span></div>
@@ -109,6 +103,7 @@
     </div>
   </div>
 
+  <!-- تابات الأصول — بدون زر الرسم -->
   <div class="tabs">
     <button class="tab" data-asset="XAU">
       <div class="tab-left">
@@ -133,14 +128,12 @@
       <div class="tab-left"><img class="tab-img" src="/images/oil.svg" alt="CL" loading="eager"></div>
       <div class="tab-right"><span class="tab-price" id="priceCL">—</span></div>
     </button>
-    <button class="tab tab-chart" id="tabChart">
-      <div class="tab-left"><span style="font-size:22px;line-height:1">📈</span></div>
-      <div class="tab-right"><span class="tab-price">رسم</span></div>
-    </button>
   </div>
 
   <main class="main">
     <div class="col-left">
+
+      <!-- بطاقة السعر -->
       <div class="price-card" id="priceCard">
         <div class="price-img-wrap" id="priceImgWrap">
           <img id="priceAssetImg" src="/images/oil.svg" alt="asset" loading="eager">
@@ -152,9 +145,9 @@
           <div class="price-session hidden" id="priceSession">
             <span class="ps-chg" id="psChg"></span>
             <span class="ps-divider">|</span>
-            <span class="ps-h" id="psH"></span>
+            <span class="ps-h"  id="psH"></span>
             <span class="ps-divider">|</span>
-            <span class="ps-l" id="psL"></span>
+            <span class="ps-l"  id="psL"></span>
           </div>
           <div class="price-meta-row">
             <span class="price-bid-ask" id="priceBidAsk"></span>
@@ -163,11 +156,11 @@
         </div>
       </div>
 
+      <!-- ✅ لوحة التداول — بدون header بدون presets -->
       <div class="trade-panel">
-        <div class="panel-header">تنفيذ صفقة · <span id="tradeAssetName">نفط خام</span></div>
-        <div class="qty-presets" id="qtyPresets"></div>
         <div class="qty-input-row">
-          <input type="number" class="qty-input" id="qtyInput" placeholder="0.00" min="0" step="any">
+          <input type="number" class="qty-input" id="qtyInput"
+                 placeholder="0.00" min="0" step="any">
           <button class="qty-100" id="qty100">100%</button>
           <span class="qty-unit" id="qtyUnit">برميل</span>
         </div>
@@ -199,39 +192,57 @@
     </div>
   </main>
 
+  <!-- ✅ Footer — زراران فقط -->
   <footer class="footer">
-    <button class="footer-btn" id="btnBalance">
-      <img class="footer-img" src="/images/balance.png"  alt="" loading="eager">
-      <span class="footer-lbl">رصيد</span>
+    <button class="footer-main-btn" id="btnChart">
+      <span class="fmb-icon">📈</span>
+      <span class="fmb-lbl">رسم بياني</span>
     </button>
-    <button class="footer-btn" id="btnHistory">
-      <img class="footer-img" src="/images/history.png"  alt="" loading="eager">
-      <span class="footer-lbl">تاريخ</span>
-    </button>
-    <button class="footer-btn" id="btnCalendar">
-      <img class="footer-img" src="/images/calendar.png" alt="" loading="eager">
-      <span class="footer-lbl">تقويم</span>
-    </button>
-    <button class="footer-btn" id="btnDeposit">
-      <img class="footer-img" src="/images/diposit.png"  alt="" loading="eager">
-      <span class="footer-lbl">إيداع</span>
-    </button>
-    <button class="footer-btn" id="btnWithdraw">
-      <img class="footer-img" src="/images/withdraw.png" alt="" loading="eager">
-      <span class="footer-lbl">سحب</span>
-    </button>
-    <button class="footer-btn footer-logout" id="btnLogout">
-      <span style="font-size:clamp(18px,4vw,24px);line-height:1;display:block;margin-bottom:2px">🚪</span>
-      <span class="footer-lbl">خروج</span>
+    <button class="footer-main-btn footer-opts-btn" id="btnOptions">
+      <span class="fmb-icon">⚙️</span>
+      <span class="fmb-lbl">الخيارات</span>
     </button>
   </footer>
+</div>
+
+<!-- ✅ Options Overlay — ملء شاشة -->
+<div class="opts-overlay hidden" id="optsOverlay">
+  <div class="opts-header">
+    <span class="opts-title">الخيارات</span>
+    <button class="opts-close" id="optsClose">✕</button>
+  </div>
+  <div class="opts-grid">
+    <button class="opts-btn" id="optBalance">
+      <img class="opts-img" src="/images/balance.png" alt="">
+      <span class="opts-lbl">الرصيد</span>
+    </button>
+    <button class="opts-btn" id="optHistory">
+      <img class="opts-img" src="/images/history.png" alt="">
+      <span class="opts-lbl">السجل</span>
+    </button>
+    <button class="opts-btn" id="optCalendar">
+      <img class="opts-img" src="/images/calendar.png" alt="">
+      <span class="opts-lbl">التقويم</span>
+    </button>
+    <button class="opts-btn" id="optDeposit">
+      <img class="opts-img" src="/images/diposit.png" alt="">
+      <span class="opts-lbl">إيداع</span>
+    </button>
+    <button class="opts-btn" id="optWithdraw">
+      <img class="opts-img" src="/images/withdraw.png" alt="">
+      <span class="opts-lbl">سحب</span>
+    </button>
+    <button class="opts-btn opts-btn-logout" id="optLogout">
+      <span class="opts-emoji">🚪</span>
+      <span class="opts-lbl">خروج</span>
+    </button>
+  </div>
 </div>
 
 <!-- شاشة الرسم -->
 <div id="chartScreen" class="chart-screen hidden"></div>
 
 <!-- ══ MODALS ══ -->
-
 <div class="modal-overlay overlay-fs" id="modalConfirm">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -401,7 +412,6 @@
   </div>
 </div>
 
-<!-- ✅ عن التطبيق — شرح مفصل احترافي -->
 <div class="modal-overlay" id="modalAbout">
   <div class="modal" style="max-width:600px;">
     <div class="modal-handle"></div>
@@ -411,48 +421,12 @@
         <p>منصة تداول مباشر على بروتوكول Hyperliquid اللامركزي، تعمل بالكامل داخل متصفحك دون أي خوادم وسيطة.</p>
       </div>
       <div class="about-section">
-        <div class="about-item">
-          <span class="about-icon">🔑</span>
-          <div>
-            <strong>المفتاح الخاص</strong>
-            <p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة. احتفظ بنسخة احتياطية في مكان آمن.</p>
-          </div>
-        </div>
-        <div class="about-item">
-          <span class="about-icon">📈</span>
-          <div>
-            <strong>الشراء والبيع</strong>
-            <p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر متاح في السوق.</p>
-          </div>
-        </div>
-        <div class="about-item">
-          <span class="about-icon">⚖️</span>
-          <div>
-            <strong>الرافعة المالية</strong>
-            <p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p>
-          </div>
-        </div>
-        <div class="about-item">
-          <span class="about-icon">🎯</span>
-          <div>
-            <strong>جني الربح (TP)</strong>
-            <p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد، لتأمين الأرباح دون الحاجة للمراقبة المستمرة.</p>
-          </div>
-        </div>
-        <div class="about-item">
-          <span class="about-icon">🛡️</span>
-          <div>
-            <strong>وقف الخسارة (SL)</strong>
-            <p>أمر وقائي يُغلق الصفقة تلقائياً عند حد خسارة تحدده، للحد من المخاطر في الحركات المعاكسة.</p>
-          </div>
-        </div>
-        <div class="about-item">
-          <span class="about-icon">⚡</span>
-          <div>
-            <strong>سعر التصفية</strong>
-            <p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش المتاح. يظهر في الرسم البياني كخط برتقالي.</p>
-          </div>
-        </div>
+        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة. احتفظ بنسخة احتياطية في مكان آمن.</p></div></div>
+        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر متاح في السوق.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p></div></div>
+        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد، لتأمين الأرباح دون مراقبة مستمرة.</p></div></div>
+        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>أمر وقائي يُغلق الصفقة تلقائياً عند حد خسارة تحدده، للحد من المخاطر في الحركات المعاكسة.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش المتاح. يظهر في الرسم البياني كخط برتقالي.</p></div></div>
       </div>
     </div>
     <div class="modal-buttons modal-buttons-center">
@@ -500,8 +474,7 @@
     <div class="logout-content">
       <div class="logout-icon">⚠️</div>
       <h3 class="modal-title">نسيان رمز PIN</h3>
-      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية بما فيها المفتاح الخاص.<br>
-        <strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
+      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية بما فيها المفتاح الخاص.<br><strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"             id="forgotCancel">إلغاء</button>
@@ -553,7 +526,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/utils.js"></script>
@@ -572,7 +544,6 @@
 <script src="/js/c.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/button.js"></script>
-
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
