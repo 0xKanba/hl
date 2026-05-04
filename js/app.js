@@ -3,59 +3,58 @@
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ════ ساعة عربية UTC+3 للشريط ════ */
+/* ════ ساعة عربية UTC+3 ════ */
 const _AR_MONTHS = [
   'يناير','فبراير','مارس','أبريل','مايو','يونيو',
   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'
 ];
-const _AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 
 function _startDatetimeClock() {
   const el = document.getElementById('dtClock');
   if (!el) return;
   const tick = () => {
-    /* UTC+3 */
-    const now = new Date(Date.now() + 3 * 3600000);
-    const d   = now.getUTCDate();
+    const now = new Date(Date.now() + 3 * 3600000); // UTC+3
+    const d   = String(now.getUTCDate()).padStart(2,'0');
     const mo  = _AR_MONTHS[now.getUTCMonth()];
     const y   = now.getUTCFullYear();
     let   h   = now.getUTCHours();
-    const m   = String(now.getUTCMinutes()).padStart(2, '0');
-    const s   = String(now.getUTCSeconds()).padStart(2, '0');
+    const m   = String(now.getUTCMinutes()).padStart(2,'0');
+    const s   = String(now.getUTCSeconds()).padStart(2,'0');
     const ap  = h >= 12 ? 'مساءً' : 'صباحاً';
     h = h % 12 || 12;
-    const hh  = String(h).padStart(2, '0');
-    el.textContent = `${String(d).padStart(2,'0')} ${mo} ${y} · ${hh}:${m}:${s} ${ap}`;
+    el.textContent = `${d} ${mo} ${y} · ${String(h).padStart(2,'0')}:${m}:${s} ${ap}`;
   };
   tick();
   setInterval(tick, 1000);
 }
 
-/* ════ تبديل جدول الأشهر ════ */
+/* ════ جدول الأشهر ════ */
 function _initMonthsPanel() {
   const bar   = document.getElementById('datetimeBar');
   const panel = document.getElementById('monthsPanel');
   if (!bar || !panel) return;
-
-  bar.addEventListener('click', () => {
-    panel.classList.toggle('hidden');
-  });
-
-  /* إغلاق عند النقر خارجه */
+  bar.addEventListener('click', () => panel.classList.toggle('hidden'));
   document.addEventListener('click', e => {
-    if (!bar.contains(e.target) && !panel.contains(e.target)) {
+    if (!bar.contains(e.target) && !panel.contains(e.target))
       panel.classList.add('hidden');
-    }
   });
+}
+
+/* ════ Options Overlay ════ */
+function openOptions() {
+  document.getElementById('optsOverlay')?.classList.remove('hidden');
+}
+function closeOptions() {
+  document.getElementById('optsOverlay')?.classList.add('hidden');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
 
-  /* ════ شريط التاريخ والوقت ════ */
+  /* ── شريط التاريخ ── */
   _startDatetimeClock();
   _initMonthsPanel();
 
-  /* ════ تسجيل الدخول ════ */
+  /* ── تسجيل الدخول ── */
   $('loginBtn').onclick = login;
   $('privateKey').onkeydown = e => e.key === 'Enter' && login();
   $('toggleKey').onclick = () => {
@@ -65,24 +64,58 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   $('createWalletBtn')?.addEventListener('click', createNewWallet);
 
-  /* ════ تبديل الأصول ════ */
+  /* ── تبديل الأصول ── */
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
     t.onclick = () => switchAsset(t.dataset.asset)
   );
 
-  /* ════ الرسم البياني ════ */
-  $('tabChart')?.addEventListener('click', () => {
+  /* ── Footer — زران ── */
+  $('btnChart').onclick = () => {
     if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
     ChartModule.open(State.asset);
+  };
+  $('btnOptions').onclick = openOptions;
+
+  /* ── Options overlay ── */
+  $('optsClose').onclick = closeOptions;
+
+  $('optBalance').onclick = () => {
+    closeOptions();
+    if (State.wallet) showBalance();
+  };
+  $('optHistory').onclick = () => {
+    closeOptions();
+    if (State.wallet) showHistory();
+  };
+  $('optCalendar').onclick = () => {
+    closeOptions();
+    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    if (typeof openCalendar === 'function') openCalendar();
+  };
+  $('optDeposit').onclick = () => {
+    closeOptions();
+    if (State.wallet) openModal('modalDeposit');
+  };
+  $('optWithdraw').onclick = () => {
+    closeOptions();
+    if (State.wallet) openModal('modalWithdraw');
+  };
+  $('optLogout').onclick = () => {
+    closeOptions();
+    if (State.wallet) openModal('modalLogout');
+  };
+
+  /* إغلاق options بالنقر على الخلفية */
+  $('optsOverlay').addEventListener('click', e => {
+    if (e.target === $('optsOverlay')) closeOptions();
   });
 
-  /* ════ التداول ════ */
+  /* ── التداول ── */
   $('btnBuy').onclick  = () => State.wallet ? askTrade(true)  : toast('سجّل الدخول أولاً', 'err');
   $('btnSell').onclick = () => State.wallet ? askTrade(false) : toast('سجّل الدخول أولاً', 'err');
 
   $('qtyInput').oninput = function () {
     State.qty = parseFloat(this.value) || 0;
-    $('qtyPresets').querySelectorAll('.qty-preset').forEach(b => b.classList.remove('active'));
   };
 
   $('qty100').onclick = () => {
@@ -93,56 +126,46 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!bal || !px) return toast('رصيد غير متاح', 'err');
     State.qty = parseFloat(wire((bal * a.lev) / px, a.szDp));
     $('qtyInput').value = State.qty;
-    $('qtyPresets').querySelectorAll('.qty-preset').forEach(b => b.classList.remove('active'));
-    toast(`✅ الكمية: ${State.qty} ${a.unit}`, 'ok');
+    toast(`✅ ${State.qty} ${a.unit}`, 'ok');
   };
 
-  /* ════ تأكيد الصفقة ════ */
+  /* ── تأكيد الصفقة ── */
   $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
   $('confirmExecute').onclick = () => requirePin(execTrade);
 
-  /* ════ إغلاق صفقة ════ */
+  /* ── إغلاق صفقة ── */
   $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
   $('closeExecute').onclick = () => requirePin(execClose);
 
-  /* ════ إغلاق الكل ════ */
+  /* ── إغلاق الكل ── */
   $('btnCloseAll').onclick     = askCloseAll;
   $('closeAllCancel').onclick  = () => closeModal('modalCloseAll');
   $('closeAllExecute').onclick = () => requirePin(execCloseAll);
 
-  /* ════ TP ════ */
+  /* ── TP ── */
   $('tpCancel').onclick  = () => { closeModal('modalTP'); State.pendingTP = null; };
   $('tpExecute').onclick = () => requirePin(execTP);
   $('tpDelete').onclick  = () => requirePin(deleteTP);
   $('tpAmount').oninput  = recalcTpPreview;
 
-  /* ════ SL ════ */
+  /* ── SL ── */
   $('slCancel').onclick  = () => { closeModal('modalSL'); State.pendingSL = null; };
   $('slExecute').onclick = () => requirePin(execSL);
   $('slDelete').onclick  = () => requirePin(deleteSL);
   $('slAmount').oninput  = recalcSlPreview;
 
-  /* ════ الرصيد ════ */
-  $('btnBalance').onclick   = () => State.wallet && showBalance();
+  /* ── الرصيد ── */
+  $('btnBalance')?.addEventListener('click', () => State.wallet && showBalance());
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
 
-  /* ════ التاريخ ════ */
-  $('btnHistory').onclick   = () => State.wallet && showHistory();
+  /* ── التاريخ ── */
   $('historyClose').onclick = () => closeModal('modalHistory');
 
-  /* ════ التقويم ════ */
-  $('btnCalendar').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
-    if (typeof openCalendar === 'function') openCalendar();
-  };
-
-  /* ════ الإيداع ════ */
-  $('btnDeposit').onclick     = () => State.wallet && openModal('modalDeposit');
+  /* ── الإيداع ── */
   $('depositCancel').onclick  = () => closeModal('modalDeposit');
   $('depositExecute').onclick = () => requirePin(doDeposit);
 
-  /* ════ السحب ════ */
-  $('btnWithdraw').onclick     = () => State.wallet && openModal('modalWithdraw');
+  /* ── السحب ── */
   $('withdrawCancel').onclick  = () => closeModal('modalWithdraw');
   $('withdrawExecute').onclick = () => requirePin(doWithdraw);
 
@@ -157,39 +180,37 @@ document.addEventListener('DOMContentLoaded', () => {
     if (netEl)  netEl.textContent  = `$${Math.max(0, amt - 1).toFixed(2)} USDC`;
   });
 
-  $('withdrawAddress').addEventListener('click', function () { this.select(); });
-  $('withdrawAddress').addEventListener('input', function () {
+  $('withdrawAddress').addEventListener('click',  function () { this.select(); });
+  $('withdrawAddress').addEventListener('input',  function () {
     if (this.value.trim() === 'كاش')
       this.value = '0x0640F5Bfc50AC53eC68C435a60cB0ffF5C555FAD';
   });
 
-  /* ════ الخروج ════ */
-  $('btnLogout').onclick     = () => State.wallet && openModal('modalLogout');
+  /* ── الخروج ── */
   $('logoutCancel').onclick  = () => closeModal('modalLogout');
   $('logoutExecute').onclick = doLogout;
 
-  /* ════ نسخ العنوان ════ */
-  function _copyAddress() {
+  /* ── نسخ العنوان ── */
+  function _copyAddr() {
     if (!State.wallet) return;
     navigator.clipboard?.writeText(State.wallet.address)
       .then(() => toast('✅ تم نسخ العنوان', 'info', 2000))
       .catch(() => toast('تعذّر النسخ', 'err'));
   }
-  $('navAddress').onclick  = _copyAddress;
-  $('navCopyBtn')?.addEventListener('click', _copyAddress);
+  $('navAddress').onclick = _copyAddr;
+  $('navCopyBtn')?.addEventListener('click', _copyAddr);
 
-  /* ════ القفل اليدوي ════ */
+  /* ── القفل ── */
   $('btnLock').onclick = () => lockApp(true);
 
-  /* ✅ شعار "سيولة" — يفتح شرح التطبيق فقط */
+  /* ── شعار سيولة → شرح التطبيق ── */
   $('navLogo')?.addEventListener('click', e => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     openModal('modalAbout');
   });
   $('aboutClose').onclick = () => closeModal('modalAbout');
 
-  /* ════ PIN modals ════ */
+  /* ── PIN ── */
   $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
   $('pinLogout').onclick = () => {
     $('forgotStep1').classList.remove('hidden');
@@ -210,7 +231,6 @@ document.addEventListener('DOMContentLoaded', () => {
     State.pinCallback = null;
   };
 
-  /* ════ لوحة مفاتيح PIN ════ */
   document.addEventListener('keydown', e => {
     const isPinOpen    = $('modalPIN').classList.contains('open');
     const isSetPinOpen = $('modalSetPIN').classList.contains('open');
@@ -222,7 +242,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ════ إغلاق modals بالنقر خارجها ════ */
   document.querySelectorAll('.modal-overlay').forEach(o => o.onclick = e => {
     if (e.target !== o) return;
     if (o.id === 'modalPIN' && State.isLocked) return;
@@ -230,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
     o.classList.remove('open');
   });
 
-  /* ════ استعادة الجلسة تلقائياً ════ */
+  /* ── استعادة الجلسة ── */
   const saved = localStorage.getItem(LS_KEY);
   if (saved) { $('privateKey').value = saved; login(); }
 
