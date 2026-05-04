@@ -1043,3 +1043,89 @@ canvas {
   .tab-price { font-size: clamp(10px, 1.4vw, 13px); }
   .main { padding: 10px 14px 6px; }
 }
+
+/* ═══════════════════════════════════════
+   شريط التاريخ والوقت
+═══════════════════════════════════════ */
+.datetime-bar {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 5px 12px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s;
+  user-select: none;
+}
+.datetime-bar:hover { background: var(--bg-input); }
+.datetime-bar:active { background: var(--bg-input); }
+
+.dt-clock {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px; font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: .3px;
+  direction: rtl;
+}
+.dt-hint {
+  font-size: 13px; opacity: .6;
+}
+
+/* ═══════════════════════════════════════
+   جدول الأشهر
+═══════════════════════════════════════ */
+.months-panel {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 10px 6px;
+  flex-shrink: 0;
+  animation: slideDown .18s ease;
+  overflow: hidden;
+}
+@keyframes slideDown {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.months-panel.hidden { display: none; }
+
+.months-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+@media (min-width: 480px) {
+  .months-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+.month-item {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center;
+}
+.m-num  {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 16px; font-weight: 900; color: var(--ac); line-height: 1;
+}
+.m-name {
+  font-size: 11px; font-weight: 800; color: var(--text-primary); line-height: 1.2;
+}
+.m-en {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px; color: var(--text-muted); font-weight: 700;
+}
+
+/* ═══════════════════════════════════════
+   NAV Logo Button — منفصل عن "مباشر"
+═══════════════════════════════════════ */
+.nav-logo-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; cursor: pointer;
+  padding: 4px 6px; border-radius: 8px;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.nav-logo-btn:hover { background: var(--ac-dim); }
+.nav-logo-btn:active { opacity: .7; }
