@@ -93,6 +93,7 @@ https://hl.kanba.pw/
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -101,6 +102,7 @@ https://hl.kanba.pw/
 .
 ├── README.md
 ├── hl.css
+├── hl2.css
 ├── icon-192x192.png
 ├── icon-512x512.png
 ├── images
@@ -124,7 +126,6 @@ https://hl.kanba.pw/
 │   ├── c.js
 │   ├── chart.js
 │   ├── config.js
-│   ├── hl2.css
 │   ├── pin.js
 │   ├── positions.js
 │   ├── prices.js
