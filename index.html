@@ -17,23 +17,6 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-512x512.png">
 
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "سيولة",
-    "alternateName": "HL Simple",
-    "url": "https://hl.kanba.pw/",
-    "description": "سيولة وبساطة للاستثمار والتداول على Hyperliquid",
-    "publisher": { "@type": "Organization", "name": "HL Simple" }
-  }
-  </script>
-  <meta property="og:title"       content="سيولة · HL Simple">
-  <meta property="og:description" content="سيولة وبساطة للاستثمار والتداول">
-  <meta property="og:image"       content="https://hl.kanba.pw/icon-192x192.png">
-  <meta property="og:url"         content="https://hl.kanba.pw/">
-  <meta property="og:type"        content="website">
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/hl.css">
@@ -50,9 +33,7 @@
 </head>
 <body>
 
-<!-- ══════════════════════════════
-     شاشة الدخول
-══════════════════════════════ -->
+<!-- ══ شاشة الدخول ══ -->
 <div class="screen" id="loginScreen">
   <div class="login-brand">
     <div class="login-icon">💧</div>
@@ -70,28 +51,32 @@
       <strong>🔒 المفتاح يُحفظ في متصفحك فقط</strong><br>
       لا خوادم · لا وسيط · توقيعاتك تتم محلياً
     </div>
-    <button class="create-wallet-btn" id="createWalletBtn">
-      إنشاء محفظة جديدة مجاناً ←
-    </button>
+    <button class="create-wallet-btn" id="createWalletBtn">إنشاء محفظة جديدة مجاناً ←</button>
   </div>
 </div>
 
-<!-- ══════════════════════════════
-     التطبيق الرئيسي
-══════════════════════════════ -->
+<!-- ══ التطبيق الرئيسي ══ -->
 <div class="screen hidden" id="appScreen">
 
+  <!-- NAV: كل زر منفصل -->
   <nav class="nav">
-    <div class="nav-left" id="navLogo">
-      <span class="nav-logo-icon">💧</span>
-      <span class="nav-logo-text">سيولة</span>
-      <a href="https://shopkanba.pw/" target="_blank" rel="noopener"
-         class="nav-status" style="text-decoration:none;color:inherit;">
+    <!-- يسار: شعار يفتح الشرح + زر مباشر للرابط الخارجي -->
+    <div class="nav-left">
+      <!-- ✅ "سيولة" وحده يفتح الشرح -->
+      <button class="nav-logo-btn" id="navLogo">
+        <span class="nav-logo-icon">💧</span>
+        <span class="nav-logo-text">سيولة</span>
+      </button>
+      <!-- ✅ "مباشر" وحده رابط خارجي -->
+      <a href="https://shop.kanba.pw/"
+         target="_blank" rel="noopener"
+         class="nav-status">
         <span class="status-dot"></span>مباشر
       </a>
     </div>
+
+    <!-- يمين: ساعة + قفل + عنوان + نسخ -->
     <div class="nav-right">
-      <div id="mainClock" class="nav-clock"></div>
       <button id="btnLock" title="قفل التطبيق">🔒</button>
       <div class="nav-address-wrap">
         <div class="nav-address" id="navAddress" title="انقر للنسخ">—</div>
@@ -99,6 +84,30 @@
       </div>
     </div>
   </nav>
+
+  <!-- ✅ شريط التاريخ والوقت — بين NAV والتابات -->
+  <div class="datetime-bar" id="datetimeBar" title="انقر لعرض التقويم">
+    <span class="dt-clock" id="dtClock">—</span>
+    <span class="dt-hint">📅</span>
+  </div>
+
+  <!-- ✅ جدول الأشهر — يظهر عند النقر على شريط التاريخ -->
+  <div class="months-panel hidden" id="monthsPanel">
+    <div class="months-grid">
+      <div class="month-item"><span class="m-num">1</span><span class="m-name">يناير</span><span class="m-en">Jan</span></div>
+      <div class="month-item"><span class="m-num">2</span><span class="m-name">فبراير</span><span class="m-en">Feb</span></div>
+      <div class="month-item"><span class="m-num">3</span><span class="m-name">مارس</span><span class="m-en">Mar</span></div>
+      <div class="month-item"><span class="m-num">4</span><span class="m-name">أبريل</span><span class="m-en">Apr</span></div>
+      <div class="month-item"><span class="m-num">5</span><span class="m-name">مايو</span><span class="m-en">May</span></div>
+      <div class="month-item"><span class="m-num">6</span><span class="m-name">يونيو</span><span class="m-en">Jun</span></div>
+      <div class="month-item"><span class="m-num">7</span><span class="m-name">يوليو</span><span class="m-en">Jul</span></div>
+      <div class="month-item"><span class="m-num">8</span><span class="m-name">أغسطس</span><span class="m-en">Aug</span></div>
+      <div class="month-item"><span class="m-num">9</span><span class="m-name">سبتمبر</span><span class="m-en">Sep</span></div>
+      <div class="month-item"><span class="m-num">10</span><span class="m-name">أكتوبر</span><span class="m-en">Oct</span></div>
+      <div class="month-item"><span class="m-num">11</span><span class="m-name">نوفمبر</span><span class="m-en">Nov</span></div>
+      <div class="month-item"><span class="m-num">12</span><span class="m-name">ديسمبر</span><span class="m-en">Dec</span></div>
+    </div>
+  </div>
 
   <div class="tabs">
     <button class="tab" data-asset="XAU">
@@ -132,7 +141,6 @@
 
   <main class="main">
     <div class="col-left">
-      <!-- بطاقة السعر -->
       <div class="price-card" id="priceCard">
         <div class="price-img-wrap" id="priceImgWrap">
           <img id="priceAssetImg" src="/images/oil.svg" alt="asset" loading="eager">
@@ -155,7 +163,6 @@
         </div>
       </div>
 
-      <!-- لوحة التداول -->
       <div class="trade-panel">
         <div class="panel-header">تنفيذ صفقة · <span id="tradeAssetName">نفط خام</span></div>
         <div class="qty-presets" id="qtyPresets"></div>
@@ -220,14 +227,11 @@
   </footer>
 </div>
 
-<!-- شاشة الرسم البياني -->
+<!-- شاشة الرسم -->
 <div id="chartScreen" class="chart-screen hidden"></div>
 
-<!-- ══════════════════════════════
-     MODALS
-══════════════════════════════ -->
+<!-- ══ MODALS ══ -->
 
-<!-- تأكيد الصفقة -->
 <div class="modal-overlay overlay-fs" id="modalConfirm">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -241,7 +245,6 @@
   </div>
 </div>
 
-<!-- إغلاق صفقة -->
 <div class="modal-overlay overlay-fs" id="modalClose">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -249,13 +252,12 @@
     <p class="modal-subtitle">سيتم الإغلاق فوراً بالسعر الحالي</p>
     <div class="confirm-details" id="closeDetails"></div>
     <div class="modal-buttons">
-      <button class="btn-modal btn-cancel"              id="closeCancel">إبقاء</button>
-      <button class="btn-modal btn-confirm btn-danger"  id="closeExecute">إغلاق الآن ✕</button>
+      <button class="btn-modal btn-cancel"             id="closeCancel">إبقاء</button>
+      <button class="btn-modal btn-confirm btn-danger" id="closeExecute">إغلاق الآن ✕</button>
     </div>
   </div>
 </div>
 
-<!-- إغلاق الكل -->
 <div class="modal-overlay overlay-fs" id="modalCloseAll">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -269,7 +271,6 @@
   </div>
 </div>
 
-<!-- TP جني الربح -->
 <div class="modal-overlay overlay-fs" id="modalTP">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -292,7 +293,6 @@
   </div>
 </div>
 
-<!-- SL وقف الخسارة -->
 <div class="modal-overlay overlay-fs" id="modalSL">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -315,7 +315,6 @@
   </div>
 </div>
 
-<!-- الرصيد -->
 <div class="modal-overlay" id="modalBalance">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -329,7 +328,6 @@
   </div>
 </div>
 
-<!-- التاريخ -->
 <div class="modal-overlay" id="modalHistory">
   <div class="modal" style="display:flex;flex-direction:column;">
     <h3 class="modal-title">📜 سجل الصفقات</h3>
@@ -343,7 +341,6 @@
   </div>
 </div>
 
-<!-- الإيداع -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -352,10 +349,7 @@
       <label>المبلغ (USDC)</label>
       <input type="number" class="form-input" id="depositAmount" placeholder="100" min="8">
     </div>
-    <p class="form-note">
-      الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>
-      الحد الأدنى $8 · يصل خلال 1–3 دقائق عادةً.
-    </p>
+    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $8 · يصل خلال 1–3 دقائق.</p>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"              id="depositCancel">إلغاء</button>
       <button class="btn-modal btn-confirm btn-success" id="depositExecute">إيداع ✓</button>
@@ -363,7 +357,6 @@
   </div>
 </div>
 
-<!-- السحب -->
 <div class="modal-overlay" id="modalWithdraw">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -377,18 +370,9 @@
       <input type="number" class="form-input" id="withdrawAmount" placeholder="21" min="2">
     </div>
     <div class="withdraw-preview hidden" id="withdrawPreview">
-      <div class="wp-row">
-        <span>📤 المبلغ المُرسَل</span>
-        <span class="wp-val" id="wpSend">—</span>
-      </div>
-      <div class="wp-row">
-        <span>💸 رسوم Hyperliquid</span>
-        <span class="wp-val red">- $1.00</span>
-      </div>
-      <div class="wp-row wp-net">
-        <span>✅ يصلك صافي</span>
-        <span class="wp-val green" id="wpNet">—</span>
-      </div>
+      <div class="wp-row"><span>📤 المبلغ المُرسَل</span><span class="wp-val" id="wpSend">—</span></div>
+      <div class="wp-row"><span>💸 رسوم Hyperliquid</span><span class="wp-val red">- $1.00</span></div>
+      <div class="wp-row wp-net"><span>✅ يصلك صافي</span><span class="wp-val green" id="wpNet">—</span></div>
     </div>
     <div class="form-group">
       <label>عنوان المحفظة (Arbitrum)</label>
@@ -401,17 +385,14 @@
   </div>
 </div>
 
-<!-- تسجيل الخروج -->
 <div class="modal-overlay" id="modalLogout">
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="logout-content">
       <div class="logout-icon">🔐</div>
       <h3 class="modal-title">تسجيل الخروج</h3>
-      <p class="logout-text">
-        سيُحذف المفتاح الخاص من ذاكرة المتصفح.<br>
-        صفقاتك المفتوحة <strong>تبقى نشطة</strong> على Hyperliquid.
-      </p>
+      <p class="logout-text">سيُحذف المفتاح الخاص من ذاكرة المتصفح.<br>
+        صفقاتك المفتوحة <strong>تبقى نشطة</strong> على Hyperliquid.</p>
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"             id="logoutCancel">إلغاء</button>
@@ -420,23 +401,21 @@
   </div>
 </div>
 
-<!-- عن التطبيق -->
+<!-- ✅ عن التطبيق — شرح مفصل احترافي -->
 <div class="modal-overlay" id="modalAbout">
   <div class="modal" style="max-width:600px;">
     <div class="modal-handle"></div>
     <h3 class="modal-title" style="text-align:center;color:var(--ac);">💧 سيولة · كيف يعمل؟</h3>
     <div class="about-body">
-
       <div class="about-block">
         <p>منصة تداول مباشر على بروتوكول Hyperliquid اللامركزي، تعمل بالكامل داخل متصفحك دون أي خوادم وسيطة.</p>
       </div>
-
       <div class="about-section">
         <div class="about-item">
           <span class="about-icon">🔑</span>
           <div>
             <strong>المفتاح الخاص</strong>
-            <p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل إلى أي جهة. احتفظ بنسخة احتياطية في مكان آمن.</p>
+            <p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة. احتفظ بنسخة احتياطية في مكان آمن.</p>
           </div>
         </div>
         <div class="about-item">
@@ -450,21 +429,21 @@
           <span class="about-icon">⚖️</span>
           <div>
             <strong>الرافعة المالية</strong>
-            <p>تتيح التحكم بمركز أكبر من رصيدك. تزيد من الأرباح المحتملة وكذلك من المخاطر. استخدمها بحذر.</p>
+            <p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p>
           </div>
         </div>
         <div class="about-item">
           <span class="about-icon">🎯</span>
           <div>
             <strong>جني الربح (TP)</strong>
-            <p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد مسبقاً، لتأمين الأرباح دون الحاجة للمراقبة المستمرة.</p>
+            <p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد، لتأمين الأرباح دون الحاجة للمراقبة المستمرة.</p>
           </div>
         </div>
         <div class="about-item">
           <span class="about-icon">🛡️</span>
           <div>
             <strong>وقف الخسارة (SL)</strong>
-            <p>أمر وقائي يُغلق الصفقة تلقائياً عند حد خسارة تحدده، للحد من المخاطر في حالات الحركة المعاكسة.</p>
+            <p>أمر وقائي يُغلق الصفقة تلقائياً عند حد خسارة تحدده، للحد من المخاطر في الحركات المعاكسة.</p>
           </div>
         </div>
         <div class="about-item">
@@ -475,7 +454,6 @@
           </div>
         </div>
       </div>
-
     </div>
     <div class="modal-buttons modal-buttons-center">
       <button class="btn-modal btn-confirm btn-success" id="aboutClose">فهمت — ابدأ التداول</button>
@@ -483,7 +461,7 @@
   </div>
 </div>
 
-<!-- PIN — إدخال الرمز -->
+<!-- PIN -->
 <div class="modal-overlay" id="modalPIN">
   <div class="lock-screen">
     <div class="lock-header">
@@ -516,17 +494,14 @@
   </div>
 </div>
 
-<!-- نسيان PIN -->
 <div class="modal-overlay" id="modalForgotPIN" style="z-index:9999;">
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="logout-content">
       <div class="logout-icon">⚠️</div>
       <h3 class="modal-title">نسيان رمز PIN</h3>
-      <p class="logout-text">
-        لاسترداد الوصول يجب حذف جميع البيانات المحلية بما فيها المفتاح الخاص.<br>
-        <strong>هذا الإجراء لا يمكن التراجع عنه.</strong>
-      </p>
+      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية بما فيها المفتاح الخاص.<br>
+        <strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"             id="forgotCancel">إلغاء</button>
@@ -536,13 +511,12 @@
   </div>
 </div>
 
-<!-- تعيين PIN -->
 <div class="modal-overlay" id="modalSetPIN">
   <div class="lock-screen">
     <div class="lock-header">
       <div class="lock-icon">🔑</div>
       <h3 class="lock-title">تعيين رمز PIN</h3>
-      <p class="lock-subtitle">رمز من 4 أرقام لحماية صفقاتك وسحوباتك</p>
+      <p class="lock-subtitle">رمز من 4 أرقام لحماية صفقاتك</p>
     </div>
     <div class="pin-dots" id="setPinDots">
       <div class="dot"></div><div class="dot"></div>
@@ -568,54 +542,37 @@
   </div>
 </div>
 
-<!-- Toast & Loader -->
 <div id="toast"></div>
-<div id="loader">
-  <div class="spinner"></div>
-  <div class="loader-text" id="loaderText">جاري...</div>
-</div>
+<div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
 
-<!-- Preload JS أساسي -->
 <link rel="preload" as="script" href="/js/config.js">
 <link rel="preload" as="script" href="/js/state.js">
 <link rel="preload" as="script" href="/js/utils.js">
 <link rel="preload" as="script" href="/js/ws.js">
 
-<!-- CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 
-<!-- Core -->
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/utils.js"></script>
-
-<!-- API & Network -->
 <script src="/js/api.js"></script>
 <script src="/js/ws.js"></script>
-
-<!-- Business Logic -->
 <script src="/js/prices.js"></script>
 <script src="/js/session.js"></script>
 <script src="/js/positions.js"></script>
 <script src="/js/account.js"></script>
 <script src="/js/trading.js"></script>
 <script src="/js/tpsl.js"></script>
-
-<!-- UI -->
 <script src="/js/assets.js"></script>
 <script src="/js/pin.js"></script>
 <script src="/js/auth.js"></script>
-
-<!-- Charts & Calendar -->
 <script src="/js/chart.js"></script>
 <script src="/js/c.js"></script>
-
-<!-- App Init — آخراً دائماً -->
 <script src="/js/app.js"></script>
+<script src="/js/button.js"></script>
 
-<!-- Service Worker -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
