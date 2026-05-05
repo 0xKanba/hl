@@ -13,7 +13,7 @@ function _startDatetimeClock() {
   const el = document.getElementById('dtClock');
   if (!el) return;
   const tick = () => {
-    const now = new Date(Date.now() + 3 * 3600000); // UTC+3
+    const now = new Date(Date.now() + 3 * 3600000);
     const d   = String(now.getUTCDate()).padStart(2,'0');
     const mo  = _AR_MONTHS[now.getUTCMonth()];
     const y   = now.getUTCFullYear();
@@ -40,12 +40,44 @@ function _initMonthsPanel() {
   });
 }
 
-/* ════ Options Overlay ════ */
+/* ════ Options Overlay ════
+   المنطق: تبقى مفتوحة — الـ modals تفتح فوقها
+   لا تُغلَق إلا بـ: زر الرجوع أو ايماء للأعلى
+════ */
 function openOptions() {
-  document.getElementById('optsOverlay')?.classList.remove('hidden');
+  const ov = document.getElementById('optsOverlay');
+  if (!ov) return;
+  ov.classList.remove('hidden');
+  ov.classList.add('visible');
 }
+
 function closeOptions() {
-  document.getElementById('optsOverlay')?.classList.add('hidden');
+  const ov = document.getElementById('optsOverlay');
+  if (!ov) return;
+  ov.classList.add('closing');
+  setTimeout(() => {
+    ov.classList.remove('visible', 'closing');
+    ov.classList.add('hidden');
+  }, 200);
+}
+
+/* ════ Swipe-Up لإغلاق Options ════ */
+function _initOptsSwipe() {
+  const ov = document.getElementById('optsOverlay');
+  if (!ov) return;
+  let startY = 0, startTime = 0;
+
+  ov.addEventListener('touchstart', e => {
+    startY    = e.touches[0].clientY;
+    startTime = Date.now();
+  }, { passive: true });
+
+  ov.addEventListener('touchend', e => {
+    const dy   = startY - e.changedTouches[0].clientY; // موجب = للأعلى
+    const dt   = Date.now() - startTime;
+    /* سرعة كافية وارتفاع ≥ 60px للأعلى */
+    if (dy >= 60 && dt < 400) closeOptions();
+  }, { passive: true });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -53,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ── شريط التاريخ ── */
   _startDatetimeClock();
   _initMonthsPanel();
+  _initOptsSwipe();
 
   /* ── تسجيل الدخول ── */
   $('loginBtn').onclick = login;
@@ -69,46 +102,40 @@ document.addEventListener('DOMContentLoaded', () => {
     t.onclick = () => switchAsset(t.dataset.asset)
   );
 
-  /* ── Footer — زران ── */
-  $('btnChart').onclick = () => {
+  /* ── Footer ── */
+  $('btnChart').onclick   = () => {
     if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
     ChartModule.open(State.asset);
   };
   $('btnOptions').onclick = openOptions;
 
-  /* ── Options overlay ── */
+  /* ── زر الرجوع في Options ← ── */
   $('optsClose').onclick = closeOptions;
 
+  /* ── أزرار الخيارات — تفتح modal فوق الـ overlay بدون إغلاقها ── */
   $('optBalance').onclick = () => {
-    closeOptions();
-    if (State.wallet) showBalance();
+    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    showBalance();  /* تفتح فوق الـ overlay */
   };
   $('optHistory').onclick = () => {
-    closeOptions();
-    if (State.wallet) showHistory();
+    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    showHistory();
   };
   $('optCalendar').onclick = () => {
-    closeOptions();
     if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
     if (typeof openCalendar === 'function') openCalendar();
   };
   $('optDeposit').onclick = () => {
-    closeOptions();
-    if (State.wallet) openModal('modalDeposit');
+    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    openModal('modalDeposit');
   };
   $('optWithdraw').onclick = () => {
-    closeOptions();
-    if (State.wallet) openModal('modalWithdraw');
+    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    openModal('modalWithdraw');
   };
   $('optLogout').onclick = () => {
-    closeOptions();
-    if (State.wallet) openModal('modalLogout');
+    openModal('modalLogout');
   };
-
-  /* إغلاق options بالنقر على الخلفية */
-  $('optsOverlay').addEventListener('click', e => {
-    if (e.target === $('optsOverlay')) closeOptions();
-  });
 
   /* ── التداول ── */
   $('btnBuy').onclick  = () => State.wallet ? askTrade(true)  : toast('سجّل الدخول أولاً', 'err');
@@ -155,7 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('slAmount').oninput  = recalcSlPreview;
 
   /* ── الرصيد ── */
-  $('btnBalance')?.addEventListener('click', () => State.wallet && showBalance());
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
 
   /* ── التاريخ ── */
@@ -180,8 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (netEl)  netEl.textContent  = `$${Math.max(0, amt - 1).toFixed(2)} USDC`;
   });
 
-  $('withdrawAddress').addEventListener('click',  function () { this.select(); });
-  $('withdrawAddress').addEventListener('input',  function () {
+  $('withdrawAddress').addEventListener('click', function () { this.select(); });
+  $('withdrawAddress').addEventListener('input', function () {
     if (this.value.trim() === 'كاش')
       this.value = '0x0640F5Bfc50AC53eC68C435a60cB0ffF5C555FAD';
   });
@@ -203,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ── القفل ── */
   $('btnLock').onclick = () => lockApp(true);
 
-  /* ── شعار سيولة → شرح التطبيق ── */
+  /* ── شعار سيولة → شرح ── */
   $('navLogo')?.addEventListener('click', e => {
     e.preventDefault(); e.stopPropagation();
     openModal('modalAbout');
@@ -242,6 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  /* ── إغلاق modals بالنقر خارجها ── */
   document.querySelectorAll('.modal-overlay').forEach(o => o.onclick = e => {
     if (e.target !== o) return;
     if (o.id === 'modalPIN' && State.isLocked) return;
