@@ -1,21 +1,21 @@
 /* ═══════════════════════════════════════
-   sw.js — Service Worker v3.0
+   sw.js — Service Worker v3.1
    ✅ 3 استراتيجيات تخزين واضحة
    ✅ يعمل بدون إنترنت كاملاً
-   ✅ بدون الملفات الخمسة المحذوفة
+   ✅ hl2.css مضاف (كان مفقوداً — v3.0 bug)
 ═══════════════════════════════════════ */
 'use strict';
 
-const CACHE_APP    = 'hltrade-app-v307';   /* JS/CSS/HTML */
-const CACHE_IMGS   = 'hltrade-img-v307';   /* صور */
-const CACHE_FONTS  = 'hltrade-fnt-v307';   /* خطوط */
+const CACHE_APP    = 'hltrade-app-v310';   /* JS/CSS/HTML */
+const CACHE_IMGS   = 'hltrade-img-v310';   /* صور */
+const CACHE_FONTS  = 'hltrade-fnt-v310';   /* خطوط */
 
 /* ══ الملفات الأساسية — تُحمَّل عند التثبيت ══ */
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/hl.css',  
-   '/hl2.css',
+  '/hl.css',
+  '/hl2.css',          /* ✅ مضاف — كان مفقوداً في v3.0 */
   '/manifest.json',
   /* JS core */
   '/js/config.js',
@@ -78,8 +78,7 @@ self.addEventListener('fetch', e => {
 
   const url = new URL(e.request.url);
 
-  /* 1. API Hyperliquid — Network First, fallback Cache
-        الأسعار يجب أن تكون حية، لكن إذا offline نُظهر آخر قيمة */
+  /* 1. API Hyperliquid — Network First, fallback Cache */
   if (url.hostname === 'api.hyperliquid.xyz' || url.hostname === 'arb1.arbitrum.io') {
     e.respondWith(networkFirst(e.request, CACHE_APP));
     return;
@@ -111,7 +110,6 @@ self.addEventListener('fetch', e => {
    استراتيجيات التخزين
 ══════════════════════════════ */
 
-/* Network First: جرب الشبكة أولاً، fallback للكاش */
 async function networkFirst(req, cacheName) {
   try {
     const res = await fetch(req);
@@ -129,7 +127,6 @@ async function networkFirst(req, cacheName) {
   }
 }
 
-/* Cache First: الكاش أولاً، الشبكة احتياطياً */
 async function cacheFirst(req, cacheName) {
   const cached = await caches.match(req);
   if (cached) return cached;
@@ -145,11 +142,9 @@ async function cacheFirst(req, cacheName) {
   }
 }
 
-/* Stale While Revalidate: أعطِ الكاش فوراً + جدّد في الخلفية */
 async function staleWhileRevalidate(req, cacheName) {
   const cached = await caches.match(req);
 
-  /* تحديث في الخلفية دائماً */
   const fetchPromise = fetch(req).then(res => {
     if (res && res.ok) {
       caches.open(cacheName).then(c => c.put(req, res.clone())).catch(() => {});
@@ -157,10 +152,8 @@ async function staleWhileRevalidate(req, cacheName) {
     return res;
   }).catch(() => null);
 
-  /* إذا موجود في الكاش → أعطه فوراً */
   if (cached) return cached;
 
-  /* إذا غير موجود → انتظر الشبكة */
   const res = await fetchPromise;
   return res || caches.match('/index.html') || new Response('Offline', { status: 503 });
 }
