@@ -52,7 +52,7 @@ async function login() {
       setInterval(pollPrices,  2000),
       setInterval(pollAccount, 3000)
     );
-    startMainClock();
+    /* ✅ startMainClock() محذوفة — الساعة تعمل من _startDatetimeClock() في app.js */
     startSessionPolling();
     startMainWs();
     startFundingTimer();
