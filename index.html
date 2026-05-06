@@ -224,47 +224,18 @@
   </footer>
 </div>
 
-
-<!-- ✅ Options Overlay — نصوص نظيفة فقط، بدون صور، أسرع -->
+<!-- ✅ Options — context menu نصوص فقط -->
 <div class="opts-overlay hidden" id="optsOverlay">
-  <div class="opts-header">
-    <span class="opts-title">⚙️ الخيارات</span>
-    <button class="opts-close" id="optsClose">← رجوع</button>
+  <div class="opts-menu">
+    <button class="opts-item" id="optBalance">💰 الرصيد والحساب</button>
+    <button class="opts-item" id="optHistory">📜 سجل الصفقات</button>
+    <button class="opts-item" id="optCalendar">📅 تقويم التداول</button>
+    <button class="opts-item" id="optDeposit">💵 إيداع USDC</button>
+    <button class="opts-item" id="optWithdraw">📤 سحب USDC</button>
+    <button class="opts-item opts-item-logout" id="optLogout">🚪 تسجيل الخروج</button>
+    <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
   </div>
-  <nav class="opts-list">
-    <button class="opts-item" id="optBalance">
-      <span class="opts-item-icon">💰</span>
-      <span class="opts-item-lbl">الرصيد والحساب</span>
-      <span class="opts-item-arr">‹</span>
-    </button>
-    <button class="opts-item" id="optHistory">
-      <span class="opts-item-icon">📜</span>
-      <span class="opts-item-lbl">سجل الصفقات</span>
-      <span class="opts-item-arr">‹</span>
-    </button>
-    <button class="opts-item" id="optCalendar">
-      <span class="opts-item-icon">📅</span>
-      <span class="opts-item-lbl">تقويم التداول</span>
-      <span class="opts-item-arr">‹</span>
-    </button>
-    <button class="opts-item" id="optDeposit">
-      <span class="opts-item-icon">💵</span>
-      <span class="opts-item-lbl">إيداع USDC</span>
-      <span class="opts-item-arr">‹</span>
-    </button>
-    <button class="opts-item" id="optWithdraw">
-      <span class="opts-item-icon">📤</span>
-      <span class="opts-item-lbl">سحب USDC</span>
-      <span class="opts-item-arr">‹</span>
-    </button>
-    <button class="opts-item opts-item-logout" id="optLogout">
-      <span class="opts-item-icon">🚪</span>
-      <span class="opts-item-lbl">تسجيل الخروج</span>
-      <span class="opts-item-arr">‹</span>
-    </button>
-  </nav>
 </div>
-
 
 <!-- شاشة الرسم -->
 <div id="chartScreen" class="chart-screen hidden"></div>
