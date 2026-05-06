@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════
    assets.js — تبديل الأصول
+   ✅ priceAssetName الصحيح (كان tradeAssetName — خطأ)
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -11,7 +12,9 @@ function switchAsset(sym) {
   );
 
   const a = ASSETS[sym];
-  setTxt('tradeAssetName', a.name);
+
+  /* ✅ الإصلاح: ID الصحيح هو priceAssetName وليس tradeAssetName */
+  setTxt('priceAssetName', a.name);
   setTxt('qtyUnit', a.unit);
 
   /* صورة بطاقة السعر */
