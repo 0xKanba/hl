@@ -81,9 +81,12 @@
 ────────────────────────────────────── */
 .opts-overlay {
   position: fixed; inset: 0;
-  /* ✅ var(--bg-app) يتغيّر تلقائياً بين فاتح/داكن */
-  background: color-mix(in srgb, var(--bg-app) 96%, transparent);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  /*
+    ✅ خلفية صلبة بالكامل = لا blur = لا GPU overhead
+    backdrop-filter:blur(20px) كانت تبطئ light mode بشكل ملحوظ
+    لأن blur على خلفية فاتحة يكلف GPU ضعف التحميل على داكن
+  */
+  background: var(--bg-app);
   display: flex; flex-direction: column;
   overflow: hidden;
 }
@@ -156,19 +159,26 @@
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   gap: 10px; padding: 22px 10px;
-  /* ✅ var(--bg-card) = أبيض في فاتح، داكن في dark */
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   border-radius: var(--r-lg);
-  cursor: pointer; transition: all .2s;
+  cursor: pointer;
+  /*
+    ✅ transition محدد بدقة — لا transition:all
+    transition:all يحرّك كل خاصية CSS = ثقيل جداً على موبايل
+    نحدد فقط ما يتغير فعلاً عند hover/active
+  */
+  transition: border-color .15s, background .15s, transform .12s;
   min-height: 105px;
   box-shadow: var(--shadow-sm);
+  /* GPU layer خاص يمنع إعادة رسم الصفحة كاملة */
+  will-change: transform;
 }
 .opts-btn:hover {
   border-color: var(--ac);
   background: var(--ac-dim);
-  transform: translateY(-3px);
-  box-shadow: var(--shadow);
+  /* translateY بدل top/margin = GPU فقط لا layout */
+  transform: translateY(-2px);
 }
 .opts-btn:active { transform: scale(.94); }
 
