@@ -40,10 +40,7 @@ function _initMonthsPanel() {
   });
 }
 
-/* ════ Options Overlay ════
-   المنطق: تبقى مفتوحة — الـ modals تفتح فوقها
-   لا تُغلَق إلا بـ: زر الرجوع أو ايماء للأعلى
-════ */
+/* ════ Options Context Menu ════ */
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
@@ -58,26 +55,16 @@ function closeOptions() {
   setTimeout(() => {
     ov.classList.remove('visible', 'closing');
     ov.classList.add('hidden');
-  }, 200);
+  }, 120);
 }
 
-/* ════ Swipe-Up لإغلاق Options ════ */
-function _initOptsSwipe() {
+/* ✅ نقر على الخلفية (خارج القائمة) يغلق */
+function _initOptsBackdrop() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
-  let startY = 0, startTime = 0;
-
-  ov.addEventListener('touchstart', e => {
-    startY    = e.touches[0].clientY;
-    startTime = Date.now();
-  }, { passive: true });
-
-  ov.addEventListener('touchend', e => {
-    const dy   = startY - e.changedTouches[0].clientY; // موجب = للأعلى
-    const dt   = Date.now() - startTime;
-    /* سرعة كافية وارتفاع ≥ 60px للأعلى */
-    if (dy >= 60 && dt < 400) closeOptions();
-  }, { passive: true });
+  ov.addEventListener('click', e => {
+    if (e.target === ov) closeOptions();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -85,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ── شريط التاريخ ── */
   _startDatetimeClock();
   _initMonthsPanel();
-  _initOptsSwipe();
+  _initOptsBackdrop();
 
   /* ── تسجيل الدخول ── */
   $('loginBtn').onclick = login;
