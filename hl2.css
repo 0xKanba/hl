@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════════
+ك/* ═══════════════════════════════════════════════════════
    hl2.css — سيولة · إضافات التصميم
    يُحمَّل بعد hl.css في index.html
 
@@ -75,80 +75,72 @@
 #loader         { z-index: 400 !important; }
 
 /* ──────────────────────────────────────
-   Options Overlay — نصوص نظيفة فقط
-   ✅ بدون صور بدون grid بدون blur
-   ✅ استجابة فورية
-   ✅ فاتح/داكن تلقائي عبر CSS vars
+   Options — context menu
+   ✅ تعتيم 50% فوق الشاشة — يعمل في فاتح وداكن
+   ✅ نصوص فقط — لا صور لا grid لا backdrop-filter
+   ✅ أسرع overlay ممكن
 ────────────────────────────────────── */
+
+/* الخلفية المعتمة — نقر خارج القائمة يغلقها */
 .opts-overlay {
   position: fixed; inset: 0;
-  background: var(--bg-app);
-  display: flex; flex-direction: column;
+  background: rgba(0, 0, 0, .5);   /* 50% تعتيم — يعمل في كلا المظهرين */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.opts-overlay.hidden { display: none; }
+
+/* animation: ظهور سريع بدون تعقيد */
+.opts-overlay.visible {
+  animation: optsFadeIn .15s ease;
+}
+.opts-overlay.closing {
+  animation: optsFadeOut .12s ease forwards;
+}
+@keyframes optsFadeIn  { from{opacity:0;} to{opacity:1;} }
+@keyframes optsFadeOut { from{opacity:1;} to{opacity:0;} }
+
+/* القائمة — بطاقة نصوص وسط الشاشة */
+.opts-menu {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
   overflow: hidden;
-}
-.opts-overlay.hidden  { display: none; }
-.opts-overlay.visible { animation: optsSlideUp .18s ease; }
-.opts-overlay.closing { animation: optsSlideDown .15s ease forwards; }
-
-@keyframes optsSlideUp {
-  from { opacity:0; transform:translateY(16px); }
-  to   { opacity:1; transform:translateY(0); }
-}
-@keyframes optsSlideDown {
-  from { opacity:1; transform:translateY(0); }
-  to   { opacity:0; transform:translateY(16px); }
+  width: min(88vw, 320px);
+  box-shadow: 0 8px 32px rgba(0,0,0,.35);
 }
 
-.opts-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 18px 13px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.opts-title {
-  font-size: 17px; font-weight: 900;
-  color: var(--text-primary);
-}
-.opts-close {
-  background: none; border: none;
-  color: var(--ac); font-size: 14px; font-weight: 800;
-  padding: 6px 10px; border-radius: var(--r-sm);
-  cursor: pointer; font-family: var(--font-ui);
-  transition: background .12s;
-}
-.opts-close:hover  { background: var(--ac-dim); }
-.opts-close:active { opacity: .7; }
-
-/* ── قائمة النصوص ── */
-.opts-list {
-  flex: 1; overflow-y: auto;
-  display: flex; flex-direction: column;
-  padding: 8px 0;
-}
-
+/* كل زر = سطر نص كامل */
 .opts-item {
-  display: flex; align-items: center; gap: 14px;
-  padding: 16px 20px;
+  display: block; width: 100%;
+  padding: 15px 20px;
   background: none; border: none;
   border-bottom: 1px solid var(--border);
-  cursor: pointer; font-family: var(--font-ui);
-  transition: background .1s;
-  width: 100%;
+  font-family: var(--font-ui);
+  font-size: 16px; font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  cursor: pointer;
+  transition: background .08s;
 }
 .opts-item:last-child { border-bottom: none; }
-.opts-item:active { background: var(--bg-elev); }
+.opts-item:active     { background: var(--bg-elev); }
 
-.opts-item-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
-.opts-item-lbl  {
-  flex: 1; font-size: 16px; font-weight: 800;
-  color: var(--text-primary); text-align: right;
-}
-.opts-item-arr  { font-size: 20px; color: var(--text-muted); flex-shrink: 0; }
-
-.opts-item-logout .opts-item-lbl { color: var(--dn); }
+/* الخروج — أحمر */
+.opts-item-logout { color: var(--dn); font-weight: 800; }
 .opts-item-logout:active { background: var(--dn-dim); }
 
-.opts-btn-logout .opts-lbl { color: var(--dn); }
+/* إلغاء — رمادي ثقيل */
+.opts-item-cancel {
+  color: var(--text-secondary);
+  font-weight: 900;
+  background: var(--bg-elev);
+  border-top: 2px solid var(--border) !important;
+  margin-top: 0;
+}
+.opts-item-cancel:active { background: var(--bg-input); }
 
 /* ──────────────────────────────────────
    Toast — يظهر فوق أي modal مفتوح
