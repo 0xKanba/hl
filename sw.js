@@ -6,15 +6,16 @@
 ═══════════════════════════════════════ */
 'use strict';
 
-const CACHE_APP    = 'hltrade-app-v306';   /* JS/CSS/HTML */
-const CACHE_IMGS   = 'hltrade-img-v306';   /* صور */
-const CACHE_FONTS  = 'hltrade-fnt-v306';   /* خطوط */
+const CACHE_APP    = 'hltrade-app-v307';   /* JS/CSS/HTML */
+const CACHE_IMGS   = 'hltrade-img-v307';   /* صور */
+const CACHE_FONTS  = 'hltrade-fnt-v307';   /* خطوط */
 
 /* ══ الملفات الأساسية — تُحمَّل عند التثبيت ══ */
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/hl.css',
+  '/hl.css',  
+   '/hl2.css',
   '/manifest.json',
   /* JS core */
   '/js/config.js',
