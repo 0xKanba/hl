@@ -224,39 +224,47 @@
   </footer>
 </div>
 
-<!-- ✅ Options Overlay — ملء شاشة -->
+
+<!-- ✅ Options Overlay — نصوص نظيفة فقط، بدون صور، أسرع -->
 <div class="opts-overlay hidden" id="optsOverlay">
   <div class="opts-header">
-    <span class="opts-title">الخيارات</span>
-    <button class="opts-close" id="optsClose">✕</button>
+    <span class="opts-title">⚙️ الخيارات</span>
+    <button class="opts-close" id="optsClose">← رجوع</button>
   </div>
-  <div class="opts-grid">
-    <button class="opts-btn" id="optBalance">
-      <img class="opts-img" src="/images/balance.png" alt="">
-      <span class="opts-lbl">الرصيد</span>
+  <nav class="opts-list">
+    <button class="opts-item" id="optBalance">
+      <span class="opts-item-icon">💰</span>
+      <span class="opts-item-lbl">الرصيد والحساب</span>
+      <span class="opts-item-arr">‹</span>
     </button>
-    <button class="opts-btn" id="optHistory">
-      <img class="opts-img" src="/images/history.png" alt="">
-      <span class="opts-lbl">السجل</span>
+    <button class="opts-item" id="optHistory">
+      <span class="opts-item-icon">📜</span>
+      <span class="opts-item-lbl">سجل الصفقات</span>
+      <span class="opts-item-arr">‹</span>
     </button>
-    <button class="opts-btn" id="optCalendar">
-      <img class="opts-img" src="/images/calendar.png" alt="">
-      <span class="opts-lbl">التقويم</span>
+    <button class="opts-item" id="optCalendar">
+      <span class="opts-item-icon">📅</span>
+      <span class="opts-item-lbl">تقويم التداول</span>
+      <span class="opts-item-arr">‹</span>
     </button>
-    <button class="opts-btn" id="optDeposit">
-      <img class="opts-img" src="/images/diposit.png" alt="">
-      <span class="opts-lbl">إيداع</span>
+    <button class="opts-item" id="optDeposit">
+      <span class="opts-item-icon">💵</span>
+      <span class="opts-item-lbl">إيداع USDC</span>
+      <span class="opts-item-arr">‹</span>
     </button>
-    <button class="opts-btn" id="optWithdraw">
-      <img class="opts-img" src="/images/withdraw.png" alt="">
-      <span class="opts-lbl">سحب</span>
+    <button class="opts-item" id="optWithdraw">
+      <span class="opts-item-icon">📤</span>
+      <span class="opts-item-lbl">سحب USDC</span>
+      <span class="opts-item-arr">‹</span>
     </button>
-    <button class="opts-btn opts-btn-logout" id="optLogout">
-      <span class="opts-emoji">🚪</span>
-      <span class="opts-lbl">خروج</span>
+    <button class="opts-item opts-item-logout" id="optLogout">
+      <span class="opts-item-icon">🚪</span>
+      <span class="opts-item-lbl">تسجيل الخروج</span>
+      <span class="opts-item-arr">‹</span>
     </button>
-  </div>
+  </nav>
 </div>
+
 
 <!-- شاشة الرسم -->
 <div id="chartScreen" class="chart-screen hidden"></div>
