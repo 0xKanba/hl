@@ -25,7 +25,7 @@
 .footer-main-btn {
   flex: 1;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 11px 16px;
+  padding: 7px 14px;
   border-radius: var(--r-pill);
   border: 1.5px solid var(--border-strong);
   background: var(--bg-elev);
