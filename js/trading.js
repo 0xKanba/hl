@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════
    trading.js — تنفيذ الصفقات وإغلاقها
+   ✅ shortCoinPos موحّدة في كل مكان
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -156,8 +157,9 @@ function askCloseAll() {
   if (!State.positions.length) return toast('لا توجد صفقات', 'info');
   $('closeAllDetails').innerHTML = State.positions.map(p => {
     const pos  = p.position, pnl = parseFloat(pos.unrealizedPnl || 0);
-    const coin = shortCoin(pos.coin);
-    const a    = ASSETS[coin] || { name:coin, pxDp:2, icon:'📊' };
+    /* ✅ shortCoinPos موحّدة — تعالج XAU/GOLD بشكل صحيح */
+    const sym  = shortCoinPos(pos.coin);
+    const a    = ASSETS[sym] || { name:sym, pxDp:2, icon:'📊' };
     return `<div class="confirm-row">
       <span class="confirm-key">${a.icon} ${a.name}</span>
       <span class="confirm-val ${pnl >= 0 ? 'buy' : 'sell'}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}</span>
