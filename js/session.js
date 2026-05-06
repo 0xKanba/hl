@@ -1,5 +1,8 @@
 /* ═══════════════════════════════════════
-   session.js — إحصائيات الجلسة والساعة
+   session.js — إحصائيات الجلسة والكاش السريع
+   ✅ بداية الجلسة 00:00 UTC+3
+   ✅ كاش يشمل sessionStats → يظهر فوراً عند فتح التطبيق
+   ✅ startMainClock محذوفة (كانت ميتة — dtClock في app.js يغطيها)
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -25,6 +28,7 @@ async function fetchSessionStats(sym) {
       low:  Math.min(...raw.map(c => parseFloat(c.l))) / div
     };
     if (State.asset === sym) updateSessionUI();
+    saveQuickState(); /* ✅ احفظ بعد كل تحديث للجلسة */
   } catch (e) { console.warn('[Session]', sym, e.message); }
 }
 
@@ -56,26 +60,18 @@ function startSessionPolling() {
   State._sessionTimer = setInterval(() => fetchSessionStats(State.asset), 3 * 60_000);
 }
 
-/* ════ الساعة الرئيسية ════ */
-function startMainClock() {
-  clearInterval(State._clockTimer);
-  const tick = () => {
-    const now = new Date();
-    setTxt('mainClock',
-      `${String(now.getDate()).padStart(2,'0')}-${String(now.getMonth()+1).padStart(2,'0')}-${now.getFullYear()} ` +
-      now.toLocaleTimeString('en-US', { hour12:true, hour:'2-digit', minute:'2-digit', second:'2-digit' })
-    );
-  };
-  tick();
-  State._clockTimer = setInterval(tick, 1000);
-}
-
-/* ════ Cache سريع للأسعار ════ */
+/* ════ Cache سريع — يشمل الأسعار + إحصائيات الجلسة ════
+   الفائدة: عند إعادة فتح التطبيق خلال 5 دقائق،
+   الأسعار وإحصائيات الجلسة تظهر فوراً بدون انتظار API
+════ */
 function saveQuickState() {
   if (!State.wallet) return;
   try {
     localStorage.setItem(QSTATE_KEY, JSON.stringify({
-      prices: State.prices, prevDayPx: State.prevDayPx, t: Date.now()
+      prices:       State.prices,
+      prevDayPx:    State.prevDayPx,
+      sessionStats: State.sessionStats, /* ✅ الجديد */
+      t:            Date.now()
     }));
   } catch {}
 }
@@ -83,12 +79,19 @@ function saveQuickState() {
 function loadQuickState() {
   try {
     const d = JSON.parse(localStorage.getItem(QSTATE_KEY) || 'null');
-    if (!d || Date.now() - d.t > 300_000) return; // 5 دقائق
-    if (d.prices)    Object.assign(State.prices,    d.prices);
-    if (d.prevDayPx) Object.assign(State.prevDayPx, d.prevDayPx);
+    if (!d || Date.now() - d.t > 300_000) return; /* 5 دقائق حد أقصى */
+
+    if (d.prices)       Object.assign(State.prices,       d.prices);
+    if (d.prevDayPx)    Object.assign(State.prevDayPx,    d.prevDayPx);
+    if (d.sessionStats) Object.assign(State.sessionStats, d.sessionStats); /* ✅ فوري */
+
+    /* تحديث تابات الأسعار فوراً */
     Object.keys(ASSETS).forEach(sym => {
       const p  = State.prices[sym]; if (!p?.mid) return;
       const el = $(`price${sym}`);  if (el) el.textContent = fmt(p.mid, ASSETS[sym].pxDp);
     });
+
+    /* ✅ عرض إحصائيات الجلسة المحفوظة فوراً */
+    updateSessionUI();
   } catch {}
 }
