@@ -364,7 +364,7 @@ async function api(body){
   });return r.json();
 }
 
-/* ══ Build Maps ══ */
+
 function buildMaps(fills,funding){
   const dayMap={},fundMap={};
   fills.forEach(f=>{
@@ -375,29 +375,45 @@ function buildMaps(fills,funding){
   (funding||[]).forEach(e=>{
     if(e.delta?.type!=='funding')return;
     const k=dayKey(new Date(e.time));
-    // ✅ إشارة صحيحة: نعكس (موجب API = دفعت = ينقص من رصيدك = سالب)
+    /* نعكس: API موجب = دفعت → عندنا سالب */
     const usd=-parseFloat(e.delta.usdc||0);
     fundMap[k]=(fundMap[k]||0)+usd;
   });
   return{dayMap,fundMap};
 }
-
+ 
 /* ══ Stats ══ */
 function showStats(){
   const now=Date.now();
-  const pnl=ms=>_fills.filter(f=>f.time>=now-ms)
+ 
+  /* ── جمع funding لفترة زمنية معينة ── */
+  function sumFunding(ms){
+    const cutoff=now-ms;
+    return Object.entries(_fundMap).reduce((s,[k,v])=>{
+      /* k = 'YYYY-MM-DD' → نحوّل لـ timestamp */
+      const ts=new Date(k+'T12:00:00Z').getTime(); /* منتصف اليوم آمن */
+      return ts>=cutoff ? s+v : s;
+    },0);
+  }
+  const allFunding=Object.values(_fundMap).reduce((s,v)=>s+v,0);
+ 
+  /* ── ربح التداول لفترة زمنية ── */
+  const tradePnl=ms=>_fills.filter(f=>f.time>=now-ms)
     .reduce((s,f)=>s+parseFloat(f.closedPnl||0)-parseFloat(f.fee||0),0);
-  const all=_fills.reduce((s,f)=>s+parseFloat(f.closedPnl||0)-parseFloat(f.fee||0),0);
+  const allTrade=_fills.reduce((s,f)=>s+parseFloat(f.closedPnl||0)-parseFloat(f.fee||0),0);
+ 
   const row=(lbl,v)=>`<div class="cal-stat">
     <span class="cal-stat-l">${lbl}</span>
     <span class="cal-stat-v ${v>=0?'up':'dn'}">${v>=0?'+':''}$${Math.abs(v).toFixed(2)}</span>
   </div>`;
+ 
   $('calStats').innerHTML=
-    row('24 ساعة',pnl(86400000))+
-    row('7 أيام',pnl(604800000))+
-    row('30 يوم',pnl(2592000000))+
-    row('الكل',all);
+    row('24 ساعة',  tradePnl(86400000)   + sumFunding(86400000))+
+    row('7 أيام',   tradePnl(604800000)  + sumFunding(604800000))+
+    row('30 يوم',   tradePnl(2592000000) + sumFunding(2592000000))+
+    row('الكل',     allTrade + allFunding);
 }
+ 
 
 /* ══ Day Names ══ */
 function renderDayHeaders(){
