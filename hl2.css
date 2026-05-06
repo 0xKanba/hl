@@ -75,135 +75,79 @@
 #loader         { z-index: 400 !important; }
 
 /* ──────────────────────────────────────
-   Options Overlay
-   ✅ ألوان ديناميكية — يستخدم CSS variables
-   ✅ يدعم light mode و dark mode تلقائياً
+   Options Overlay — نصوص نظيفة فقط
+   ✅ بدون صور بدون grid بدون blur
+   ✅ استجابة فورية
+   ✅ فاتح/داكن تلقائي عبر CSS vars
 ────────────────────────────────────── */
 .opts-overlay {
   position: fixed; inset: 0;
-  /*
-    ✅ خلفية صلبة بالكامل = لا blur = لا GPU overhead
-    backdrop-filter:blur(20px) كانت تبطئ light mode بشكل ملحوظ
-    لأن blur على خلفية فاتحة يكلف GPU ضعف التحميل على داكن
-  */
   background: var(--bg-app);
   display: flex; flex-direction: column;
   overflow: hidden;
 }
 .opts-overlay.hidden  { display: none; }
-.opts-overlay.visible { animation: optsSlideUp .25s cubic-bezier(.4,0,.2,1); }
-.opts-overlay.closing { animation: optsSlideDown .2s cubic-bezier(.4,0,.2,1) forwards; }
+.opts-overlay.visible { animation: optsSlideUp .18s ease; }
+.opts-overlay.closing { animation: optsSlideDown .15s ease forwards; }
 
 @keyframes optsSlideUp {
-  from { opacity:0; transform:translateY(40px); }
+  from { opacity:0; transform:translateY(16px); }
   to   { opacity:1; transform:translateY(0); }
 }
 @keyframes optsSlideDown {
   from { opacity:1; transform:translateY(0); }
-  to   { opacity:0; transform:translateY(40px); }
+  to   { opacity:0; transform:translateY(16px); }
 }
 
-/* ── Header الخيارات ── */
 .opts-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 18px 12px;
-  flex-shrink: 0;
+  padding: 14px 18px 13px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .opts-title {
-  font-size: 19px; font-weight: 900;
-  /* ✅ var(--text-primary) = أسود في فاتح، أبيض في داكن */
+  font-size: 17px; font-weight: 900;
   color: var(--text-primary);
 }
-
-/* ✅ زر الرجوع ← — يستجيب للمظهر */
 .opts-close {
-  display: flex; align-items: center; gap: 5px;
-  padding: 7px 14px; border-radius: var(--r-pill);
-  background: var(--bg-elev);
-  border: 1.5px solid var(--border-strong);
-  color: var(--text-secondary);
-  font-size: 13px; font-weight: 800;
-  cursor: pointer; transition: all .15s;
-  font-family: var(--font-ui);
+  background: none; border: none;
+  color: var(--ac); font-size: 14px; font-weight: 800;
+  padding: 6px 10px; border-radius: var(--r-sm);
+  cursor: pointer; font-family: var(--font-ui);
+  transition: background .12s;
 }
-.opts-close::before { content: '←'; font-size: 16px; }
-.opts-close:hover {
-  background: var(--bg-input);
-  border-color: var(--ac);
-  color: var(--text-primary);
-}
-.opts-close:active { transform: scale(.92); }
+.opts-close:hover  { background: var(--ac-dim); }
+.opts-close:active { opacity: .7; }
 
-/* ── Grid الخيارات ── */
-.opts-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding: 16px 14px;
+/* ── قائمة النصوص ── */
+.opts-list {
   flex: 1; overflow-y: auto;
-  align-content: center;
-}
-@media (min-width: 400px) {
-  .opts-grid { grid-template-columns: 1fr 1fr 1fr; }
-}
-@media (min-width: 680px) {
-  .opts-grid {
-    grid-template-columns: repeat(3,1fr);
-    max-width: 520px; margin: 0 auto; width: 100%;
-  }
-}
-
-/* ✅ أزرار الخيارات — ألوان ديناميكية بالكامل */
-.opts-btn {
   display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 10px; padding: 22px 10px;
-  background: var(--bg-card);
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-lg);
-  cursor: pointer;
-  /*
-    ✅ transition محدد بدقة — لا transition:all
-    transition:all يحرّك كل خاصية CSS = ثقيل جداً على موبايل
-    نحدد فقط ما يتغير فعلاً عند hover/active
-  */
-  transition: border-color .15s, background .15s, transform .12s;
-  min-height: 105px;
-  box-shadow: var(--shadow-sm);
-  /* GPU layer خاص يمنع إعادة رسم الصفحة كاملة */
-  will-change: transform;
-}
-.opts-btn:hover {
-  border-color: var(--ac);
-  background: var(--ac-dim);
-  /* translateY بدل top/margin = GPU فقط لا layout */
-  transform: translateY(-2px);
-}
-.opts-btn:active { transform: scale(.94); }
-
-.opts-img {
-  width: 42px; height: 42px; object-fit: contain; display: block;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
-}
-.opts-emoji { font-size: 34px; line-height: 1; display: block; }
-
-/* ✅ النص ديناميكي — يقرأ في فاتح وداكن */
-.opts-lbl {
-  font-size: 14px; font-weight: 800;
-  color: var(--text-primary);
-  text-align: center; line-height: 1.2;
+  padding: 8px 0;
 }
 
-/* زر الخروج */
-.opts-btn-logout {
-  border-color: color-mix(in srgb, var(--dn) 35%, transparent);
-  background: var(--dn-dim);
+.opts-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 20px;
+  background: none; border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; font-family: var(--font-ui);
+  transition: background .1s;
+  width: 100%;
 }
-.opts-btn-logout:hover {
-  border-color: var(--dn);
-  background: var(--dn-dim);
+.opts-item:last-child { border-bottom: none; }
+.opts-item:active { background: var(--bg-elev); }
+
+.opts-item-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
+.opts-item-lbl  {
+  flex: 1; font-size: 16px; font-weight: 800;
+  color: var(--text-primary); text-align: right;
 }
+.opts-item-arr  { font-size: 20px; color: var(--text-muted); flex-shrink: 0; }
+
+.opts-item-logout .opts-item-lbl { color: var(--dn); }
+.opts-item-logout:active { background: var(--dn-dim); }
+
 .opts-btn-logout .opts-lbl { color: var(--dn); }
 
 /* ──────────────────────────────────────
