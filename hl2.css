@@ -1,9 +1,14 @@
 /* ═══════════════════════════════════════════════════════
    hl2.css — سيولة · إضافات التصميم
    يُحمَّل بعد hl.css في index.html
+
    ✅ Footer — زران نحيفان
-   ✅ Options Overlay — يبقى مفتوح، modals تعلوه
-   ✅ Swipe-up animation
+   ✅ Options Overlay — ألوان ديناميكية (فاتح/داكن)
+   ✅ طبقات z-index صحيحة هندسياً 100%
+      opts-overlay : 200
+      modal-overlay: 300
+      toast        : 350  ← فوق كل modal
+      loader       : 400  ← فوق الكل
    ✅ شريط التاريخ والوقت
    ✅ جدول الأشهر
    ✅ Nav Logo Button
@@ -57,13 +62,27 @@
 .fmb-lbl  { font-size: 14px; font-weight: 800; }
 
 /* ──────────────────────────────────────
+   Z-INDEX — طبقات مرتبة هندسياً 100%
+
+   opts-overlay : 200
+   modal-overlay: 300  (يفتح فوق opts)
+   toast        : 350  (يظهر داخل سياق أي modal مفتوح)
+   loader       : 400  (فوق كل شيء دائماً)
+────────────────────────────────────── */
+.opts-overlay   { z-index: 200 !important; }
+.modal-overlay  { z-index: 300 !important; }
+#toast          { z-index: 350 !important; }
+#loader         { z-index: 400 !important; }
+
+/* ──────────────────────────────────────
    Options Overlay
-   z-index: 200 — modals عليه بـ z-index أعلى (100→300)
+   ✅ ألوان ديناميكية — يستخدم CSS variables
+   ✅ يدعم light mode و dark mode تلقائياً
 ────────────────────────────────────── */
 .opts-overlay {
   position: fixed; inset: 0;
-  z-index: 200;                          /* الـ modals ستكون 300 */
-  background: rgba(10,9,8,.92);
+  /* ✅ var(--bg-app) يتغيّر تلقائياً بين فاتح/داكن */
+  background: color-mix(in srgb, var(--bg-app) 96%, transparent);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -86,37 +105,32 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 18px 12px;
   flex-shrink: 0;
-  border-bottom: 1px solid rgba(255,255,255,.07);
+  border-bottom: 1px solid var(--border);
 }
 .opts-title {
-  font-size: 19px; font-weight: 900; color: var(--text-primary);
+  font-size: 19px; font-weight: 900;
+  /* ✅ var(--text-primary) = أسود في فاتح، أبيض في داكن */
+  color: var(--text-primary);
 }
 
-/* ✅ زر الرجوع ← بدل × */
+/* ✅ زر الرجوع ← — يستجيب للمظهر */
 .opts-close {
   display: flex; align-items: center; gap: 5px;
   padding: 7px 14px; border-radius: var(--r-pill);
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.14);
+  background: var(--bg-elev);
+  border: 1.5px solid var(--border-strong);
   color: var(--text-secondary);
   font-size: 13px; font-weight: 800;
   cursor: pointer; transition: all .15s;
   font-family: var(--font-ui);
 }
 .opts-close::before { content: '←'; font-size: 16px; }
-.opts-close:hover { background: rgba(255,255,255,.16); color: var(--text-primary); }
+.opts-close:hover {
+  background: var(--bg-input);
+  border-color: var(--ac);
+  color: var(--text-primary);
+}
 .opts-close:active { transform: scale(.92); }
-
-/* ── شريط ايماء للأعلى ── */
-.opts-swipe-hint {
-  text-align: center; padding: 6px 0 2px;
-  font-size: 10px; color: rgba(255,255,255,.25);
-  flex-shrink: 0;
-  letter-spacing: 1px;
-}
-.opts-swipe-hint::before {
-  content: '╌╌ اسحب للأعلى للإغلاق ╌╌';
-}
 
 /* ── Grid الخيارات ── */
 .opts-grid {
@@ -137,53 +151,59 @@
   }
 }
 
+/* ✅ أزرار الخيارات — ألوان ديناميكية بالكامل */
 .opts-btn {
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   gap: 10px; padding: 22px 10px;
-  background: rgba(255,255,255,.05);
-  border: 1.5px solid rgba(255,255,255,.09);
+  /* ✅ var(--bg-card) = أبيض في فاتح، داكن في dark */
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
   border-radius: var(--r-lg);
   cursor: pointer; transition: all .2s;
   min-height: 105px;
+  box-shadow: var(--shadow-sm);
 }
 .opts-btn:hover {
   border-color: var(--ac);
   background: var(--ac-dim);
   transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  box-shadow: var(--shadow);
 }
 .opts-btn:active { transform: scale(.94); }
 
 .opts-img {
   width: 42px; height: 42px; object-fit: contain; display: block;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,.5));
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
 }
 .opts-emoji { font-size: 34px; line-height: 1; display: block; }
+
+/* ✅ النص ديناميكي — يقرأ في فاتح وداكن */
 .opts-lbl {
-  font-size: 14px; font-weight: 800; color: var(--text-primary);
+  font-size: 14px; font-weight: 800;
+  color: var(--text-primary);
   text-align: center; line-height: 1.2;
 }
 
 /* زر الخروج */
 .opts-btn-logout {
-  border-color: rgba(240,82,72,.25);
-  background: rgba(240,82,72,.08);
+  border-color: color-mix(in srgb, var(--dn) 35%, transparent);
+  background: var(--dn-dim);
 }
 .opts-btn-logout:hover {
-  border-color: var(--dn); background: var(--dn-dim);
+  border-color: var(--dn);
+  background: var(--dn-dim);
 }
 .opts-btn-logout .opts-lbl { color: var(--dn); }
 
 /* ──────────────────────────────────────
-   Modals تُفتح فوق Options Overlay
-   رفع z-index من 100 إلى 300
+   Toast — يظهر فوق أي modal مفتوح
+   z-index: 350 (فوق modal 300)
 ────────────────────────────────────── */
-.modal-overlay {
-  z-index: 300 !important;
+#toast {
+  bottom: 68px !important;
+  /* z-index في كتلة z-index أعلاه */
 }
-/* loader فوق الكل */
-#loader { z-index: 400 !important; }
 
 /* ──────────────────────────────────────
    شريط التاريخ والوقت
@@ -341,11 +361,6 @@
   font-family: var(--font-mono); font-size: 10px;
   color: rgba(255,255,255,.85); font-weight: 700;
 }
-
-/* ──────────────────────────────────────
-   Toast — يتكيف مع footer الجديد
-────────────────────────────────────── */
-#toast { bottom: 68px !important; }
 
 /* ──────────────────────────────────────
    About modal body
