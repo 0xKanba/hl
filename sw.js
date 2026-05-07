@@ -6,9 +6,9 @@
 ═══════════════════════════════════════ */
 'use strict';
 
-const CACHE_APP    = 'hltrade-app-v310';   /* JS/CSS/HTML */
-const CACHE_IMGS   = 'hltrade-img-v310';   /* صور */
-const CACHE_FONTS  = 'hltrade-fnt-v310';   /* خطوط */
+const CACHE_APP    = 'hltrade-app-v311';   /* JS/CSS/HTML */
+const CACHE_IMGS   = 'hltrade-img-v311';   /* صور */
+const CACHE_FONTS  = 'hltrade-fnt-v311';   /* خطوط */
 
 /* ══ الملفات الأساسية — تُحمَّل عند التثبيت ══ */
 const APP_SHELL = [
@@ -34,6 +34,7 @@ const APP_SHELL = [
   '/js/auth.js',
   '/js/chart.js',
   '/js/c.js',
+  '/js/notify.js',
   '/js/app.js',
   /* صور */
   '/images/oil.svg',
