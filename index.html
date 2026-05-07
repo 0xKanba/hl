@@ -224,16 +224,37 @@
   </footer>
 </div>
 
-<!-- ✅ Options — context menu نصوص فقط -->
+<!-- ✅ Options Overlay — ملء شاشة -->
 <div class="opts-overlay hidden" id="optsOverlay">
-  <div class="opts-menu">
-    <button class="opts-item" id="optBalance">💰 الرصيد</button>
-    <button class="opts-item" id="optHistory">📜التأريخ </button>
-    <button class="opts-item" id="optCalendar">📅 التقويم الشهري</button>
-    <button class="opts-item" id="optDeposit">💵 ايداع</button>
-    <button class="opts-item" id="optWithdraw">📤 سحب</button>
-    <button class="opts-item opts-item-logout" id="optLogout"> تغيير المحفظة</button>
-    <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
+  <div class="opts-header">
+    <span class="opts-title">الخيارات</span>
+    <button class="opts-close" id="optsClose">✕</button>
+  </div>
+  <div class="opts-grid">
+    <button class="opts-btn" id="optBalance">
+      <img class="opts-img" src="/images/balance.png" alt="">
+      <span class="opts-lbl">الرصيد</span>
+    </button>
+    <button class="opts-btn" id="optHistory">
+      <img class="opts-img" src="/images/history.png" alt="">
+      <span class="opts-lbl">السجل</span>
+    </button>
+    <button class="opts-btn" id="optCalendar">
+      <img class="opts-img" src="/images/calendar.png" alt="">
+      <span class="opts-lbl">التقويم</span>
+    </button>
+    <button class="opts-btn" id="optDeposit">
+      <img class="opts-img" src="/images/diposit.png" alt="">
+      <span class="opts-lbl">إيداع</span>
+    </button>
+    <button class="opts-btn" id="optWithdraw">
+      <img class="opts-img" src="/images/withdraw.png" alt="">
+      <span class="opts-lbl">سحب</span>
+    </button>
+    <button class="opts-btn opts-btn-logout" id="optLogout">
+      <span class="opts-emoji">🚪</span>
+      <span class="opts-lbl">خروج</span>
+    </button>
   </div>
 </div>
 
@@ -540,6 +561,7 @@
 <script src="/js/auth.js"></script>
 <script src="/js/chart.js"></script>
 <script src="/js/c.js"></script>
+<script src="/js/notify.js"></script>
 <script src="/js/app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
