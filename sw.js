@@ -6,9 +6,9 @@
 ═══════════════════════════════════════ */
 'use strict';
 
-const CACHE_APP    = 'hltrade-app-v314';   /* JS/CSS/HTML */
-const CACHE_IMGS   = 'hltrade-img-v314';   /* صور */
-const CACHE_FONTS  = 'hltrade-fnt-v314';   /* خطوط */
+const CACHE_APP    = 'hltrade-app-v320';   /* JS/CSS/HTML */
+const CACHE_IMGS   = 'hltrade-img-v320';   /* صور */
+const CACHE_FONTS  = 'hltrade-fnt-v320';   /* خطوط */
 
 /* ══ الملفات الأساسية — تُحمَّل عند التثبيت ══ */
 const APP_SHELL = [
@@ -41,6 +41,7 @@ const APP_SHELL = [
   '/images/silver.svg',
   '/images/100.png',
   '/images/btc21.png',
+
   /* أيقونات */
   '/icon-192x192.png',
   '/icon-512x512.png'
