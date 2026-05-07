@@ -131,6 +131,7 @@ https://hl.kanba.pw/
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -158,7 +159,6 @@ https://hl.kanba.pw/
 │   ├── c.js
 │   ├── chart.js
 │   ├── config.js
-│   ├── notify.js
 │   ├── pin.js
 │   ├── positions.js
 │   ├── prices.js
@@ -180,6 +180,6 @@ https://hl.kanba.pw/
 ├── x2.png
 └── x3.png
 
-4 directories, 39 files
+4 directories, 38 files
 ```
 <!-- TREE END -->
