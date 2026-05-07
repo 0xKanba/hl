@@ -56,8 +56,6 @@ async function login() {
     startSessionPolling();
     startMainWs();
     startFundingTimer();
-    /* ✅ طلب إذن الإشعارات وأخذ snapshot أولي */
-    if (typeof notifyInit === 'function') notifyInit();
 
   } catch (e) {
     State.wallet = null;
