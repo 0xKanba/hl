@@ -79,8 +79,6 @@ async function pollAccount() {
 
     updateFundingFromPositions(rawPos);
     renderPositions();
-    /* ✅ فحص إشعارات TP/SL بعد كل تحديث */
-    if (typeof notifyCheckPositions === 'function') notifyCheckPositions();
     autoSetReferrer();
   } catch (e) { console.warn('[pollAccount]', e.message); }
 }
