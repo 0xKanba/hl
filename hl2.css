@@ -333,3 +333,175 @@
   font-size: 12px; font-weight: 600;
   color: var(--text-secondary); line-height: 1.6; margin: 0;
 }
+
+/* ══════════════════════════════════════════════════
+   PARTIAL CLOSE — أدوات الإغلاق الجزئي الديناميكي
+   أضف هذا في نهاية hl2.css
+══════════════════════════════════════════════════ */
+
+/* ── الغلاف الرئيسي ── */
+.partial-close-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-md);
+  padding: 13px 14px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+/* ── رأس: تسمية + نسبة مئوية ── */
+.pc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pc-lbl {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+.pc-pct-lbl {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--dn);
+  line-height: 1;
+  min-width: 54px;
+  text-align: left;
+}
+
+/* ── صف الكمية ── */
+.pc-qty-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.pc-qty-input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: clamp(20px, 5vw, 26px);
+  font-weight: 800;
+  text-align: center;
+  direction: ltr;
+  border-radius: var(--r-sm);
+  background: var(--bg-elev);
+  border: 2px solid var(--dn-dim);
+  padding: 9px 10px;
+  min-width: 0;
+  color: var(--text-primary);
+  transition: border-color .15s;
+}
+.pc-qty-input:focus { border-color: var(--dn); box-shadow: 0 0 0 3px var(--dn-dim); }
+.pc-unit {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-align: center;
+  min-width: 36px;
+}
+
+/* ── شريط التمرير ── */
+.pc-slider {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  /* الخلفية تُحدَّث ديناميكياً بـ JS */
+  background: var(--border-strong);
+  transition: opacity .15s;
+}
+.pc-slider:hover { opacity: .9; }
+.pc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--dn);
+  cursor: pointer;
+  border: 3px solid var(--bg-card);
+  box-shadow: 0 2px 8px var(--dn-dim);
+  transition: transform .1s, box-shadow .1s;
+}
+.pc-slider::-webkit-slider-thumb:active {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 6px var(--dn-dim);
+}
+.pc-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--dn);
+  cursor: pointer;
+  border: 3px solid var(--bg-card);
+  box-shadow: 0 2px 8px var(--dn-dim);
+}
+
+/* ── أزرار النسب السريعة ── */
+.pc-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+.pc-preset {
+  padding: 6px 2px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-elev);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  text-align: center;
+  cursor: pointer;
+  transition: all .12s;
+}
+.pc-preset:active { transform: scale(.88); }
+.pc-preset.active {
+  border-color: var(--dn);
+  background: var(--dn-dim);
+  color: var(--dn);
+}
+.pc-preset:hover:not(.active) {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+/* ── معلومات المتبقي ── */
+.pc-remain {
+  background: var(--bg-elev);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pc-remain-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+.pc-remain-lbl {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+.pc-remain-val {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.pc-pnl-est.up { color: var(--up); }
+.pc-pnl-est.dn { color: var(--dn); }
