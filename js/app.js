@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════
    app.js — تهيئة التطبيق وربط الأحداث
+   ✅ إغلاق جزئي ديناميكي: slider ↔ qty ↔ presets
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -58,7 +59,6 @@ function closeOptions() {
   }, 120);
 }
 
-/* ✅ نقر على الخلفية (خارج القائمة) يغلق */
 function _initOptsBackdrop() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
@@ -67,17 +67,18 @@ function _initOptsBackdrop() {
   });
 }
 
+/* ════ الحدث الرئيسي ════ */
 document.addEventListener('DOMContentLoaded', () => {
 
-  /* ── شريط التاريخ ── */
+  /* ── شريط التاريخ والساعة ── */
   _startDatetimeClock();
   _initMonthsPanel();
   _initOptsBackdrop();
 
   /* ── تسجيل الدخول ── */
-  $('loginBtn').onclick = login;
-  $('privateKey').onkeydown = e => e.key === 'Enter' && login();
-  $('toggleKey').onclick = () => {
+  $('loginBtn').onclick       = login;
+  $('privateKey').onkeydown   = e => e.key === 'Enter' && login();
+  $('toggleKey').onclick      = () => {
     const i = $('privateKey');
     i.type = i.type === 'password' ? 'text' : 'password';
     $('toggleKey').textContent = i.type === 'password' ? '👁' : '🙈';
@@ -95,14 +96,12 @@ document.addEventListener('DOMContentLoaded', () => {
     ChartModule.open(State.asset);
   };
   $('btnOptions').onclick = openOptions;
+  $('optsClose').onclick  = closeOptions;
 
-  /* ── زر الرجوع في Options ← ── */
-  $('optsClose').onclick = closeOptions;
-
-  /* ── أزرار الخيارات — تفتح modal فوق الـ overlay بدون إغلاقها ── */
+  /* ── أزرار قائمة الخيارات ── */
   $('optBalance').onclick = () => {
     if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
-    showBalance();  /* تفتح فوق الـ overlay */
+    showBalance();
   };
   $('optHistory').onclick = () => {
     if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
@@ -120,11 +119,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
     openModal('modalWithdraw');
   };
-  $('optLogout').onclick = () => {
-    openModal('modalLogout');
-  };
+  $('optLogout').onclick = () => openModal('modalLogout');
 
-  /* ── التداول ── */
+  /* ── التداول — فتح صفقة ── */
   $('btnBuy').onclick  = () => State.wallet ? askTrade(true)  : toast('سجّل الدخول أولاً', 'err');
   $('btnSell').onclick = () => State.wallet ? askTrade(false) : toast('سجّل الدخول أولاً', 'err');
 
@@ -147,22 +144,37 @@ document.addEventListener('DOMContentLoaded', () => {
   $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
   $('confirmExecute').onclick = () => requirePin(execTrade);
 
-  /* ── إغلاق صفقة ── */
+  /* ── إغلاق صفقة (جزئي أو كامل) ── */
   $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
   $('closeExecute').onclick = () => requirePin(execClose);
+
+  /* شريط التمرير: % → كمية */
+  $('closePctSlider')?.addEventListener('input', function () {
+    _syncCloseFromPct(parseFloat(this.value));
+  });
+
+  /* حقل الكمية: qty → % */
+  $('closeQtyInput')?.addEventListener('input', function () {
+    _syncCloseFromQty(parseFloat(this.value) || 0);
+  });
+
+  /* أزرار النسب السريعة */
+  document.querySelectorAll('.pc-preset').forEach(b => {
+    b.onclick = () => _syncCloseFromPct(parseFloat(b.dataset.pct));
+  });
 
   /* ── إغلاق الكل ── */
   $('btnCloseAll').onclick     = askCloseAll;
   $('closeAllCancel').onclick  = () => closeModal('modalCloseAll');
   $('closeAllExecute').onclick = () => requirePin(execCloseAll);
 
-  /* ── TP ── */
+  /* ── جني الربح (TP) ── */
   $('tpCancel').onclick  = () => { closeModal('modalTP'); State.pendingTP = null; };
   $('tpExecute').onclick = () => requirePin(execTP);
   $('tpDelete').onclick  = () => requirePin(deleteTP);
   $('tpAmount').oninput  = recalcTpPreview;
 
-  /* ── SL ── */
+  /* ── وقف الخسارة (SL) ── */
   $('slCancel').onclick  = () => { closeModal('modalSL'); State.pendingSL = null; };
   $('slExecute').onclick = () => requirePin(execSL);
   $('slDelete').onclick  = () => requirePin(deleteSL);
@@ -171,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ── الرصيد ── */
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
 
-  /* ── التاريخ ── */
+  /* ── سجل الصفقات ── */
   $('historyClose').onclick = () => closeModal('modalHistory');
 
   /* ── الإيداع ── */
@@ -199,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
       this.value = '0x0640F5Bfc50AC53eC68C435a60cB0ffF5C555FAD';
   });
 
-  /* ── الخروج ── */
+  /* ── تسجيل الخروج ── */
   $('logoutCancel').onclick  = () => closeModal('modalLogout');
   $('logoutExecute').onclick = doLogout;
 
@@ -213,10 +225,10 @@ document.addEventListener('DOMContentLoaded', () => {
   $('navAddress').onclick = _copyAddr;
   $('navCopyBtn')?.addEventListener('click', _copyAddr);
 
-  /* ── القفل ── */
+  /* ── القفل اليدوي ── */
   $('btnLock').onclick = () => lockApp(true);
 
-  /* ── شعار سيولة → شرح ── */
+  /* ── شعار سيولة → شرح التطبيق ── */
   $('navLogo')?.addEventListener('click', e => {
     e.preventDefault(); e.stopPropagation();
     openModal('modalAbout');
@@ -244,6 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
     State.pinCallback = null;
   };
 
+  /* ── لوحة أرقام PIN بالكيبورد ── */
   document.addEventListener('keydown', e => {
     const isPinOpen    = $('modalPIN').classList.contains('open');
     const isSetPinOpen = $('modalSetPIN').classList.contains('open');
@@ -263,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
     o.classList.remove('open');
   });
 
-  /* ── استعادة الجلسة ── */
+  /* ── استعادة الجلسة تلقائياً ── */
   const saved = localStorage.getItem(LS_KEY);
   if (saved) { $('privateKey').value = saved; login(); }
 
