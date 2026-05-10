@@ -1,22 +1,18 @@
-ك/* ═══════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════
    hl2.css — سيولة · إضافات التصميم
    يُحمَّل بعد hl.css في index.html
-
    ✅ Footer — زران نحيفان
-   ✅ Options Overlay — ألوان ديناميكية (فاتح/داكن)
-   ✅ طبقات z-index صحيحة هندسياً 100%
-      opts-overlay : 200
-      modal-overlay: 300
-      toast        : 350  ← فوق كل modal
-      loader       : 400  ← فوق الكل
+   ✅ Options Overlay
+   ✅ طبقات z-index صحيحة
    ✅ شريط التاريخ والوقت
    ✅ جدول الأشهر
    ✅ Nav Logo Button
    ✅ Trade Panel نظيف
+   ✅ Partial Close — إغلاق جزئي ديناميكي
 ═══════════════════════════════════════════════════════ */
 
 /* ──────────────────────────────────────
-   Footer — زران فقط
+   Footer
 ────────────────────────────────────── */
 .footer {
   display: flex !important;
@@ -45,29 +41,20 @@
   border-color: var(--ac); color: var(--ac); background: var(--ac-dim);
 }
 
-/* زر الخيارات — ملون بارز */
 .footer-opts-btn {
   background: linear-gradient(135deg, var(--ac), #a8502f) !important;
   border-color: transparent !important;
   color: #fff !important;
   box-shadow: 0 3px 16px var(--ac-dim);
 }
-.footer-opts-btn:hover  {
-  filter: brightness(1.08); color: #fff !important;
-  background: linear-gradient(135deg, var(--ac), #a8502f) !important;
-}
+.footer-opts-btn:hover  { filter: brightness(1.08); color: #fff !important; background: linear-gradient(135deg, var(--ac), #a8502f) !important; }
 .footer-opts-btn:active { transform: scale(.96); }
 
 .fmb-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
 .fmb-lbl  { font-size: 14px; font-weight: 800; }
 
 /* ──────────────────────────────────────
-   Z-INDEX — طبقات مرتبة هندسياً 100%
-
-   opts-overlay : 200
-   modal-overlay: 300  (يفتح فوق opts)
-   toast        : 350  (يظهر داخل سياق أي modal مفتوح)
-   loader       : 400  (فوق كل شيء دائماً)
+   Z-INDEX
 ────────────────────────────────────── */
 .opts-overlay   { z-index: 200 !important; }
 .modal-overlay  { z-index: 300 !important; }
@@ -75,34 +62,20 @@
 #loader         { z-index: 400 !important; }
 
 /* ──────────────────────────────────────
-   Options — context menu
-   ✅ تعتيم 50% فوق الشاشة — يعمل في فاتح وداكن
-   ✅ نصوص فقط — لا صور لا grid لا backdrop-filter
-   ✅ أسرع overlay ممكن
+   Options overlay
 ────────────────────────────────────── */
-
-/* الخلفية المعتمة — نقر خارج القائمة يغلقها */
 .opts-overlay {
   position: fixed; inset: 0;
-  background: rgba(0, 0, 0, .5);   /* 50% تعتيم — يعمل في كلا المظهرين */
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
   z-index: 200;
 }
-.opts-overlay.hidden { display: none; }
+.opts-overlay.hidden   { display: none; }
+.opts-overlay.visible  { animation: optsFadeIn .15s ease; }
+.opts-overlay.closing  { animation: optsFadeOut .12s ease forwards; }
+@keyframes optsFadeIn  { from{opacity:0} to{opacity:1} }
+@keyframes optsFadeOut { from{opacity:1} to{opacity:0} }
 
-/* animation: ظهور سريع بدون تعقيد */
-.opts-overlay.visible {
-  animation: optsFadeIn .15s ease;
-}
-.opts-overlay.closing {
-  animation: optsFadeOut .12s ease forwards;
-}
-@keyframes optsFadeIn  { from{opacity:0;} to{opacity:1;} }
-@keyframes optsFadeOut { from{opacity:1;} to{opacity:0;} }
-
-/* القائمة — بطاقة نصوص وسط الشاشة */
 .opts-menu {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -112,7 +85,6 @@
   box-shadow: 0 8px 32px rgba(0,0,0,.35);
 }
 
-/* كل زر = سطر نص كامل */
 .opts-item {
   display: block; width: 100%;
   padding: 15px 20px;
@@ -121,35 +93,24 @@
   font-family: var(--font-ui);
   font-size: 16px; font-weight: 700;
   color: var(--text-primary);
-  text-align: center;
-  cursor: pointer;
+  text-align: center; cursor: pointer;
   transition: background .08s;
 }
 .opts-item:last-child { border-bottom: none; }
 .opts-item:active     { background: var(--bg-elev); }
-
-/* الخروج — أحمر */
-.opts-item-logout { color: var(--dn); font-weight: 800; }
+.opts-item-logout     { color: var(--dn); font-weight: 800; }
 .opts-item-logout:active { background: var(--dn-dim); }
-
-/* إلغاء — رمادي ثقيل */
 .opts-item-cancel {
-  color: var(--text-secondary);
-  font-weight: 900;
+  color: var(--text-secondary); font-weight: 900;
   background: var(--bg-elev);
   border-top: 2px solid var(--border) !important;
-  margin-top: 0;
 }
 .opts-item-cancel:active { background: var(--bg-input); }
 
 /* ──────────────────────────────────────
-   Toast — يظهر فوق أي modal مفتوح
-   z-index: 350 (فوق modal 300)
+   Toast position
 ────────────────────────────────────── */
-#toast {
-  bottom: 68px !important;
-  /* z-index في كتلة z-index أعلاه */
-}
+#toast { bottom: 68px !important; }
 
 /* ──────────────────────────────────────
    شريط التاريخ والوقت
@@ -165,13 +126,11 @@
 }
 .datetime-bar:hover  { background: var(--bg-input); }
 .datetime-bar:active { opacity: .8; }
-
 .dt-clock {
   font-family: var(--font-ui);
   font-size: 13px; font-weight: 800;
   color: var(--text-primary);
-  direction: rtl; white-space: nowrap;
-  letter-spacing: .2px;
+  direction: rtl; white-space: nowrap; letter-spacing: .2px;
 }
 .dt-hint { font-size: 13px; opacity: .5; flex-shrink: 0; }
 
@@ -186,38 +145,22 @@
   animation: slideDown .18s ease;
 }
 .months-panel.hidden { display: none; }
-
 @keyframes slideDown {
   from { opacity:0; transform:translateY(-6px); }
   to   { opacity:1; transform:translateY(0); }
 }
-
 .months-grid {
-  display: grid;
-  grid-template-columns: repeat(4,1fr);
-  gap: 5px;
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 5px;
 }
-@media (min-width: 480px) {
-  .months-grid { grid-template-columns: repeat(6,1fr); }
-}
-
+@media (min-width: 480px) { .months-grid { grid-template-columns: repeat(6,1fr); } }
 .month-item {
-  display: flex; flex-direction: column;
-  align-items: center; gap: 2px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 8px; padding: 7px 4px;
-  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 4px; text-align: center;
 }
-.m-num  {
-  font-family: var(--font-mono);
-  font-size: 15px; font-weight: 900; color: var(--ac); line-height: 1;
-}
+.m-num  { font-family: var(--font-mono); font-size: 15px; font-weight: 900; color: var(--ac); line-height: 1; }
 .m-name { font-size: 11px; font-weight: 800; color: var(--text-primary); }
-.m-en   {
-  font-family: var(--font-mono);
-  font-size: 9px; color: var(--text-muted); font-weight: 700;
-}
+.m-en   { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); font-weight: 700; }
 
 /* ──────────────────────────────────────
    Nav Logo Button
@@ -230,18 +173,11 @@
 }
 .nav-logo-btn:hover  { background: var(--ac-dim); }
 .nav-logo-btn:active { opacity: .7; }
-
-.nav-logo-icon {
-  font-size: 18px; line-height: 1;
-  filter: drop-shadow(0 0 5px rgba(224,114,72,.6));
-}
-.nav-logo-text {
-  font-size: 16px; font-weight: 900;
-  color: var(--text-primary); letter-spacing: .4px; white-space: nowrap;
-}
+.nav-logo-icon { font-size: 18px; line-height: 1; filter: drop-shadow(0 0 5px rgba(224,114,72,.6)); }
+.nav-logo-text { font-size: 16px; font-weight: 900; color: var(--text-primary); letter-spacing: .4px; white-space: nowrap; }
 
 /* ──────────────────────────────────────
-   Trade Panel — نظيف (بدون header)
+   Trade Panel
 ────────────────────────────────────── */
 .trade-panel {
   background: var(--bg-card) !important;
@@ -251,7 +187,6 @@
   display: flex !important; flex-direction: column !important;
   gap: 8px !important; flex-shrink: 0 !important;
 }
-
 .qty-input-row {
   display: grid !important;
   grid-template-columns: 1fr auto auto !important;
@@ -265,56 +200,37 @@
   border: 2px solid var(--ac-dim); min-width: 0;
 }
 .qty-input:focus { border-color: var(--ac); }
-
 .qty-100 {
   background: var(--ac) !important; color: #fff !important;
   border-radius: var(--r-sm) !important;
   padding: 0 11px !important; font-size: 11px !important;
   font-weight: 800 !important; font-family: var(--font-mono) !important;
-  white-space: nowrap !important; flex-shrink: 0 !important;
-  border: none !important;
+  white-space: nowrap !important; flex-shrink: 0 !important; border: none !important;
 }
 .qty-100:hover { filter: brightness(1.1); }
-
 .qty-unit {
   font-size: 11px; font-weight: 800; color: var(--text-secondary);
   display: flex; align-items: center; justify-content: center;
   min-width: 30px; white-space: nowrap;
 }
-
 .trade-buttons {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 7px !important;
+  display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 7px !important;
 }
 .btn-trade {
   border-radius: var(--r-md); min-height: 42px;
   display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 1px;
-  border: none;
+  align-items: center; justify-content: center; gap: 1px; border: none;
 }
 .btn-trade:disabled { opacity: .45; pointer-events: none; }
-.btn-buy  {
-  background: linear-gradient(155deg, var(--up), #1a7f37);
-  box-shadow: 0 3px 10px var(--up-dim);
-}
-.btn-sell {
-  background: linear-gradient(155deg, var(--dn), #a0281e);
-  box-shadow: 0 3px 10px var(--dn-dim);
-}
+.btn-buy  { background: linear-gradient(155deg, var(--up), #1a7f37); box-shadow: 0 3px 10px var(--up-dim); }
+.btn-sell { background: linear-gradient(155deg, var(--dn), #a0281e); box-shadow: 0 3px 10px var(--dn-dim); }
 .btn-label { font-size: 15px; font-weight: 900; color: #fff; }
-.btn-price {
-  font-family: var(--font-mono); font-size: 10px;
-  color: rgba(255,255,255,.85); font-weight: 700;
-}
+.btn-price { font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,.85); font-weight: 700; }
 
 /* ──────────────────────────────────────
    About modal body
 ────────────────────────────────────── */
-.about-body {
-  display: flex; flex-direction: column; gap: 12px;
-  flex: 1; overflow-y: auto;
-}
+.about-body { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow-y: auto; }
 .about-block {
   background: var(--ac-dim);
   border: 1px solid color-mix(in srgb, var(--ac) 25%, transparent);
@@ -329,178 +245,122 @@
 .about-icon { font-size: 20px; line-height: 1; flex-shrink: 0; margin-top: 1px; }
 .about-item div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .about-item strong { font-size: 13px; font-weight: 900; color: var(--text-primary); }
-.about-item p {
-  font-size: 12px; font-weight: 600;
-  color: var(--text-secondary); line-height: 1.6; margin: 0;
-}
+.about-item p { font-size: 12px; font-weight: 600; color: var(--text-secondary); line-height: 1.6; margin: 0; }
 
 /* ══════════════════════════════════════════════════
    PARTIAL CLOSE — أدوات الإغلاق الجزئي الديناميكي
-   أضف هذا في نهاية hl2.css
 ══════════════════════════════════════════════════ */
 
-/* ── الغلاف الرئيسي ── */
+/* غلاف */
 .partial-close-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
+  display: flex; flex-direction: column; gap: 10px;
   background: var(--bg-input);
   border: 1.5px solid var(--border-strong);
   border-radius: var(--r-md);
-  padding: 13px 14px;
-  margin-bottom: 12px;
+  padding: 12px 13px;
+  margin-bottom: 10px;
   flex-shrink: 0;
 }
 
-/* ── رأس: تسمية + نسبة مئوية ── */
+/* رأس: تسمية + نسبة */
 .pc-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
 }
 .pc-lbl {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 10px; font-weight: 800;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
+  text-transform: uppercase; letter-spacing: 1.2px;
 }
 .pc-pct-lbl {
   font-family: var(--font-mono);
-  font-size: 22px;
-  font-weight: 900;
-  color: var(--dn);
-  line-height: 1;
-  min-width: 54px;
-  text-align: left;
+  font-size: 20px; font-weight: 900;
+  color: var(--dn); line-height: 1;
 }
 
-/* ── صف الكمية ── */
+/* صف الكمية */
 .pc-qty-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 8px; align-items: center;
 }
 .pc-qty-input {
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: clamp(20px, 5vw, 26px);
-  font-weight: 800;
-  text-align: center;
-  direction: ltr;
-  border-radius: var(--r-sm);
-  background: var(--bg-elev);
+  width: 100%; font-family: var(--font-mono);
+  font-size: clamp(18px, 4.5vw, 24px); font-weight: 800;
+  text-align: center; direction: ltr;
+  border-radius: var(--r-sm); background: var(--bg-elev);
   border: 2px solid var(--dn-dim);
-  padding: 9px 10px;
-  min-width: 0;
-  color: var(--text-primary);
-  transition: border-color .15s;
+  padding: 8px 10px; min-width: 0;
+  color: var(--text-primary); transition: border-color .15s;
 }
 .pc-qty-input:focus { border-color: var(--dn); box-shadow: 0 0 0 3px var(--dn-dim); }
 .pc-unit {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  flex-shrink: 0;
-  text-align: center;
-  min-width: 36px;
+  font-size: 11px; font-weight: 800;
+  color: var(--text-secondary); white-space: nowrap;
+  text-align: center; min-width: 36px;
 }
 
-/* ── شريط التمرير ── */
+/* ── شريط التمرير — نظيف ومختصر ── */
 .pc-slider {
-  width: 100%;
-  height: 8px;
-  -webkit-appearance: none;
-  appearance: none;
-  border-radius: 4px;
-  outline: none;
-  cursor: pointer;
-  /* الخلفية تُحدَّث ديناميكياً بـ JS */
+  width: 100%; height: 6px;
+  -webkit-appearance: none; appearance: none;
+  border-radius: 3px; outline: none; cursor: pointer;
   background: var(--border-strong);
   transition: opacity .15s;
 }
 .pc-slider:hover { opacity: .9; }
+
+/* thumb */
 .pc-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--dn);
-  cursor: pointer;
-  border: 3px solid var(--bg-card);
-  box-shadow: 0 2px 8px var(--dn-dim);
+  -webkit-appearance: none; appearance: none;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--dn); cursor: pointer;
+  border: 2.5px solid var(--bg-card);
+  box-shadow: 0 1px 6px var(--dn-dim);
   transition: transform .1s, box-shadow .1s;
 }
 .pc-slider::-webkit-slider-thumb:active {
-  transform: scale(1.2);
-  box-shadow: 0 0 0 6px var(--dn-dim);
+  transform: scale(1.18);
+  box-shadow: 0 0 0 5px var(--dn-dim);
 }
 .pc-slider::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--dn);
-  cursor: pointer;
-  border: 3px solid var(--bg-card);
-  box-shadow: 0 2px 8px var(--dn-dim);
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--dn); cursor: pointer;
+  border: 2.5px solid var(--bg-card);
+  box-shadow: 0 1px 6px var(--dn-dim);
 }
 
-/* ── أزرار النسب السريعة ── */
+/* أزرار النسب */
 .pc-presets {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 5px;
 }
 .pc-preset {
-  padding: 6px 2px;
-  border-radius: var(--r-pill);
+  padding: 5px 2px; border-radius: var(--r-pill);
   border: 1.5px solid var(--border-strong);
   background: var(--bg-elev);
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 12px; font-weight: 800;
   font-family: var(--font-mono);
-  text-align: center;
-  cursor: pointer;
+  text-align: center; cursor: pointer;
   transition: all .12s;
 }
-.pc-preset:active { transform: scale(.88); }
-.pc-preset.active {
-  border-color: var(--dn);
-  background: var(--dn-dim);
-  color: var(--dn);
-}
-.pc-preset:hover:not(.active) {
-  border-color: var(--text-secondary);
-  color: var(--text-primary);
-}
+.pc-preset:active   { transform: scale(.88); }
+.pc-preset.active   { border-color: var(--dn); background: var(--dn-dim); color: var(--dn); }
+.pc-preset:hover:not(.active) { border-color: var(--text-secondary); color: var(--text-primary); }
 
-/* ── معلومات المتبقي ── */
+/* معلومات المتبقي */
 .pc-remain {
   background: var(--bg-elev);
   border-radius: var(--r-sm);
   padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: flex; flex-direction: column; gap: 5px;
 }
 .pc-remain-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
+  display: flex; justify-content: space-between; align-items: center;
 }
 .pc-remain-lbl {
-  color: var(--text-secondary);
-  font-weight: 700;
+  font-size: 12px; color: var(--text-secondary); font-weight: 700;
 }
 .pc-remain-val {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 800;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 800;
   color: var(--text-primary);
 }
 .pc-pnl-est.up { color: var(--up); }
