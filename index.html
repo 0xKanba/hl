@@ -26,11 +26,6 @@
   <link rel="preload" as="image" href="/images/gold.svg">
   <link rel="preload" as="image" href="/images/silver.svg">
   <link rel="preload" as="image" href="/images/100.png">
-  <link rel="preload" as="image" href="/images/balance.png">
-  <link rel="preload" as="image" href="/images/history.png">
-  <link rel="preload" as="image" href="/images/diposit.png">
-  <link rel="preload" as="image" href="/images/withdraw.png">
-  <link rel="preload" as="image" href="/images/calendar.png">
 
   <script type="application/ld+json">
   {
@@ -75,7 +70,6 @@
 <!-- ══ التطبيق الرئيسي ══ -->
 <div class="screen hidden" id="appScreen">
 
-  <!-- NAV -->
   <nav class="nav">
     <div class="nav-left">
       <button class="nav-logo-btn" id="navLogo">
@@ -95,13 +89,11 @@
     </div>
   </nav>
 
-  <!-- شريط التاريخ والوقت -->
   <div class="datetime-bar" id="datetimeBar" title="انقر لعرض أسماء الأشهر">
     <span class="dt-clock" id="dtClock">—</span>
     <span class="dt-hint">📅</span>
   </div>
 
-  <!-- جدول الأشهر -->
   <div class="months-panel hidden" id="monthsPanel">
     <div class="months-grid">
       <div class="month-item"><span class="m-num">1</span><span class="m-name">يناير</span><span class="m-en">Jan</span></div>
@@ -119,13 +111,9 @@
     </div>
   </div>
 
-  <!-- تابات الأصول -->
   <div class="tabs">
     <button class="tab" data-asset="XAU">
-      <div class="tab-left">
-        <img class="tab-img" src="/images/gold.svg" alt="XAU" loading="eager"
-             style="filter:sepia(1) saturate(2) hue-rotate(10deg)">
-      </div>
+      <div class="tab-left"><img class="tab-img" src="/images/gold.svg" alt="XAU" loading="eager" style="filter:sepia(1) saturate(2) hue-rotate(10deg)"></div>
       <div class="tab-right"><span class="tab-price" id="priceXAU">—</span></div>
     </button>
     <button class="tab" data-asset="NQ">
@@ -148,8 +136,6 @@
 
   <main class="main">
     <div class="col-left">
-
-      <!-- بطاقة السعر -->
       <div class="price-card" id="priceCard">
         <div class="price-img-wrap" id="priceImgWrap">
           <img id="priceAssetImg" src="/images/oil.svg" alt="asset" loading="eager">
@@ -172,11 +158,9 @@
         </div>
       </div>
 
-      <!-- لوحة التداول -->
       <div class="trade-panel">
         <div class="qty-input-row">
-          <input type="number" class="qty-input" id="qtyInput"
-                 placeholder="0.00" min="0" step="any">
+          <input type="number" class="qty-input" id="qtyInput" placeholder="0.00" min="0" step="any">
           <button class="qty-100" id="qty100">100%</button>
           <span class="qty-unit" id="qtyUnit">برميل</span>
         </div>
@@ -208,7 +192,6 @@
     </div>
   </main>
 
-  <!-- Footer -->
   <footer class="footer">
     <button class="footer-main-btn" id="btnChart">
       <span class="fmb-icon">📈</span>
@@ -234,12 +217,10 @@
   </div>
 </div>
 
-<!-- شاشة الرسم -->
 <div id="chartScreen" class="chart-screen hidden"></div>
 
 <!-- ══ MODALS ══ -->
 
-<!-- تأكيد فتح صفقة -->
 <div class="modal-overlay overlay-fs" id="modalConfirm">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -263,37 +244,23 @@
     <!-- معلومات المركز -->
     <div class="confirm-details" id="closeDetails"></div>
 
-    <!-- أدوات الإغلاق الجزئي الديناميكية -->
+    <!-- أدوات الإغلاق الجزئي -->
     <div class="partial-close-wrap">
 
-      <!-- رأس: تسمية + نسبة مئوية -->
       <div class="pc-header">
         <span class="pc-lbl">حجم الإغلاق</span>
         <span class="pc-pct-lbl" id="closePctLabel">100%</span>
       </div>
 
-      <!-- حقل الكمية -->
       <div class="pc-qty-row">
-        <input type="number"
-               class="pc-qty-input"
-               id="closeQtyInput"
-               min="0"
-               step="any"
-               inputmode="decimal"
-               placeholder="0.00">
+        <input type="number" class="pc-qty-input" id="closeQtyInput"
+               min="0" step="any" inputmode="decimal" placeholder="0.00">
         <span class="pc-unit" id="closeQtyUnit">—</span>
       </div>
 
-      <!-- شريط التمرير -->
-      <input type="range"
-             class="pc-slider"
-             id="closePctSlider"
-             min="0"
-             max="100"
-             value="100"
-             step="0.5">
+      <input type="range" class="pc-slider" id="closePctSlider"
+             min="0" max="100" value="100" step="0.5">
 
-      <!-- أزرار النسب السريعة -->
       <div class="pc-presets">
         <button class="pc-preset" data-pct="25">25%</button>
         <button class="pc-preset" data-pct="50">50%</button>
@@ -301,9 +268,7 @@
         <button class="pc-preset active" data-pct="100">100%</button>
       </div>
 
-      <!-- المتبقي + تقدير الربح -->
       <div class="pc-remain" id="closeRemain"></div>
-
     </div>
 
     <div class="modal-buttons">
@@ -313,7 +278,6 @@
   </div>
 </div>
 
-<!-- إغلاق الكل -->
 <div class="modal-overlay overlay-fs" id="modalCloseAll">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -327,7 +291,6 @@
   </div>
 </div>
 
-<!-- جني الربح TP -->
 <div class="modal-overlay overlay-fs" id="modalTP">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -350,7 +313,6 @@
   </div>
 </div>
 
-<!-- وقف الخسارة SL -->
 <div class="modal-overlay overlay-fs" id="modalSL">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -373,7 +335,6 @@
   </div>
 </div>
 
-<!-- الرصيد -->
 <div class="modal-overlay" id="modalBalance">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -387,7 +348,6 @@
   </div>
 </div>
 
-<!-- سجل الصفقات -->
 <div class="modal-overlay" id="modalHistory">
   <div class="modal" style="display:flex;flex-direction:column;">
     <h3 class="modal-title">📜 سجل الصفقات</h3>
@@ -401,16 +361,16 @@
   </div>
 </div>
 
-<!-- الإيداع -->
+<!-- ✅ الحد الأدنى للإيداع $5 -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
     <h3 class="modal-title">💵 إيداع USDC</h3>
     <div class="form-group">
       <label>المبلغ (USDC)</label>
-      <input type="number" class="form-input" id="depositAmount" placeholder="100" min="8">
+      <input type="number" class="form-input" id="depositAmount" placeholder="10" min="5">
     </div>
-    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $8 · يصل خلال 1–3 دقائق.</p>
+    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال 1–3 دقائق.</p>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"              id="depositCancel">إلغاء</button>
       <button class="btn-modal btn-confirm btn-success" id="depositExecute">إيداع ✓</button>
@@ -418,7 +378,6 @@
   </div>
 </div>
 
-<!-- السحب -->
 <div class="modal-overlay" id="modalWithdraw">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -447,7 +406,6 @@
   </div>
 </div>
 
-<!-- تسجيل الخروج -->
 <div class="modal-overlay" id="modalLogout">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -464,7 +422,6 @@
   </div>
 </div>
 
-<!-- شرح التطبيق -->
 <div class="modal-overlay" id="modalAbout">
   <div class="modal" style="max-width:600px;">
     <div class="modal-handle"></div>
@@ -474,12 +431,12 @@
         <p>منصة تداول مباشر على بروتوكول Hyperliquid اللامركزي، تعمل بالكامل داخل متصفحك دون أي خوادم وسيطة.</p>
       </div>
       <div class="about-section">
-        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة. احتفظ بنسخة احتياطية في مكان آمن.</p></div></div>
-        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر متاح في السوق.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p></div></div>
-        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد، لتأمين الأرباح دون مراقبة مستمرة.</p></div></div>
-        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>أمر وقائي يُغلق الصفقة تلقائياً عند حد خسارة تحدده، للحد من المخاطر في الحركات المعاكسة.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش المتاح. يظهر في الرسم البياني كخط برتقالي.</p></div></div>
+        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة.</p></div></div>
+        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر متاح.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر.</p></div></div>
+        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد.</p></div></div>
+        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>أمر وقائي يُغلق الصفقة عند حد خسارة تحدده.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش المتاح.</p></div></div>
       </div>
     </div>
     <div class="modal-buttons modal-buttons-center">
@@ -488,7 +445,6 @@
   </div>
 </div>
 
-<!-- PIN — إدخال -->
 <div class="modal-overlay" id="modalPIN">
   <div class="lock-screen">
     <div class="lock-header">
@@ -521,7 +477,6 @@
   </div>
 </div>
 
-<!-- PIN — نسيان -->
 <div class="modal-overlay" id="modalForgotPIN" style="z-index:9999;">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -538,7 +493,6 @@
   </div>
 </div>
 
-<!-- PIN — تعيين -->
 <div class="modal-overlay" id="modalSetPIN">
   <div class="lock-screen">
     <div class="lock-header">
