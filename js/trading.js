@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════
    trading.js — تنفيذ الصفقات وإغلاقها
-   ✅ إغلاق جزئي ديناميكي: slider ↔ qty ↔ presets
-   ✅ shortCoinPos موحّدة في كل مكان
+   ✅ إغلاق جزئي ديناميكي
+   ✅ تحديث فوري optimistic للمركز بعد الإغلاق
+   ✅ استعلام متعدد من API لضمان التحديث الكامل
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -46,7 +47,7 @@ function askTrade(isBuy) {
 
 async function execTrade() {
   if (!State.pendingTrade) { closeModal('modalConfirm'); return; }
-  let { isBuy, qty, sym } = State.pendingTrade;
+  const { isBuy, qty, sym } = State.pendingTrade;
   const a       = ASSETS[sym], p = State.prices[sym];
   const execQty = a.gram ? +(qty / TROY).toFixed(4) : qty;
   const execMid = a.gram ? p.mid * TROY : p.mid;
@@ -83,15 +84,21 @@ async function execTrade() {
     }
     autoSetReferrer();
     State.pendingTrade = null;
-    setTimeout(pollAccount, 2000);
+    _multiPoll();
   } catch (e) { toast(tradeErr(e.message), 'err', 6000); }
   finally { resetBtn('confirmExecute'); hideLoader(); }
 }
 
-/* ═══════════════════════════════════════════════════
-   إغلاق صفقة — جزئي أو كامل (الجزء الرئيسي الجديد)
-═══════════════════════════════════════════════════ */
+/* ════ استعلام متعدد — يضمن تحديث الأرقام بعد أي تنفيذ ════ */
+function _multiPoll() {
+  setTimeout(() => pollAccount().catch(() => {}), 800);
+  setTimeout(() => pollAccount().catch(() => {}), 2500);
+  setTimeout(() => pollAccount().catch(() => {}), 5500);
+}
 
+/* ═══════════════════════════════════════════════════
+   إغلاق صفقة — جزئي أو كامل
+═══════════════════════════════════════════════════ */
 window.askClose = function (i) {
   const p = State.positions[i]; if (!p) return;
   const pos      = p.position;
@@ -107,10 +114,9 @@ window.askClose = function (i) {
   const entryDisp= isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
   const isLong   = sziOz > 0;
 
-  setTxt('closeTitle', `${a.icon} إغلاق — ${a.name}`);
+  setTxt('closeTitle',    `${a.icon} إغلاق — ${a.name}`);
   setTxt('closeSubtitle', `${isLong ? '▲ شراء' : '▼ بيع'} · دخول $${fmt(entryDisp, a.pxDp)}`);
 
-  /* معلومات المركز */
   $('closeDetails').innerHTML = `
     <div class="confirm-row">
       <span class="confirm-key">حجم المركز</span>
@@ -121,14 +127,16 @@ window.askClose = function (i) {
       <span class="confirm-val">${curPx ? '$' + fmt(curPx, a.pxDp) : '—'}</span>
     </div>
     <div class="confirm-row">
-      <span class="confirm-key">الربح / الخسارة</span>
+      <span class="confirm-key">ربح / خسارة حالية</span>
       <span class="confirm-val ${pnlTotal >= 0 ? 'buy' : 'sell'}">${pnlTotal >= 0 ? '+' : ''}$${fmt(pnlTotal, 2)}</span>
     </div>`;
 
-  /* حفظ الحالة */
-  State.pendingClose = { index:i, coin:pos.coin, sym, isGram, a, totalOz, totalDisp, dp, pnlTotal };
+  State.pendingClose = {
+    index: i, coin: pos.coin, sym, isGram, a,
+    totalOz, totalDisp, dp, pnlTotal,
+    sziOriginal: sziOz
+  };
 
-  /* تهيئة أدوات الإغلاق الجزئي */
   _initCloseControls(totalDisp, a, isGram, pnlTotal);
   openModal('modalClose');
 };
@@ -153,14 +161,13 @@ function _initCloseControls(totalDisp, a, isGram, pnlTotal) {
   _updateCloseBtn(totalDisp, totalDisp, a, isGram, true);
 }
 
-/* ── slider → qty (يُستدعى من app.js و presets) ── */
+/* ── slider → qty ── */
 function _syncCloseFromPct(pct) {
   const pc = State.pendingClose; if (!pc) return;
   const { totalDisp, a, isGram, pnlTotal } = pc;
-  const dp         = isGram ? 2 : a.szDp;
-  const closeDisp  = parseFloat((totalDisp * pct / 100).toFixed(dp));
-  const qtyIn      = $('closeQtyInput');
-  const slider     = $('closePctSlider');
+  const dp        = isGram ? 2 : a.szDp;
+  const closeDisp = parseFloat((totalDisp * pct / 100).toFixed(dp));
+  const qtyIn     = $('closeQtyInput'), slider = $('closePctSlider');
   if (qtyIn)  qtyIn.value  = closeDisp;
   if (slider) slider.value = pct;
   setTxt('closePctLabel', Math.round(pct) + '%');
@@ -170,7 +177,7 @@ function _syncCloseFromPct(pct) {
   _updateCloseBtn(closeDisp, totalDisp, a, isGram, Math.round(pct) === 100);
 }
 
-/* ── qty input → slider (يُستدعى من app.js) ── */
+/* ── qty input → slider ── */
 function _syncCloseFromQty(closeDisp) {
   const pc = State.pendingClose; if (!pc) return;
   const { totalDisp, a, isGram, pnlTotal } = pc;
@@ -185,50 +192,48 @@ function _syncCloseFromQty(closeDisp) {
   _updateCloseBtn(clamped, totalDisp, a, isGram, Math.round(pct) === 100);
 }
 
-/* ── تحديث لون شريط التمرير ── */
+/* ── لون الشريط: يسار أحمر (مغلق)، يمين رمادي (متبقي) ── */
 function _updateSliderTrack(pct) {
   const slider = $('closePctSlider');
   if (!slider) return;
   slider.style.background =
-    `linear-gradient(to right, var(--dn) ${pct}%, var(--border-strong) ${pct}%)`;
+    `linear-gradient(to right, var(--dn) ${pct}%, var(--bg-input) ${pct}%)`;
 }
 
-/* ── تحديث حالة presets ── */
+/* ── presets ── */
 function _updateClosePresets(roundedPct) {
-  document.querySelectorAll('.pc-preset').forEach(b => {
-    b.classList.toggle('active', +b.dataset.pct === roundedPct);
-  });
+  document.querySelectorAll('.pc-preset').forEach(b =>
+    b.classList.toggle('active', +b.dataset.pct === roundedPct)
+  );
 }
 
-/* ── تحديث معلومات المتبقي والتقدير ── */
+/* ── معلومات المتبقي ── */
 function _updateCloseRemain(closeDisp, totalDisp, a, isGram, pnlTotal) {
   const el = $('closeRemain'); if (!el) return;
-  const pc  = State.pendingClose; if (!pc) return;
-  const dp  = isGram ? 2 : a.szDp;
+  const pc = State.pendingClose; if (!pc) return;
+  const dp         = isGram ? 2 : a.szDp;
   const remainDisp = Math.max(0, totalDisp - closeDisp);
   const pct        = totalDisp > 0 ? closeDisp / totalDisp : 0;
   const closePnl   = pnlTotal * pct;
-
-  /* تقدير الرسوم */
-  const curPx  = State.prices[pc.sym]?.mid || 0;
-  const closeOz= isGram ? closeDisp / TROY : closeDisp;
-  const curOz  = isGram ? curPx * TROY : curPx;
-  const fee    = curOz > 0 ? closeOz * curOz * feeRate(pc.sym) : 0;
-  const netPnl = closePnl - fee;
-  const pCls   = netPnl >= 0 ? 'up' : 'dn';
+  const curPx      = State.prices[pc.sym]?.mid || 0;
+  const closeOz    = isGram ? closeDisp / TROY : closeDisp;
+  const curOz      = isGram ? curPx * TROY : curPx;
+  const fee        = curOz > 0 ? closeOz * curOz * feeRate(pc.sym) : 0;
+  const netPnl     = closePnl - fee;
+  const pCls       = netPnl >= 0 ? 'up' : 'dn';
 
   el.innerHTML = `
     <div class="pc-remain-row">
-      <span class="pc-remain-lbl">يتبقى</span>
+      <span class="pc-remain-lbl">يتبقى مفتوح</span>
       <span class="pc-remain-val">${remainDisp.toFixed(dp)} ${a.unit}</span>
     </div>
     <div class="pc-remain-row">
-      <span class="pc-remain-lbl">صافي هذه الصفقة</span>
+      <span class="pc-remain-lbl">صافي هذا الجزء</span>
       <span class="pc-remain-val pc-pnl-est ${pCls}">${netPnl >= 0 ? '+' : ''}$${Math.abs(netPnl).toFixed(2)}</span>
     </div>`;
 }
 
-/* ── نص زر الإغلاق ── */
+/* ── نص الزر ── */
 function _updateCloseBtn(closeDisp, totalDisp, a, isGram, isAll) {
   const btn = $('closeExecute'); if (!btn) return;
   const dp  = isGram ? 2 : a.szDp;
@@ -254,14 +259,13 @@ async function execClose() {
   const aApi     = isGram ? ASSETS['GOLD'] : ASSETS[sym];
   if (!aApi) { toast('أصل غير معروف', 'err'); closeModal('modalClose'); return; }
 
-  /* تحويل للأونصة */
-  const closeOz  = isGram ? closeDispRaw / TROY : closeDispRaw;
-  const maxOz    = Math.abs(sziOz);
-  const finalOz  = Math.min(closeOz, maxOz); /* لا يتجاوز الحجم الكلي */
-  const isAll    = finalOz >= maxOz * 0.9999;
+  const closeOz = isGram ? closeDispRaw / TROY : closeDispRaw;
+  const maxOz   = Math.abs(sziOz);
+  const finalOz = Math.min(closeOz, maxOz);
+  const isAll   = finalOz >= maxOz * 0.9999;
 
-  const gramPx   = State.prices['XAU']?.mid;
-  const midOz    = isGram
+  const gramPx  = State.prices['XAU']?.mid;
+  const midOz   = isGram
     ? (gramPx > 0 ? gramPx * TROY : State.prices['GOLD']?.mid)
     : State.prices[sym]?.mid;
   if (!midOz || midOz <= 0) { toast('سعر غير متاح، انتظر لحظة', 'err'); return; }
@@ -269,6 +273,7 @@ async function execClose() {
   const aDisp    = ASSETS[sym] || aApi;
   const dp       = isGram ? 2 : aApi.szDp;
   const dispLabel= closeDispRaw.toFixed(dp);
+  const remain   = Math.max(0, pc.totalDisp - closeDispRaw).toFixed(dp);
 
   setBtnLoading('closeExecute', '⏳');
   showLoader(`${aDisp.icon || ''} إغلاق ${dispLabel} ${aDisp.unit || ''}...`);
@@ -283,15 +288,40 @@ async function execClose() {
       }],
       grouping: 'na'
     });
+
     closeModal('modalClose');
+
+    /* ✅ تحديث فوري في الذاكرة — لا ننتظر API */
+    _applyOptimisticClose(pc.index, sziOz, finalOz, isAll);
+
     toast(isAll
       ? `✅ أُغلق كاملاً — ${aDisp.icon || ''} ${aDisp.name || ''}`
-      : `✅ أُغلق جزئياً — ${dispLabel} ${aDisp.unit || ''}`,
-      'ok', 4000);
+      : `✅ أُغلق ${dispLabel} ${aDisp.unit || ''} · يتبقى ${remain} ${aDisp.unit || ''}`,
+      'ok', 5000);
+
     State.pendingClose = null;
-    setTimeout(pollAccount, 2000);
+    /* ✅ ثلاثة استعلامات متتالية لضمان تحديث الأرقام الفعلية من Hyperliquid */
+    _multiPoll();
+
   } catch (e) { toast(tradeErr(e.message), 'err', 6000); }
   finally { resetBtn('closeExecute'); hideLoader(); }
+}
+
+/* ✅ تحديث فوري للمركز في State.positions قبل استجابة API */
+function _applyOptimisticClose(index, sziOz, closedOz, isAll) {
+  if (isAll) {
+    State.positions.splice(index, 1);
+  } else {
+    const pos = State.positions[index];
+    if (!pos) return;
+    const dir    = sziOz > 0 ? 1 : -1;
+    const newSzi = sziOz - dir * closedOz;
+    /* منع الحجم السالب بسبب دقة الأرقام */
+    pos.position.szi           = (Math.abs(newSzi) < 1e-6 ? 0 : newSzi).toFixed(6);
+    pos.position.unrealizedPnl = '0';
+  }
+  resetPosFingerprint();
+  renderPositions();
 }
 
 /* ════ إغلاق جميع الصفقات ════ */
@@ -338,8 +368,11 @@ async function execCloseAll() {
         ok++;
       } catch (e) { fail++; console.warn('[closeAll]', sym, e.message); }
     }
+    State.positions = [];
+    resetPosFingerprint();
+    renderPositions();
     closeModal('modalCloseAll');
     toast(`✅ أُغلق ${ok} مركز${fail ? ` · فشل ${fail}` : ''}`, 'ok', 5000);
-    setTimeout(pollAccount, 2000);
+    _multiPoll();
   } finally { resetBtn('closeAllExecute'); hideLoader(); }
 }
