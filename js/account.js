@@ -1,5 +1,7 @@
 /* ═══════════════════════════════════════
    account.js — الحساب والتاريخ والمحفظة
+   ✅ حد أدنى للإيداع $5
+   ✅ حقل "رصيد بدون ربح/خسارة حالية"
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -102,14 +104,22 @@ async function _renderBalance() {
       hlInfo({ type:'spotClearinghouseState', user:State.wallet.address           }).catch(() => ({})),
       hlInfo({ type:'clearinghouseState',     user:State.wallet.address, dex:'xyz'}).catch(() => ({}))
     ]);
-    let total = 0;
-    for (const b of spot?.balances || [])
-      if (b.coin === 'USDC' || b.coin === 'USDC:0') total += parseFloat(b.total || 0);
 
-    const margin   = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
-    const floatPnl = (xyz?.assetPositions || [])
+    let spotUSDC = 0;
+    for (const b of spot?.balances || [])
+      if (b.coin === 'USDC' || b.coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
+
+    const accountVal = parseFloat(xyz?.marginSummary?.accountValue || 0);
+    const margin     = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
+    const floatPnl   = (xyz?.assetPositions || [])
       .reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
+
+    /* ✅ الرصيد الصافي بدون PnL = رأس المال الحقيقي */
+    const total      = accountVal + spotUSDC;
+    const netBalance = total - floatPnl;
+
     const pCls = floatPnl >= 0 ? 'green' : 'red';
+    const nCls = netBalance >= 0 ? 'blue' : 'red';
 
     el.innerHTML = `
       <div class="balance-grid">
@@ -118,12 +128,20 @@ async function _renderBalance() {
           <span class="balance-value blue">$${fmt(total, 2)}</span>
         </div>
         <div class="balance-item">
+          <span class="balance-label">📊 ربح / خسارة حالية</span>
+          <span class="balance-value ${pCls}">${floatPnl >= 0 ? '+' : ''}$${fmt(floatPnl, 2)}</span>
+        </div>
+        <div class="balance-item" style="border:1.5px solid var(--border-strong);background:var(--bg-elev);">
+          <span class="balance-label">🏦 رصيد بدون ربح/خسارة</span>
+          <span class="balance-value ${nCls}">$${fmt(netBalance, 2)}</span>
+        </div>
+        <div class="balance-item">
           <span class="balance-label">🔒 الهامش المستخدم</span>
           <span class="balance-value warn">$${fmt(margin, 2)}</span>
         </div>
         <div class="balance-item">
-          <span class="balance-label">📊 ربح / خسارة عائمة</span>
-          <span class="balance-value ${pCls}">${floatPnl >= 0 ? '+' : ''}$${fmt(floatPnl, 2)}</span>
+          <span class="balance-label">💵 USDC في Spot</span>
+          <span class="balance-value blue">$${fmt(spotUSDC, 2)}</span>
         </div>
       </div>
       <div class="balance-auto-note">↻ تحديث تلقائي كل 2 ثانية</div>`;
@@ -229,10 +247,10 @@ async function showHistory() {
   }
 }
 
-/* ════ إيداع USDC ════ */
+/* ════ إيداع USDC — الحد الأدنى $5 ════ */
 async function doDeposit() {
   const amt = parseFloat($('depositAmount').value || 0);
-  if (!amt || amt < 8)  return toast('الحد الأدنى للإيداع $8', 'err');
+  if (!amt || amt < 5)  return toast('الحد الأدنى للإيداع $5', 'err');
   if (!State.wallet)    return toast('يجب تسجيل الدخول أولاً', 'err');
 
   setBtnLoading('depositExecute', '⏳');
