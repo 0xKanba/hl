@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════
    app.js — تهيئة التطبيق وربط الأحداث
-   ✅ إغلاق جزئي ديناميكي: slider ↔ qty ↔ presets
+   ✅ إغلاق جزئي ديناميكي: slider ↔ qty
+   ✅ شريط أخضر يسار → يمين
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -70,7 +71,6 @@ function _initOptsBackdrop() {
 /* ════ الحدث الرئيسي ════ */
 document.addEventListener('DOMContentLoaded', () => {
 
-  /* ── شريط التاريخ والساعة ── */
   _startDatetimeClock();
   _initMonthsPanel();
   _initOptsBackdrop();
@@ -144,23 +144,18 @@ document.addEventListener('DOMContentLoaded', () => {
   $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
   $('confirmExecute').onclick = () => requirePin(execTrade);
 
-  /* ── إغلاق صفقة (جزئي أو كامل) ── */
+  /* ── إغلاق صفقة جزئي أو كامل ── */
   $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
   $('closeExecute').onclick = () => requirePin(execClose);
 
-  /* شريط التمرير: % → كمية */
+  /* ✅ شريط التمرير: % → كمية */
   $('closePctSlider')?.addEventListener('input', function () {
     _syncCloseFromPct(parseFloat(this.value));
   });
 
-  /* حقل الكمية: qty → % */
+  /* ✅ حقل الكمية: qty → % */
   $('closeQtyInput')?.addEventListener('input', function () {
     _syncCloseFromQty(parseFloat(this.value) || 0);
-  });
-
-  /* أزرار النسب السريعة */
-  document.querySelectorAll('.pc-preset').forEach(b => {
-    b.onclick = () => _syncCloseFromPct(parseFloat(b.dataset.pct));
   });
 
   /* ── إغلاق الكل ── */
