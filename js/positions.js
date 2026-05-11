@@ -1,11 +1,10 @@
 /* ═══════════════════════════════════════
    positions.js — عرض الصفقات والتصفية
-   ✅ رياضيات صحيحة لسعر التصفية
    ✅ resetPosFingerprint — يُجبر إعادة الرسم الفوري
+   ✅ sziDisp يعكس الحجم الفعلي دائماً
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ════ Symbol helpers ════ */
 function shortCoinPos(c) {
   const raw = c.includes(':') ? c.split(':')[1] : c;
   if (raw === 'GOLD') return 'XAU';
@@ -15,7 +14,6 @@ function apiAsset(sym) {
   return (sym === 'XAU') ? ASSETS['GOLD'] : ASSETS[sym];
 }
 
-/* ════ تحليل أوامر TP/SL ════ */
 function parseTpslFromOrders(orders, coin) {
   const r = { tp:null, sl:null, tpOid:null, slOid:null };
   for (const o of orders || []) {
@@ -30,7 +28,6 @@ function parseTpslFromOrders(orders, coin) {
   return r;
 }
 
-/* ════ حساب سعر التصفية ════ */
 function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
   const side     = sziOz > 0 ? 1 : -1;
@@ -66,7 +63,6 @@ function liqPriceDisplay(sym, entryPxOz, sziOz, balance) {
   return { text:`$${fmt(liqDisp, a.pxDp)}`, ounce:liqOz };
 }
 
-/* ════ حساب أسعار TP/SL ════ */
 function calcTpPrice(ep, szi, pnl) {
   const sz = parseFloat(szi), e = parseFloat(ep);
   if (!sz || !e) return e;
@@ -79,7 +75,6 @@ function calcSlPrice(ep, szi, sl) {
   return sz > 0 ? e - sl / sz : e + sl / Math.abs(sz);
 }
 
-/* ════ رسوم التمويل ════ */
 function updateFundingFromPositions(positions) {
   const acc = {};
   for (const p of positions || []) {
@@ -115,14 +110,15 @@ function startFundingTimer() {
 /* ════ Render الصفقات ════ */
 let _posFingerprint = '';
 
-/* ✅ يُجبر إعادة بناء DOM كاملة في المرة القادمة */
 function resetPosFingerprint() {
   _posFingerprint = '';
 }
 
 function renderPositions() {
   const count = State.positions.length;
-  const fp    = State.positions.map(p =>
+
+  /* ✅ fingerprint يشمل szi لاكتشاف التغيير الجزئي */
+  const fp = State.positions.map(p =>
     `${p.position.coin}|${p.position.szi}|${p.tpsl?.tp||''}|${p.tpsl?.sl||''}`
   ).join(';');
 
@@ -132,7 +128,7 @@ function renderPositions() {
 
   const totalPnl = State.positions.reduce((s, p) => s + parseFloat(p.position.unrealizedPnl || 0), 0);
 
-  /* تحديث PnL والأسعار بسلاسة بدون إعادة بناء DOM */
+  /* تحديث بسلاسة بدون إعادة بناء DOM */
   State.positions.forEach((p, i) => {
     const pnl = parseFloat(p.position.unrealizedPnl || 0);
     const pEl = document.querySelector(`[data-pnl-idx="${i}"]`);
@@ -140,6 +136,18 @@ function renderPositions() {
       pEl.textContent = `${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}`;
       pEl.className   = `pos-pnl ${pnl >= 0 ? 'pos' : 'neg'}`;
     }
+
+    /* ✅ تحديث الحجم المعروض ديناميكياً */
+    const szEl = document.querySelector(`[data-sz-idx="${i}"]`);
+    if (szEl) {
+      const sym     = shortCoinPos(p.position.coin);
+      const a       = ASSETS[sym] || { szDp:4, gram:false, unit:'' };
+      const isGram  = !!a.gram;
+      const sziOz   = parseFloat(p.position.szi || 0);
+      const sziDisp = isGram ? sziOz * TROY : sziOz;
+      szEl.textContent = `${Math.abs(sziDisp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}`;
+    }
+
     const cpEl = document.querySelector(`[data-curpx-idx="${i}"]`);
     if (cpEl) {
       const sym = shortCoinPos(p.position.coin);
@@ -147,6 +155,7 @@ function renderPositions() {
       const cur = State.prices[sym]?.mid;
       cpEl.textContent = cur ? `$${fmt(cur, a.pxDp)}` : '—';
     }
+
     const liqEl = document.querySelector(`[data-liq-idx="${i}"]`);
     if (liqEl) {
       const sym     = shortCoinPos(p.position.coin);
@@ -182,6 +191,7 @@ function renderPositions() {
     const sym       = shortCoinPos(pos.coin);
     const a         = ASSETS[sym] || { name:sym, unit:'', icon:'📊', pxDp:2, szDp:2, lev:10 };
     const isGram    = !!a.gram;
+    /* ✅ الحجم المعروض يُحسب من pos.szi مباشرة — دائماً محدث */
     const sziDisp   = isGram ? sziOz * TROY : sziOz;
     const entryDisp = isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
     const curPx     = State.prices[sym]?.mid;
@@ -202,7 +212,7 @@ function renderPositions() {
         </div>
         <div class="pos-right">
           <div class="pos-pnl ${pCls}" data-pnl-idx="${i}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}</div>
-          <div class="pos-size">${Math.abs(sziDisp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}</div>
+          <div class="pos-size" data-sz-idx="${i}">${Math.abs(sziDisp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}</div>
         </div>
       </div>
       <div class="pos-data-grid">
