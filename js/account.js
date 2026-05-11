@@ -1,11 +1,10 @@
 /* ═══════════════════════════════════════
    account.js — الحساب والتاريخ والمحفظة
    ✅ حد أدنى للإيداع $5
-   ✅ حقل "رصيد بدون ربح/خسارة حالية"
+   ✅ رصيد بسيط كما كان + حقل "رصيد صافي"
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ════ ترجمة أخطاء الإيداع ════ */
 function _depositErr(msg) {
   const m = (msg || '').toLowerCase();
   if (m.includes('كافٍ') || m.includes('insufficient') || m.includes('balance'))
@@ -25,7 +24,6 @@ function _depositErr(msg) {
   return 'فشل الإيداع — حاول مجدداً';
 }
 
-/* ════ ترجمة أخطاء السحب ════ */
 function _withdrawErr(msg) {
   const m = (msg || '').toLowerCase();
   if (m.includes('insufficient') || m.includes('balance'))
@@ -48,6 +46,11 @@ function _withdrawErr(msg) {
 /* ════ جلب بيانات الحساب ════ */
 async function pollAccount() {
   if (!State.wallet) return;
+
+  /* ✅ إذا كان هناك optimistic update في آخر 10 ثواني — لا تعيد الكتابة فوراً */
+  const timeSinceOptimistic = Date.now() - (State._lastOptimisticClose || 0);
+  const skipPositionUpdate  = timeSinceOptimistic < 10000;
+
   try {
     const [native, spot, xyz, openOrders] = await Promise.all([
       hlInfo({ type:'clearinghouseState',     user:State.wallet.address           }).catch(() => ({})),
@@ -58,34 +61,36 @@ async function pollAccount() {
 
     State.openOrders = Array.isArray(openOrders) ? openOrders : [];
 
-    const nativeVal = parseFloat(native?.marginSummary?.accountValue || 0);
-    const xyzVal    = parseFloat(xyz?.marginSummary?.accountValue    || 0);
-    let spotUSDC    = 0;
+    let spotUSDC = 0;
     for (const b of spot?.balances || [])
       if (b.coin === 'USDC' || b.coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
 
-    const total  = nativeVal + (xyzVal > 0 && xyzVal !== nativeVal ? xyzVal : 0) + spotUSDC;
-    const margin = parseFloat(xyz?.marginSummary?.totalMarginUsed   || 0) ||
-                   parseFloat(native?.marginSummary?.totalMarginUsed || 0);
-
+    const xyzVal   = parseFloat(xyz?.marginSummary?.accountValue || 0);
+    const margin   = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
     const rawPos   = (xyz?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
     const floatPnl = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
-    State.balance  = { total, margin, floatPnl };
 
-    State.positions = rawPos.map(p => {
-      const existing = State.positions.find(e => e.position.coin === p.position.coin);
-      const tpsl     = parseTpslFromOrders(State.openOrders, p.position.coin);
-      if (existing && !tpsl.tp && !tpsl.sl && existing.tpsl) return { ...p, tpsl:existing.tpsl };
-      return { ...p, tpsl };
-    });
+    /* ✅ رصيد صحيح: account value من xyz يشمل USDC في futures + PnL */
+    const total = xyzVal + spotUSDC;
+    State.balance = { total, margin, floatPnl };
 
-    updateFundingFromPositions(rawPos);
-    renderPositions();
+    /* ✅ لا تعيد الكتابة على الـ optimistic update أثناء فترة الحماية */
+    if (!skipPositionUpdate) {
+      State.positions = rawPos.map(p => {
+        const existing = State.positions.find(e => e.position.coin === p.position.coin);
+        const tpsl     = parseTpslFromOrders(State.openOrders, p.position.coin);
+        if (existing && !tpsl.tp && !tpsl.sl && existing.tpsl) return { ...p, tpsl: existing.tpsl };
+        return { ...p, tpsl };
+      });
+      updateFundingFromPositions(rawPos);
+      renderPositions();
+    }
+
     autoSetReferrer();
   } catch (e) { console.warn('[pollAccount]', e.message); }
 }
 
-/* ════ عرض الرصيد ════ */
+/* ════ عرض الرصيد — بسيط كما كان ════ */
 async function showBalance() {
   openModal('modalBalance');
   await _renderBalance();
@@ -114,12 +119,11 @@ async function _renderBalance() {
     const floatPnl   = (xyz?.assetPositions || [])
       .reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
 
-    /* ✅ الرصيد الصافي بدون PnL = رأس المال الحقيقي */
     const total      = accountVal + spotUSDC;
+    /* ✅ رصيد بدون ربح/خسارة = رأس المال الثابت */
     const netBalance = total - floatPnl;
-
-    const pCls = floatPnl >= 0 ? 'green' : 'red';
-    const nCls = netBalance >= 0 ? 'blue' : 'red';
+    const pCls       = floatPnl >= 0 ? 'green' : 'red';
+    const nCls       = netBalance >= floatPnl ? 'blue' : 'warn';
 
     el.innerHTML = `
       <div class="balance-grid">
@@ -128,20 +132,16 @@ async function _renderBalance() {
           <span class="balance-value blue">$${fmt(total, 2)}</span>
         </div>
         <div class="balance-item">
-          <span class="balance-label">📊 ربح / خسارة حالية</span>
-          <span class="balance-value ${pCls}">${floatPnl >= 0 ? '+' : ''}$${fmt(floatPnl, 2)}</span>
-        </div>
-        <div class="balance-item" style="border:1.5px solid var(--border-strong);background:var(--bg-elev);">
           <span class="balance-label">🏦 رصيد بدون ربح/خسارة</span>
           <span class="balance-value ${nCls}">$${fmt(netBalance, 2)}</span>
         </div>
         <div class="balance-item">
-          <span class="balance-label">🔒 الهامش المستخدم</span>
-          <span class="balance-value warn">$${fmt(margin, 2)}</span>
+          <span class="balance-label">📊 ربح / خسارة عائمة</span>
+          <span class="balance-value ${pCls}">${floatPnl >= 0 ? '+' : ''}$${fmt(floatPnl, 2)}</span>
         </div>
         <div class="balance-item">
-          <span class="balance-label">💵 USDC في Spot</span>
-          <span class="balance-value blue">$${fmt(spotUSDC, 2)}</span>
+          <span class="balance-label">🔒 الهامش المستخدم</span>
+          <span class="balance-value warn">$${fmt(margin, 2)}</span>
         </div>
       </div>
       <div class="balance-auto-note">↻ تحديث تلقائي كل 2 ثانية</div>`;
@@ -243,7 +243,7 @@ async function showHistory() {
     }).join('');
   } catch {
     if (sub) sub.textContent = '';
-    list.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب السجل — تحقق من الاتصال</div>`;
+    list.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب السجل</div>`;
   }
 }
 
@@ -277,7 +277,6 @@ async function doDeposit() {
     closeModal('modalDeposit');
     toast(`✅ تم إرسال $${amt} بنجاح — يصل خلال 1-3 دقائق`, 'ok', 6000);
     setTimeout(pollAccount, 6000);
-
   } catch (e) {
     toast(`⚠️ ${_depositErr(e.message)}`, 'err', 5000);
   } finally {
@@ -335,7 +334,6 @@ async function doWithdraw() {
     const net = (amt - 1).toFixed(2);
     toast(`✅ طلب السحب مقبول — سيصلك $${net} USDC قريباً`, 'ok', 6000);
     setTimeout(pollAccount, 5000);
-
   } catch (e) {
     toast(`⚠️ ${_withdrawErr(e.message)}`, 'err', 5000);
   } finally {
