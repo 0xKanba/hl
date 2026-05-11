@@ -1,8 +1,9 @@
 /* ═══════════════════════════════════════
    trading.js — تنفيذ الصفقات وإغلاقها
-   ✅ إغلاق جزئي ديناميكي
-   ✅ تحديث فوري optimistic للمركز بعد الإغلاق
-   ✅ استعلام متعدد من API لضمان التحديث الكامل
+   ✅ إغلاق جزئي ديناميكي: slider ↔ qty
+   ✅ _applyOptimisticClose: تحديث فوري صحيح
+   ✅ _multiPoll: تأخير 3/6.5/11 ثانية
+   ✅ State._lastOptimisticClose: يحمي من override API
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -89,11 +90,11 @@ async function execTrade() {
   finally { resetBtn('confirmExecute'); hideLoader(); }
 }
 
-/* ════ استعلام متعدد — يضمن تحديث الأرقام بعد أي تنفيذ ════ */
+/* ════ استعلام متعدد — يأتي بعد 3/6.5/11 ثانية لإعطاء Hyperliquid وقتاً للتسوية ════ */
 function _multiPoll() {
-  setTimeout(() => pollAccount().catch(() => {}), 800);
-  setTimeout(() => pollAccount().catch(() => {}), 2500);
-  setTimeout(() => pollAccount().catch(() => {}), 5500);
+  setTimeout(() => pollAccount().catch(() => {}), 3000);
+  setTimeout(() => pollAccount().catch(() => {}), 6500);
+  setTimeout(() => pollAccount().catch(() => {}), 11000);
 }
 
 /* ═══════════════════════════════════════════════════
@@ -141,7 +142,7 @@ window.askClose = function (i) {
   openModal('modalClose');
 };
 
-/* ── تهيئة عناصر التحكم الجزئي ── */
+/* ── تهيئة عناصر التحكم ── */
 function _initCloseControls(totalDisp, a, isGram, pnlTotal) {
   const qtyIn  = $('closeQtyInput');
   const slider = $('closePctSlider');
@@ -156,7 +157,6 @@ function _initCloseControls(totalDisp, a, isGram, pnlTotal) {
   setTxt('closeQtyUnit',  a.unit);
   setTxt('closePctLabel', '100%');
   _updateSliderTrack(100);
-  _updateClosePresets(100);
   _updateCloseRemain(totalDisp, totalDisp, a, isGram, pnlTotal);
   _updateCloseBtn(totalDisp, totalDisp, a, isGram, true);
 }
@@ -172,9 +172,8 @@ function _syncCloseFromPct(pct) {
   if (slider) slider.value = pct;
   setTxt('closePctLabel', Math.round(pct) + '%');
   _updateSliderTrack(pct);
-  _updateClosePresets(Math.round(pct));
   _updateCloseRemain(closeDisp, totalDisp, a, isGram, pnlTotal);
-  _updateCloseBtn(closeDisp, totalDisp, a, isGram, Math.round(pct) === 100);
+  _updateCloseBtn(closeDisp, totalDisp, a, isGram, Math.abs(pct - 100) < 0.1);
 }
 
 /* ── qty input → slider ── */
@@ -187,24 +186,16 @@ function _syncCloseFromQty(closeDisp) {
   if (slider) slider.value = pct;
   setTxt('closePctLabel', Math.round(pct) + '%');
   _updateSliderTrack(pct);
-  _updateClosePresets(Math.round(pct));
   _updateCloseRemain(clamped, totalDisp, a, isGram, pnlTotal);
-  _updateCloseBtn(clamped, totalDisp, a, isGram, Math.round(pct) === 100);
+  _updateCloseBtn(clamped, totalDisp, a, isGram, Math.abs(pct - 100) < 0.1);
 }
 
-/* ── لون الشريط: يسار أحمر (مغلق)، يمين رمادي (متبقي) ── */
+/* ── لون شريط أخضر يسار → يمين ── */
 function _updateSliderTrack(pct) {
   const slider = $('closePctSlider');
   if (!slider) return;
   slider.style.background =
-    `linear-gradient(to right, var(--dn) ${pct}%, var(--bg-input) ${pct}%)`;
-}
-
-/* ── presets ── */
-function _updateClosePresets(roundedPct) {
-  document.querySelectorAll('.pc-preset').forEach(b =>
-    b.classList.toggle('active', +b.dataset.pct === roundedPct)
-  );
+    `linear-gradient(to right, var(--up) ${pct}%, var(--bg-input) ${pct}%)`;
 }
 
 /* ── معلومات المتبقي ── */
@@ -259,6 +250,7 @@ async function execClose() {
   const aApi     = isGram ? ASSETS['GOLD'] : ASSETS[sym];
   if (!aApi) { toast('أصل غير معروف', 'err'); closeModal('modalClose'); return; }
 
+  /* تحويل للأونصات */
   const closeOz = isGram ? closeDispRaw / TROY : closeDispRaw;
   const maxOz   = Math.abs(sziOz);
   const finalOz = Math.min(closeOz, maxOz);
@@ -300,15 +292,23 @@ async function execClose() {
       'ok', 5000);
 
     State.pendingClose = null;
-    /* ✅ ثلاثة استعلامات متتالية لضمان تحديث الأرقام الفعلية من Hyperliquid */
+    /* ✅ استعلام بعد تأخير كافٍ لتسوية Hyperliquid */
     _multiPoll();
 
   } catch (e) { toast(tradeErr(e.message), 'err', 6000); }
   finally { resetBtn('closeExecute'); hideLoader(); }
 }
 
-/* ✅ تحديث فوري للمركز في State.positions قبل استجابة API */
+/* ✅ تحديث فوري + تسجيل وقت الـ optimistic لحماية من override API
+   الرياضيات:
+   - sziOz:    الحجم الحالي بالأونصات (موجب = long، سالب = short)
+   - closedOz: الحجم المُغلَق بالأونصات (دائماً موجب)
+   - newSzi:   sziOz - (dir × closedOz)
+*/
 function _applyOptimisticClose(index, sziOz, closedOz, isAll) {
+  /* ✅ سجّل وقت الـ optimistic لمنع pollAccount من الكتابة فوقه */
+  State._lastOptimisticClose = Date.now();
+
   if (isAll) {
     State.positions.splice(index, 1);
   } else {
@@ -316,8 +316,8 @@ function _applyOptimisticClose(index, sziOz, closedOz, isAll) {
     if (!pos) return;
     const dir    = sziOz > 0 ? 1 : -1;
     const newSzi = sziOz - dir * closedOz;
-    /* منع الحجم السالب بسبب دقة الأرقام */
-    pos.position.szi           = (Math.abs(newSzi) < 1e-6 ? 0 : newSzi).toFixed(6);
+    /* إذا المتبقي أصغر من دقة الأرقام = أصفر */
+    pos.position.szi           = (Math.abs(newSzi) < 1e-8 ? 0 : newSzi).toFixed(8);
     pos.position.unrealizedPnl = '0';
   }
   resetPosFingerprint();
@@ -368,6 +368,7 @@ async function execCloseAll() {
         ok++;
       } catch (e) { fail++; console.warn('[closeAll]', sym, e.message); }
     }
+    State._lastOptimisticClose = Date.now();
     State.positions = [];
     resetPosFingerprint();
     renderPositions();
