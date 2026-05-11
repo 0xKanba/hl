@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ك<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -241,7 +241,6 @@
     <h3 class="modal-title" id="closeTitle">إغلاق الصفقة</h3>
     <p class="modal-subtitle" id="closeSubtitle">إغلاق جزئي أو كامل بالسعر الحالي</p>
 
-    <!-- معلومات المركز -->
     <div class="confirm-details" id="closeDetails"></div>
 
     <!-- أدوات الإغلاق الجزئي -->
@@ -258,14 +257,10 @@
         <span class="pc-unit" id="closeQtyUnit">—</span>
       </div>
 
-      <input type="range" class="pc-slider" id="closePctSlider"
-             min="0" max="100" value="100" step="0.5">
-
-      <div class="pc-presets">
-        <button class="pc-preset" data-pct="25">25%</button>
-        <button class="pc-preset" data-pct="50">50%</button>
-        <button class="pc-preset" data-pct="75">75%</button>
-        <button class="pc-preset active" data-pct="100">100%</button>
+      <!-- ✅ wrapper يحمل نقاط 25/50/75 كـ pseudo-elements -->
+      <div class="pc-slider-wrap">
+        <input type="range" class="pc-slider" id="closePctSlider"
+               min="0" max="100" value="100" step="0.5">
       </div>
 
       <div class="pc-remain" id="closeRemain"></div>
@@ -361,7 +356,7 @@
   </div>
 </div>
 
-<!-- ✅ الحد الأدنى للإيداع $5 -->
+<!-- ✅ حد أدنى للإيداع $5 -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -425,18 +420,18 @@
 <div class="modal-overlay" id="modalAbout">
   <div class="modal" style="max-width:600px;">
     <div class="modal-handle"></div>
-    <h3 class="modal-title" style="text-align:center;color:var(--ac);">💧 سيولة · كيف يعمل؟</h3>
+    <h3 class="modal-title" style="text-align:center;color:var(--hc-ac);">💧 سيولة · كيف يعمل؟</h3>
     <div class="about-body">
       <div class="about-block">
         <p>منصة تداول مباشر على بروتوكول Hyperliquid اللامركزي، تعمل بالكامل داخل متصفحك دون أي خوادم وسيطة.</p>
       </div>
       <div class="about-section">
-        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة.</p></div></div>
-        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر متاح.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر.</p></div></div>
-        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد.</p></div></div>
-        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>أمر وقائي يُغلق الصفقة عند حد خسارة تحدده.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش المتاح.</p></div></div>
+        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة.</p></div></div>
+        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>تُنفَّذ الصفقات فوراً بأفضل سعر متاح في السوق.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p></div></div>
+        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>يُغلق الصفقة تلقائياً عند بلوغ سعر محدد.</p></div></div>
+        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>يُغلق الصفقة عند حد خسارة تحدده.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً. يظهر كخط برتقالي في الرسم.</p></div></div>
       </div>
     </div>
     <div class="modal-buttons modal-buttons-center">
@@ -483,7 +478,7 @@
     <div class="logout-content">
       <div class="logout-icon">⚠️</div>
       <h3 class="modal-title">نسيان رمز PIN</h3>
-      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية بما فيها المفتاح الخاص.<br><strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
+      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية.<br><strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"             id="forgotCancel">إلغاء</button>
