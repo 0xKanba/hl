@@ -1,4 +1,4 @@
-ك<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -26,6 +26,11 @@
   <link rel="preload" as="image" href="/images/gold.svg">
   <link rel="preload" as="image" href="/images/silver.svg">
   <link rel="preload" as="image" href="/images/100.png">
+  <link rel="preload" as="image" href="/images/balance.png">
+  <link rel="preload" as="image" href="/images/history.png">
+  <link rel="preload" as="image" href="/images/diposit.png">
+  <link rel="preload" as="image" href="/images/withdraw.png">
+  <link rel="preload" as="image" href="/images/calendar.png">
 
   <script type="application/ld+json">
   {
@@ -70,6 +75,7 @@
 <!-- ══ التطبيق الرئيسي ══ -->
 <div class="screen hidden" id="appScreen">
 
+  <!-- NAV -->
   <nav class="nav">
     <div class="nav-left">
       <button class="nav-logo-btn" id="navLogo">
@@ -89,11 +95,13 @@
     </div>
   </nav>
 
+  <!-- شريط التاريخ والوقت -->
   <div class="datetime-bar" id="datetimeBar" title="انقر لعرض أسماء الأشهر">
     <span class="dt-clock" id="dtClock">—</span>
     <span class="dt-hint">📅</span>
   </div>
 
+  <!-- جدول الأشهر -->
   <div class="months-panel hidden" id="monthsPanel">
     <div class="months-grid">
       <div class="month-item"><span class="m-num">1</span><span class="m-name">يناير</span><span class="m-en">Jan</span></div>
@@ -111,9 +119,13 @@
     </div>
   </div>
 
+  <!-- تابات الأصول -->
   <div class="tabs">
     <button class="tab" data-asset="XAU">
-      <div class="tab-left"><img class="tab-img" src="/images/gold.svg" alt="XAU" loading="eager" style="filter:sepia(1) saturate(2) hue-rotate(10deg)"></div>
+      <div class="tab-left">
+        <img class="tab-img" src="/images/gold.svg" alt="XAU" loading="eager"
+             style="filter:sepia(1) saturate(2) hue-rotate(10deg)">
+      </div>
       <div class="tab-right"><span class="tab-price" id="priceXAU">—</span></div>
     </button>
     <button class="tab" data-asset="NQ">
@@ -136,6 +148,8 @@
 
   <main class="main">
     <div class="col-left">
+
+      <!-- بطاقة السعر -->
       <div class="price-card" id="priceCard">
         <div class="price-img-wrap" id="priceImgWrap">
           <img id="priceAssetImg" src="/images/oil.svg" alt="asset" loading="eager">
@@ -158,9 +172,11 @@
         </div>
       </div>
 
+      <!-- لوحة التداول -->
       <div class="trade-panel">
         <div class="qty-input-row">
-          <input type="number" class="qty-input" id="qtyInput" placeholder="0.00" min="0" step="any">
+          <input type="number" class="qty-input" id="qtyInput"
+                 placeholder="0.00" min="0" step="any">
           <button class="qty-100" id="qty100">100%</button>
           <span class="qty-unit" id="qtyUnit">برميل</span>
         </div>
@@ -192,6 +208,7 @@
     </div>
   </main>
 
+  <!-- Footer -->
   <footer class="footer">
     <button class="footer-main-btn" id="btnChart">
       <span class="fmb-icon">📈</span>
@@ -217,10 +234,12 @@
   </div>
 </div>
 
+<!-- شاشة الرسم -->
 <div id="chartScreen" class="chart-screen hidden"></div>
 
 <!-- ══ MODALS ══ -->
 
+<!-- تأكيد فتح صفقة -->
 <div class="modal-overlay overlay-fs" id="modalConfirm">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -234,45 +253,21 @@
   </div>
 </div>
 
-<!-- ✅ إغلاق صفقة — جزئي أو كامل -->
+<!-- ✅ إغلاق صفقة — بسيط كما كان -->
 <div class="modal-overlay overlay-fs" id="modalClose">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
     <h3 class="modal-title" id="closeTitle">إغلاق الصفقة</h3>
-    <p class="modal-subtitle" id="closeSubtitle">إغلاق جزئي أو كامل بالسعر الحالي</p>
-
+    <p class="modal-subtitle">سيتم الإغلاق فوراً بالسعر الحالي</p>
     <div class="confirm-details" id="closeDetails"></div>
-
-    <!-- أدوات الإغلاق الجزئي -->
-    <div class="partial-close-wrap">
-
-      <div class="pc-header">
-        <span class="pc-lbl">حجم الإغلاق</span>
-        <span class="pc-pct-lbl" id="closePctLabel">100%</span>
-      </div>
-
-      <div class="pc-qty-row">
-        <input type="number" class="pc-qty-input" id="closeQtyInput"
-               min="0" step="any" inputmode="decimal" placeholder="0.00">
-        <span class="pc-unit" id="closeQtyUnit">—</span>
-      </div>
-
-      <!-- ✅ wrapper يحمل نقاط 25/50/75 كـ pseudo-elements -->
-      <div class="pc-slider-wrap">
-        <input type="range" class="pc-slider" id="closePctSlider"
-               min="0" max="100" value="100" step="0.5">
-      </div>
-
-      <div class="pc-remain" id="closeRemain"></div>
-    </div>
-
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"             id="closeCancel">إبقاء</button>
-      <button class="btn-modal btn-confirm btn-danger" id="closeExecute">إغلاق الكل ✕</button>
+      <button class="btn-modal btn-confirm btn-danger" id="closeExecute">إغلاق الآن ✕</button>
     </div>
   </div>
 </div>
 
+<!-- إغلاق الكل -->
 <div class="modal-overlay overlay-fs" id="modalCloseAll">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -286,6 +281,7 @@
   </div>
 </div>
 
+<!-- جني الربح TP -->
 <div class="modal-overlay overlay-fs" id="modalTP">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -308,6 +304,7 @@
   </div>
 </div>
 
+<!-- وقف الخسارة SL -->
 <div class="modal-overlay overlay-fs" id="modalSL">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -330,6 +327,7 @@
   </div>
 </div>
 
+<!-- الرصيد -->
 <div class="modal-overlay" id="modalBalance">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -343,6 +341,7 @@
   </div>
 </div>
 
+<!-- سجل الصفقات -->
 <div class="modal-overlay" id="modalHistory">
   <div class="modal" style="display:flex;flex-direction:column;">
     <h3 class="modal-title">📜 سجل الصفقات</h3>
@@ -356,7 +355,7 @@
   </div>
 </div>
 
-<!-- ✅ حد أدنى للإيداع $5 -->
+<!-- ✅ الإيداع — حد أدنى $5 -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -373,6 +372,7 @@
   </div>
 </div>
 
+<!-- السحب -->
 <div class="modal-overlay" id="modalWithdraw">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -401,6 +401,7 @@
   </div>
 </div>
 
+<!-- تسجيل الخروج -->
 <div class="modal-overlay" id="modalLogout">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -417,6 +418,7 @@
   </div>
 </div>
 
+<!-- شرح التطبيق -->
 <div class="modal-overlay" id="modalAbout">
   <div class="modal" style="max-width:600px;">
     <div class="modal-handle"></div>
@@ -426,12 +428,12 @@
         <p>منصة تداول مباشر على بروتوكول Hyperliquid اللامركزي، تعمل بالكامل داخل متصفحك دون أي خوادم وسيطة.</p>
       </div>
       <div class="about-section">
-        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة.</p></div></div>
-        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>تُنفَّذ الصفقات فوراً بأفضل سعر متاح في السوق.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p></div></div>
-        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>يُغلق الصفقة تلقائياً عند بلوغ سعر محدد.</p></div></div>
-        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>يُغلق الصفقة عند حد خسارة تحدده.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً. يظهر كخط برتقالي في الرسم.</p></div></div>
+        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة. احتفظ بنسخة احتياطية في مكان آمن.</p></div></div>
+        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر متاح في السوق.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p></div></div>
+        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد، لتأمين الأرباح دون مراقبة مستمرة.</p></div></div>
+        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>أمر وقائي يُغلق الصفقة تلقائياً عند حد خسارة تحدده، للحد من المخاطر في الحركات المعاكسة.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش المتاح. يظهر في الرسم البياني كخط برتقالي.</p></div></div>
       </div>
     </div>
     <div class="modal-buttons modal-buttons-center">
@@ -440,6 +442,7 @@
   </div>
 </div>
 
+<!-- PIN — إدخال -->
 <div class="modal-overlay" id="modalPIN">
   <div class="lock-screen">
     <div class="lock-header">
@@ -472,13 +475,14 @@
   </div>
 </div>
 
+<!-- PIN — نسيان -->
 <div class="modal-overlay" id="modalForgotPIN" style="z-index:9999;">
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="logout-content">
       <div class="logout-icon">⚠️</div>
       <h3 class="modal-title">نسيان رمز PIN</h3>
-      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية.<br><strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
+      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية بما فيها المفتاح الخاص.<br><strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"             id="forgotCancel">إلغاء</button>
@@ -488,6 +492,7 @@
   </div>
 </div>
 
+<!-- PIN — تعيين -->
 <div class="modal-overlay" id="modalSetPIN">
   <div class="lock-screen">
     <div class="lock-header">
