@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════
    trading.js — تنفيذ الصفقات وإغلاقها
-   ✅ إغلاق جزئي ديناميكي: slider ↔ qty
-   ✅ _applyOptimisticClose: تحديث فوري صحيح
-   ✅ _multiPoll: تأخير 3/6.5/11 ثانية
-   ✅ State._lastOptimisticClose: يحمي من override API
+   ✅ إغلاق بسيط كما كان — بدون شريط
+   ✅ optimistic update فوري للحجم
+   ✅ _multiPoll — 3 استعلامات متتالية
+   ✅ رياضيات صحيحة لكل الأصول
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -74,6 +74,8 @@ async function execTrade() {
     if (status?.filled) {
       const f = status.filled;
       closeModal('modalConfirm');
+      /* ✅ تحديث optimistic فوري لحجم المركز بعد فتح صفقة */
+      _applyOptimisticOpen(sym, a, isBuy, +f.totalSz, +f.avgPx);
       const dispSz = a.gram ? (+f.totalSz * TROY).toFixed(2) : f.totalSz;
       toast(`✅ مُنفَّذ — ${a.icon} ${dispSz} ${a.unit} @ ${fmt(parseFloat(f.avgPx) / (a.gram ? TROY : 1), a.pxDp)}`, 'ok', 5000);
     } else if (status?.resting) {
@@ -90,16 +92,50 @@ async function execTrade() {
   finally { resetBtn('confirmExecute'); hideLoader(); }
 }
 
-/* ════ استعلام متعدد — يأتي بعد 3/6.5/11 ثانية لإعطاء Hyperliquid وقتاً للتسوية ════ */
+/* ════ تحديث فوري بعد فتح صفقة ════
+   إذا كان هناك مركز مفتوح بنفس الأصل → دمج (netting)
+   وإلا → إضافة مركز جديد مؤقت حتى يأتي API
+*/
+function _applyOptimisticOpen(sym, a, isBuy, filledOz, avgPxOz) {
+  State._lastOptimisticClose = Date.now();
+  const coin      = a.coin;
+  const existing  = State.positions.findIndex(p => {
+    const raw = p.position.coin.includes(':') ? p.position.coin.split(':')[1] : p.position.coin;
+    const s   = raw === 'GOLD' ? 'XAU' : (COIN_TO_SYM[raw] || raw);
+    return s === sym;
+  });
+
+  if (existing >= 0) {
+    const pos    = State.positions[existing].position;
+    const oldSzi = parseFloat(pos.szi);
+    /* netted size: long + buy = أكبر، long + sell = أصغر */
+    const addSzi = isBuy ? filledOz : -filledOz;
+    const newSzi = oldSzi + addSzi;
+    if (Math.abs(newSzi) < 1e-8) {
+      /* الصفقة أُغلقت كلياً بالشراء/البيع العكسي */
+      State.positions.splice(existing, 1);
+    } else {
+      pos.szi           = newSzi.toFixed(8);
+      pos.unrealizedPnl = '0';
+    }
+  }
+  /* إذا لم يكن هناك مركز موجود يضيف API لاحقاً */
+  resetPosFingerprint();
+  renderPositions();
+}
+
+/* ════ استعلام متعدد بعد أي تنفيذ ════ */
 function _multiPoll() {
-  setTimeout(() => pollAccount().catch(() => {}), 3000);
-  setTimeout(() => pollAccount().catch(() => {}), 6500);
+  setTimeout(() => pollAccount().catch(() => {}), 2500);
+  setTimeout(() => pollAccount().catch(() => {}), 6000);
   setTimeout(() => pollAccount().catch(() => {}), 11000);
 }
 
-/* ═══════════════════════════════════════════════════
-   إغلاق صفقة — جزئي أو كامل
-═══════════════════════════════════════════════════ */
+/* ════════════════════════════════════════
+   إغلاق صفقة — بسيط كما كان
+   ✅ لا شريط لا أزرار — فقط تأكيد وإغلاق
+   ✅ optimistic update فوري للحجم
+════════════════════════════════════════ */
 window.askClose = function (i) {
   const p = State.positions[i]; if (!p) return;
   const pos      = p.position;
@@ -107,175 +143,77 @@ window.askClose = function (i) {
   const sym      = shortCoinPos(pos.coin);
   const a        = ASSETS[sym] || { name:sym, unit:'', icon:'📊', pxDp:2, szDp:2 };
   const isGram   = !!a.gram;
-  const pnlTotal = parseFloat(pos.unrealizedPnl || 0);
+  const pnl      = parseFloat(pos.unrealizedPnl || 0);
   const curPx    = State.prices[sym]?.mid || 0;
-  const totalOz  = Math.abs(sziOz);
-  const totalDisp= isGram ? totalOz * TROY : totalOz;
+  const sziDisp  = isGram ? Math.abs(sziOz) * TROY : Math.abs(sziOz);
   const dp       = isGram ? 2 : a.szDp;
   const entryDisp= isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
   const isLong   = sziOz > 0;
+  const closeFee = curPx
+    ? (Math.abs(sziOz) * (isGram ? curPx * TROY : curPx) * feeRate(sym)).toFixed(4)
+    : '—';
 
-  setTxt('closeTitle',    `${a.icon} إغلاق — ${a.name}`);
-  setTxt('closeSubtitle', `${isLong ? '▲ شراء' : '▼ بيع'} · دخول $${fmt(entryDisp, a.pxDp)}`);
-
+  setTxt('closeTitle', `${a.icon} إغلاق — ${a.name}`);
   $('closeDetails').innerHTML = `
     <div class="confirm-row">
-      <span class="confirm-key">حجم المركز</span>
-      <span class="confirm-val">${totalDisp.toFixed(dp)} ${a.unit}</span>
+      <span class="confirm-key">الاتجاه</span>
+      <span class="confirm-val ${isLong ? 'buy' : 'sell'}">${isLong ? '▲ شراء' : '▼ بيع'}</span>
+    </div>
+    <div class="confirm-row">
+      <span class="confirm-key">الكمية</span>
+      <span class="confirm-val">${sziDisp.toFixed(dp)} ${a.unit}</span>
+    </div>
+    <div class="confirm-row">
+      <span class="confirm-key">سعر الدخول</span>
+      <span class="confirm-val">$${fmt(entryDisp, a.pxDp)}</span>
     </div>
     <div class="confirm-row">
       <span class="confirm-key">السعر الحالي</span>
       <span class="confirm-val">${curPx ? '$' + fmt(curPx, a.pxDp) : '—'}</span>
     </div>
     <div class="confirm-row">
-      <span class="confirm-key">ربح / خسارة حالية</span>
-      <span class="confirm-val ${pnlTotal >= 0 ? 'buy' : 'sell'}">${pnlTotal >= 0 ? '+' : ''}$${fmt(pnlTotal, 2)}</span>
+      <span class="confirm-key">الربح / الخسارة</span>
+      <span class="confirm-val ${pnl >= 0 ? 'buy' : 'sell'}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}</span>
+    </div>
+    <div class="confirm-row">
+      <span class="confirm-key">رسوم الإغلاق</span>
+      <span class="confirm-val fee">$${closeFee} (${feeRatePct(sym)})</span>
     </div>`;
 
-  State.pendingClose = {
-    index: i, coin: pos.coin, sym, isGram, a,
-    totalOz, totalDisp, dp, pnlTotal,
-    sziOriginal: sziOz
-  };
-
-  _initCloseControls(totalDisp, a, isGram, pnlTotal);
+  State.pendingClose = i;
   openModal('modalClose');
 };
 
-/* ── تهيئة عناصر التحكم ── */
-function _initCloseControls(totalDisp, a, isGram, pnlTotal) {
-  const qtyIn  = $('closeQtyInput');
-  const slider = $('closePctSlider');
-  if (!qtyIn || !slider) return;
-
-  const dp = isGram ? 2 : a.szDp;
-  qtyIn.value  = totalDisp.toFixed(dp);
-  qtyIn.max    = totalDisp;
-  qtyIn.step   = Math.pow(10, -dp);
-  slider.value = 100;
-
-  setTxt('closeQtyUnit',  a.unit);
-  setTxt('closePctLabel', '100%');
-  _updateSliderTrack(100);
-  _updateCloseRemain(totalDisp, totalDisp, a, isGram, pnlTotal);
-  _updateCloseBtn(totalDisp, totalDisp, a, isGram, true);
-}
-
-/* ── slider → qty ── */
-function _syncCloseFromPct(pct) {
-  const pc = State.pendingClose; if (!pc) return;
-  const { totalDisp, a, isGram, pnlTotal } = pc;
-  const dp        = isGram ? 2 : a.szDp;
-  const closeDisp = parseFloat((totalDisp * pct / 100).toFixed(dp));
-  const qtyIn     = $('closeQtyInput'), slider = $('closePctSlider');
-  if (qtyIn)  qtyIn.value  = closeDisp;
-  if (slider) slider.value = pct;
-  setTxt('closePctLabel', Math.round(pct) + '%');
-  _updateSliderTrack(pct);
-  _updateCloseRemain(closeDisp, totalDisp, a, isGram, pnlTotal);
-  _updateCloseBtn(closeDisp, totalDisp, a, isGram, Math.abs(pct - 100) < 0.1);
-}
-
-/* ── qty input → slider ── */
-function _syncCloseFromQty(closeDisp) {
-  const pc = State.pendingClose; if (!pc) return;
-  const { totalDisp, a, isGram, pnlTotal } = pc;
-  const clamped = Math.min(Math.max(0, closeDisp), totalDisp);
-  const pct     = totalDisp > 0 ? (clamped / totalDisp) * 100 : 0;
-  const slider  = $('closePctSlider');
-  if (slider) slider.value = pct;
-  setTxt('closePctLabel', Math.round(pct) + '%');
-  _updateSliderTrack(pct);
-  _updateCloseRemain(clamped, totalDisp, a, isGram, pnlTotal);
-  _updateCloseBtn(clamped, totalDisp, a, isGram, Math.abs(pct - 100) < 0.1);
-}
-
-/* ── لون شريط أخضر يسار → يمين ── */
-function _updateSliderTrack(pct) {
-  const slider = $('closePctSlider');
-  if (!slider) return;
-  slider.style.background =
-    `linear-gradient(to right, var(--up) ${pct}%, var(--bg-input) ${pct}%)`;
-}
-
-/* ── معلومات المتبقي ── */
-function _updateCloseRemain(closeDisp, totalDisp, a, isGram, pnlTotal) {
-  const el = $('closeRemain'); if (!el) return;
-  const pc = State.pendingClose; if (!pc) return;
-  const dp         = isGram ? 2 : a.szDp;
-  const remainDisp = Math.max(0, totalDisp - closeDisp);
-  const pct        = totalDisp > 0 ? closeDisp / totalDisp : 0;
-  const closePnl   = pnlTotal * pct;
-  const curPx      = State.prices[pc.sym]?.mid || 0;
-  const closeOz    = isGram ? closeDisp / TROY : closeDisp;
-  const curOz      = isGram ? curPx * TROY : curPx;
-  const fee        = curOz > 0 ? closeOz * curOz * feeRate(pc.sym) : 0;
-  const netPnl     = closePnl - fee;
-  const pCls       = netPnl >= 0 ? 'up' : 'dn';
-
-  el.innerHTML = `
-    <div class="pc-remain-row">
-      <span class="pc-remain-lbl">يتبقى مفتوح</span>
-      <span class="pc-remain-val">${remainDisp.toFixed(dp)} ${a.unit}</span>
-    </div>
-    <div class="pc-remain-row">
-      <span class="pc-remain-lbl">صافي هذا الجزء</span>
-      <span class="pc-remain-val pc-pnl-est ${pCls}">${netPnl >= 0 ? '+' : ''}$${Math.abs(netPnl).toFixed(2)}</span>
-    </div>`;
-}
-
-/* ── نص الزر ── */
-function _updateCloseBtn(closeDisp, totalDisp, a, isGram, isAll) {
-  const btn = $('closeExecute'); if (!btn) return;
-  const dp  = isGram ? 2 : a.szDp;
-  btn.innerHTML = isAll
-    ? `إغلاق الكل ✕`
-    : `إغلاق ${(+closeDisp).toFixed(dp)} ${a.unit} ✕`;
-}
-
-/* ── تنفيذ الإغلاق ── */
 async function execClose() {
-  const pc = State.pendingClose;
-  if (!pc) { closeModal('modalClose'); return; }
-
-  const closeDispRaw = parseFloat($('closeQtyInput')?.value || 0);
-  if (!closeDispRaw || closeDispRaw <= 0) { toast('أدخل كمية الإغلاق', 'err'); return; }
-
-  const p = State.positions[pc.index];
+  if (State.pendingClose === null) { closeModal('modalClose'); return; }
+  const p = State.positions[State.pendingClose];
   if (!p) { closeModal('modalClose'); return; }
 
   const pos      = p.position;
   const sziOz    = parseFloat(pos.szi);
-  const { sym, isGram } = pc;
+  const sym      = shortCoinPos(pos.coin);
+  const isGram   = !!ASSETS[sym]?.gram;
   const aApi     = isGram ? ASSETS['GOLD'] : ASSETS[sym];
   if (!aApi) { toast('أصل غير معروف', 'err'); closeModal('modalClose'); return; }
 
-  /* تحويل للأونصات */
-  const closeOz = isGram ? closeDispRaw / TROY : closeDispRaw;
-  const maxOz   = Math.abs(sziOz);
-  const finalOz = Math.min(closeOz, maxOz);
-  const isAll   = finalOz >= maxOz * 0.9999;
-
-  const gramPx  = State.prices['XAU']?.mid;
-  const midOz   = isGram
+  const gramPx   = State.prices['XAU']?.mid;
+  const midOz    = isGram
     ? (gramPx > 0 ? gramPx * TROY : State.prices['GOLD']?.mid)
     : State.prices[sym]?.mid;
-  if (!midOz || midOz <= 0) { toast('سعر غير متاح، انتظر لحظة', 'err'); return; }
+  if (!midOz || midOz <= 0) { toast('سعر غير متاح، انتظر لحظة', 'err'); closeModal('modalClose'); return; }
 
   const aDisp    = ASSETS[sym] || aApi;
-  const dp       = isGram ? 2 : aApi.szDp;
-  const dispLabel= closeDispRaw.toFixed(dp);
-  const remain   = Math.max(0, pc.totalDisp - closeDispRaw).toFixed(dp);
+  const idx      = State.pendingClose;
 
   setBtnLoading('closeExecute', '⏳');
-  showLoader(`${aDisp.icon || ''} إغلاق ${dispLabel} ${aDisp.unit || ''}...`);
+  showLoader(`إغلاق ${aDisp.icon || ''} ${aDisp.name || ''}...`);
   try {
     const isBuy = sziOz < 0;
     await hlExchange({
       type: 'order',
       orders: [{ a:aApi.idx, b:isBuy,
         p: wirePx(midOz * (isBuy ? 1.02 : 0.98), aApi.szDp),
-        s: wire(finalOz, aApi.szDp),
+        s: wire(Math.abs(sziOz), aApi.szDp),
         r: true, t:{ limit:{ tif:'Ioc' } }
       }],
       grouping: 'na'
@@ -283,45 +221,18 @@ async function execClose() {
 
     closeModal('modalClose');
 
-    /* ✅ تحديث فوري في الذاكرة — لا ننتظر API */
-    _applyOptimisticClose(pc.index, sziOz, finalOz, isAll);
+    /* ✅ حذف فوري من الذاكرة */
+    State._lastOptimisticClose = Date.now();
+    State.positions.splice(idx, 1);
+    resetPosFingerprint();
+    renderPositions();
 
-    toast(isAll
-      ? `✅ أُغلق كاملاً — ${aDisp.icon || ''} ${aDisp.name || ''}`
-      : `✅ أُغلق ${dispLabel} ${aDisp.unit || ''} · يتبقى ${remain} ${aDisp.unit || ''}`,
-      'ok', 5000);
-
+    toast(`✅ أُغلقت — ${aDisp.icon || ''} ${aDisp.name || ''}`, 'ok', 4000);
     State.pendingClose = null;
-    /* ✅ استعلام بعد تأخير كافٍ لتسوية Hyperliquid */
     _multiPoll();
 
   } catch (e) { toast(tradeErr(e.message), 'err', 6000); }
   finally { resetBtn('closeExecute'); hideLoader(); }
-}
-
-/* ✅ تحديث فوري + تسجيل وقت الـ optimistic لحماية من override API
-   الرياضيات:
-   - sziOz:    الحجم الحالي بالأونصات (موجب = long، سالب = short)
-   - closedOz: الحجم المُغلَق بالأونصات (دائماً موجب)
-   - newSzi:   sziOz - (dir × closedOz)
-*/
-function _applyOptimisticClose(index, sziOz, closedOz, isAll) {
-  /* ✅ سجّل وقت الـ optimistic لمنع pollAccount من الكتابة فوقه */
-  State._lastOptimisticClose = Date.now();
-
-  if (isAll) {
-    State.positions.splice(index, 1);
-  } else {
-    const pos = State.positions[index];
-    if (!pos) return;
-    const dir    = sziOz > 0 ? 1 : -1;
-    const newSzi = sziOz - dir * closedOz;
-    /* إذا المتبقي أصغر من دقة الأرقام = أصفر */
-    pos.position.szi           = (Math.abs(newSzi) < 1e-8 ? 0 : newSzi).toFixed(8);
-    pos.position.unrealizedPnl = '0';
-  }
-  resetPosFingerprint();
-  renderPositions();
 }
 
 /* ════ إغلاق جميع الصفقات ════ */
