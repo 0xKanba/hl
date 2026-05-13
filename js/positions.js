@@ -1,7 +1,6 @@
 /* ═══════════════════════════════════════
    positions.js — عرض الصفقات والتصفية
-   ✅ resetPosFingerprint — يُجبر إعادة الرسم الفوري
-   ✅ data-sz-idx — يعكس الحجم الفعلي دائماً
+   ✅ رياضيات صحيحة لسعر التصفية
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -30,29 +29,47 @@ function parseTpslFromOrders(orders, coin) {
   return r;
 }
 
-/* ════ حساب سعر التصفية ════ */
+/* ════ حساب سعر التصفية — صيغة Hyperliquid الصحيحة ════
+   المعادلة:
+   - Isolated long:  liq = entry × (1 − 1/lev + mmRate)
+   - Isolated short: liq = entry × (1 + 1/lev − mmRate)
+   - Cross: يُستخدم الرصيد الكلي لدعم المركز
+   حيث mmRate = maintenance margin = 0.5 / lev (نصف الهامش الأولي)
+*/
 function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
-  const side     = sziOz > 0 ? 1 : -1;
-  const absSize  = Math.abs(sziOz);
-  const mmRate   = 0.5 / maxLev;
+
+  const side    = sziOz > 0 ? 1 : -1;   // 1 = شراء، -1 = بيع
+  const absSize = Math.abs(sziOz);
+  const mmRate  = 0.5 / maxLev;          // نسبة هامش الصيانة
   const notional = absSize * entryPxOz;
+
   let liq;
+
   if (isCross) {
-    const bal        = balance > 0 ? balance : notional / maxLev;
+    /* Cross: الرصيد كله يدعم المركز
+       liq = entry − side × (balance − notional×mmRate) / absSize */
+    const bal = balance > 0 ? balance : notional / maxLev;
     const freeMargin = bal - notional * mmRate;
     if (freeMargin <= 0) {
+      /* الرصيد لا يكفي حتى الهامش — التصفية فورية تقريباً */
       liq = side > 0 ? entryPxOz * 0.99 : entryPxOz * 1.01;
     } else {
       liq = entryPxOz - side * freeMargin / absSize;
     }
   } else {
-    liq = side > 0
-      ? entryPxOz * (1 - 1 / maxLev + mmRate)
-      : entryPxOz * (1 + 1 / maxLev - mmRate);
+    /* Isolated: المعادلة المباشرة
+       long:  liq = entry × (1 − 1/lev + mmRate)
+       short: liq = entry × (1 + 1/lev − mmRate) */
+    if (side > 0) {
+      liq = entryPxOz * (1 - 1 / maxLev + mmRate);
+    } else {
+      liq = entryPxOz * (1 + 1 / maxLev - mmRate);
+    }
   }
-  if (liq <= 0) return 0;
-  if (side === -1 && liq > entryPxOz * 5) return null;
+
+  if (liq <= 0)  return 0;
+  if (side === -1 && liq > entryPxOz * 5) return null; // غير منطقي
   return liq;
 }
 
@@ -66,26 +83,30 @@ function liqPriceDisplay(sym, entryPxOz, sziOz, balance) {
   return { text:`$${fmt(liqDisp, a.pxDp)}`, ounce:liqOz };
 }
 
-/* ════ حساب أسعار TP/SL ════ */
+/* ════ حساب أسعار TP/SL — بالأونصة دائماً ════ */
 function calcTpPrice(ep, szi, pnl) {
+  /* pnl = (tpPx − entry) × size → tpPx = entry + pnl/size */
   const sz = parseFloat(szi), e = parseFloat(ep);
   if (!sz || !e) return e;
   return sz > 0 ? e + pnl / sz : e - pnl / Math.abs(sz);
 }
 
 function calcSlPrice(ep, szi, sl) {
+  /* خسارة = (entry − slPx) × size → slPx = entry − sl/size */
   const sz = parseFloat(szi), e = parseFloat(ep);
   if (!sz || !e) return e;
   return sz > 0 ? e - sl / sz : e + sl / Math.abs(sz);
 }
 
-/* ════ رسوم التمويل ════ */
+/* ════ رسوم التمويل (cumFunding.sinceOpen) ════ */
 function updateFundingFromPositions(positions) {
   const acc = {};
   for (const p of positions || []) {
     const pos  = p.position, coin = pos.coin || '';
     const raw  = coin.includes(':') ? coin.split(':')[1] : coin;
     const sym  = raw === 'GOLD' ? 'XAU' : (COIN_TO_SYM[raw] || raw);
+    /* cumFunding.sinceOpen: موجب = دفعت، سالب = قبضت
+       نعكس الإشارة لعرض: موجب = ربحت، سالب = دفعت */
     acc[sym] = -parseFloat(pos.cumFunding?.sinceOpen || 0);
   }
   State.fundingRates = acc;
@@ -115,16 +136,9 @@ function startFundingTimer() {
 /* ════ Render الصفقات ════ */
 let _posFingerprint = '';
 
-/* ✅ يُجبر إعادة بناء DOM كاملة في المرة القادمة */
-function resetPosFingerprint() {
-  _posFingerprint = '';
-}
-
 function renderPositions() {
   const count = State.positions.length;
-
-  /* ✅ fingerprint يشمل szi لاكتشاف أي تغيير في الحجم */
-  const fp = State.positions.map(p =>
+  const fp    = State.positions.map(p =>
     `${p.position.coin}|${p.position.szi}|${p.tpsl?.tp||''}|${p.tpsl?.sl||''}`
   ).join(';');
 
@@ -134,28 +148,15 @@ function renderPositions() {
 
   const totalPnl = State.positions.reduce((s, p) => s + parseFloat(p.position.unrealizedPnl || 0), 0);
 
-  /* تحديث PnL والحجم والسعر بسلاسة بدون إعادة بناء DOM */
+  /* تحديث PnL والأسعار بسلاسة — بدون إعادة بناء DOM */
   State.positions.forEach((p, i) => {
-    /* PnL */
-    const pnl = parseFloat(p.position.unrealizedPnl || 0);
-    const pEl = document.querySelector(`[data-pnl-idx="${i}"]`);
+    const pnl  = parseFloat(p.position.unrealizedPnl || 0);
+    const pEl  = document.querySelector(`[data-pnl-idx="${i}"]`);
     if (pEl) {
       pEl.textContent = `${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}`;
       pEl.className   = `pos-pnl ${pnl >= 0 ? 'pos' : 'neg'}`;
     }
 
-    /* ✅ حجم المركز — يُحدَّث ديناميكياً من pos.szi الفعلي */
-    const szEl = document.querySelector(`[data-sz-idx="${i}"]`);
-    if (szEl) {
-      const sym    = shortCoinPos(p.position.coin);
-      const a      = ASSETS[sym] || { szDp:4, gram:false, unit:'' };
-      const isGram = !!a.gram;
-      const sziOz  = parseFloat(p.position.szi || 0);
-      const disp   = isGram ? sziOz * TROY : sziOz;
-      szEl.textContent = `${Math.abs(disp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}`;
-    }
-
-    /* السعر الحالي */
     const cpEl = document.querySelector(`[data-curpx-idx="${i}"]`);
     if (cpEl) {
       const sym = shortCoinPos(p.position.coin);
@@ -164,7 +165,6 @@ function renderPositions() {
       cpEl.textContent = cur ? `$${fmt(cur, a.pxDp)}` : '—';
     }
 
-    /* سعر التصفية */
     const liqEl = document.querySelector(`[data-liq-idx="${i}"]`);
     if (liqEl) {
       const sym     = shortCoinPos(p.position.coin);
@@ -173,7 +173,7 @@ function renderPositions() {
       const bal     = State.balance?.total || 0;
       const info    = liqPriceDisplay(sym, entryOz, sziOz, bal);
       liqEl.textContent = info.text;
-      liqEl.style.color = info.text === 'آمن ✅' ? 'var(--hc-up)' : 'var(--warn)';
+      liqEl.style.color = info.text === 'آمن ✅' ? 'var(--up)' : 'var(--warn)';
     }
   });
 
@@ -200,7 +200,6 @@ function renderPositions() {
     const sym       = shortCoinPos(pos.coin);
     const a         = ASSETS[sym] || { name:sym, unit:'', icon:'📊', pxDp:2, szDp:2, lev:10 };
     const isGram    = !!a.gram;
-    /* ✅ الحجم يُحسب من pos.szi مباشرة */
     const sziDisp   = isGram ? sziOz * TROY : sziOz;
     const entryDisp = isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
     const curPx     = State.prices[sym]?.mid;
@@ -221,7 +220,7 @@ function renderPositions() {
         </div>
         <div class="pos-right">
           <div class="pos-pnl ${pCls}" data-pnl-idx="${i}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}</div>
-          <div class="pos-size" data-sz-idx="${i}">${Math.abs(sziDisp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}</div>
+          <div class="pos-size">${Math.abs(sziDisp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}</div>
         </div>
       </div>
       <div class="pos-data-grid">
