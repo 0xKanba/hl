@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════
    account.js — الحساب والتاريخ والمحفظة
-   ✅ حد أدنى للإيداع $5
-   ✅ رصيد بسيط كما كان + حقل "رصيد صافي"
+   ✅ رصيد بسيط كما كان (3 حقول)
+   ✅ حد أدنى إيداع $5
+   ✅ pollAccount يحترم optimistic guard
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -47,9 +48,8 @@ function _withdrawErr(msg) {
 async function pollAccount() {
   if (!State.wallet) return;
 
-  /* ✅ إذا كان هناك optimistic update في آخر 10 ثواني — لا تعيد الكتابة فوراً */
-  const timeSinceOptimistic = Date.now() - (State._lastOptimisticClose || 0);
-  const skipPositionUpdate  = timeSinceOptimistic < 10000;
+  /* ✅ حماية الـ optimistic update لمدة 10 ثواني */
+  const skipPos = (Date.now() - (State._lastOptimisticClose || 0)) < 10000;
 
   try {
     const [native, spot, xyz, openOrders] = await Promise.all([
@@ -61,21 +61,22 @@ async function pollAccount() {
 
     State.openOrders = Array.isArray(openOrders) ? openOrders : [];
 
-    let spotUSDC = 0;
+    const nativeVal = parseFloat(native?.marginSummary?.accountValue || 0);
+    const xyzVal    = parseFloat(xyz?.marginSummary?.accountValue    || 0);
+    let spotUSDC    = 0;
     for (const b of spot?.balances || [])
       if (b.coin === 'USDC' || b.coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
 
-    const xyzVal   = parseFloat(xyz?.marginSummary?.accountValue || 0);
-    const margin   = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
+    const total  = nativeVal + (xyzVal > 0 && xyzVal !== nativeVal ? xyzVal : 0) + spotUSDC;
+    const margin = parseFloat(xyz?.marginSummary?.totalMarginUsed   || 0) ||
+                   parseFloat(native?.marginSummary?.totalMarginUsed || 0);
+
     const rawPos   = (xyz?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
     const floatPnl = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
+    State.balance  = { total, margin, floatPnl };
 
-    /* ✅ رصيد صحيح: account value من xyz يشمل USDC في futures + PnL */
-    const total = xyzVal + spotUSDC;
-    State.balance = { total, margin, floatPnl };
-
-    /* ✅ لا تعيد الكتابة على الـ optimistic update أثناء فترة الحماية */
-    if (!skipPositionUpdate) {
+    /* ✅ لا تعيد الكتابة على الـ optimistic أثناء فترة الحماية */
+    if (!skipPos) {
       State.positions = rawPos.map(p => {
         const existing = State.positions.find(e => e.position.coin === p.position.coin);
         const tpsl     = parseTpslFromOrders(State.openOrders, p.position.coin);
@@ -109,21 +110,14 @@ async function _renderBalance() {
       hlInfo({ type:'spotClearinghouseState', user:State.wallet.address           }).catch(() => ({})),
       hlInfo({ type:'clearinghouseState',     user:State.wallet.address, dex:'xyz'}).catch(() => ({}))
     ]);
-
-    let spotUSDC = 0;
+    let total = 0;
     for (const b of spot?.balances || [])
-      if (b.coin === 'USDC' || b.coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
+      if (b.coin === 'USDC' || b.coin === 'USDC:0') total += parseFloat(b.total || 0);
 
-    const accountVal = parseFloat(xyz?.marginSummary?.accountValue || 0);
-    const margin     = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
-    const floatPnl   = (xyz?.assetPositions || [])
+    const margin   = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
+    const floatPnl = (xyz?.assetPositions || [])
       .reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
-
-    const total      = accountVal + spotUSDC;
-    /* ✅ رصيد بدون ربح/خسارة = رأس المال الثابت */
-    const netBalance = total - floatPnl;
-    const pCls       = floatPnl >= 0 ? 'green' : 'red';
-    const nCls       = netBalance >= floatPnl ? 'blue' : 'warn';
+    const pCls = floatPnl >= 0 ? 'green' : 'red';
 
     el.innerHTML = `
       <div class="balance-grid">
@@ -132,16 +126,12 @@ async function _renderBalance() {
           <span class="balance-value blue">$${fmt(total, 2)}</span>
         </div>
         <div class="balance-item">
-          <span class="balance-label">🏦 رصيد بدون ربح/خسارة</span>
-          <span class="balance-value ${nCls}">$${fmt(netBalance, 2)}</span>
+          <span class="balance-label">🔒 الهامش المستخدم</span>
+          <span class="balance-value warn">$${fmt(margin, 2)}</span>
         </div>
         <div class="balance-item">
           <span class="balance-label">📊 ربح / خسارة عائمة</span>
           <span class="balance-value ${pCls}">${floatPnl >= 0 ? '+' : ''}$${fmt(floatPnl, 2)}</span>
-        </div>
-        <div class="balance-item">
-          <span class="balance-label">🔒 الهامش المستخدم</span>
-          <span class="balance-value warn">$${fmt(margin, 2)}</span>
         </div>
       </div>
       <div class="balance-auto-note">↻ تحديث تلقائي كل 2 ثانية</div>`;
@@ -243,11 +233,11 @@ async function showHistory() {
     }).join('');
   } catch {
     if (sub) sub.textContent = '';
-    list.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب السجل</div>`;
+    list.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب السجل — تحقق من الاتصال</div>`;
   }
 }
 
-/* ════ إيداع USDC — الحد الأدنى $5 ════ */
+/* ════ إيداع USDC — حد أدنى $5 ════ */
 async function doDeposit() {
   const amt = parseFloat($('depositAmount').value || 0);
   if (!amt || amt < 5)  return toast('الحد الأدنى للإيداع $5', 'err');
