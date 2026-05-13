@@ -1,7 +1,6 @@
 /* ═══════════════════════════════════════
    app.js — تهيئة التطبيق وربط الأحداث
-   ✅ إغلاق جزئي ديناميكي: slider ↔ qty
-   ✅ شريط أخضر يسار → يمين
+   ✅ إغلاق بسيط كما كان — بدون شريط
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -71,6 +70,7 @@ function _initOptsBackdrop() {
 /* ════ الحدث الرئيسي ════ */
 document.addEventListener('DOMContentLoaded', () => {
 
+  /* ── شريط التاريخ والساعة ── */
   _startDatetimeClock();
   _initMonthsPanel();
   _initOptsBackdrop();
@@ -144,19 +144,9 @@ document.addEventListener('DOMContentLoaded', () => {
   $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
   $('confirmExecute').onclick = () => requirePin(execTrade);
 
-  /* ── إغلاق صفقة جزئي أو كامل ── */
+  /* ── إغلاق صفقة — بسيط كما كان ── */
   $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
   $('closeExecute').onclick = () => requirePin(execClose);
-
-  /* ✅ شريط التمرير: % → كمية */
-  $('closePctSlider')?.addEventListener('input', function () {
-    _syncCloseFromPct(parseFloat(this.value));
-  });
-
-  /* ✅ حقل الكمية: qty → % */
-  $('closeQtyInput')?.addEventListener('input', function () {
-    _syncCloseFromQty(parseFloat(this.value) || 0);
-  });
 
   /* ── إغلاق الكل ── */
   $('btnCloseAll').onclick     = askCloseAll;
@@ -178,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ── الرصيد ── */
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
 
-  /* ── السجل ── */
+  /* ── سجل الصفقات ── */
   $('historyClose').onclick = () => closeModal('modalHistory');
 
   /* ── الإيداع ── */
@@ -223,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ── القفل اليدوي ── */
   $('btnLock').onclick = () => lockApp(true);
 
-  /* ── شعار سيولة ── */
+  /* ── شعار سيولة → شرح التطبيق ── */
   $('navLogo')?.addEventListener('click', e => {
     e.preventDefault(); e.stopPropagation();
     openModal('modalAbout');
@@ -271,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     o.classList.remove('open');
   });
 
-  /* ── استعادة الجلسة ── */
+  /* ── استعادة الجلسة تلقائياً ── */
   const saved = localStorage.getItem(LS_KEY);
   if (saved) { $('privateKey').value = saved; login(); }
 
