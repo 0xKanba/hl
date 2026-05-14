@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════
    ws.js — WebSocket BBO (أسعار لحظية)
-   ✅ يُحدِّث State.wsConnected
-   ✅ يُحدِّث زر الاتصال فوراً
+   ✅ يُحدِّث State.wsConnected عند كل حدث
+   ✅ يستدعي updateConnectBtn فوراً
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -34,7 +34,7 @@ function _onWsBbo(data) {
     if (State.asset === 'GOLD') updatePriceUI();
 
     const gm = mid / TROY, gBid = bid / TROY, gAsk = ask / TROY;
-    State.prices['XAU'] = { bid:gBid, ask:gAsk, mid:gm };
+    State.prices['XAU'] = { bid: gBid, ask: gAsk, mid: gm };
     _updateTab('XAU', gm, ASSETS['XAU'].pxDp);
     State.prevMid['XAU'] = gm;
     if (State.asset === 'XAU') updatePriceUI();
@@ -57,17 +57,19 @@ function startMainWs() {
 
     _mainWs.onopen = () => {
       if (!_mainWs) return;
-      /* اشترك في BBO لكل الأصول */
       const seen = new Set();
       Object.values(ASSETS).forEach(a => {
         if (!seen.has(a.coin)) {
           seen.add(a.coin);
-          _mainWs.send(JSON.stringify({ method:'subscribe', subscription:{ type:'bbo', coin:a.coin } }));
+          _mainWs.send(JSON.stringify({
+            method: 'subscribe',
+            subscription: { type: 'bbo', coin: a.coin }
+          }));
         }
       });
-      /* ✅ تحديث حالة الاتصال */
+      /* ✅ متصل بـ Hyperliquid */
       State.wsConnected = true;
-      if (typeof updateConnectBtn === 'function') updateConnectBtn();
+      updateConnectBtn();
     };
 
     _mainWs.onmessage = e => {
@@ -79,17 +81,21 @@ function startMainWs() {
 
     _mainWs.onerror = () => {
       State.wsConnected = false;
-      if (typeof updateConnectBtn === 'function') updateConnectBtn();
+      updateConnectBtn();
     };
 
     _mainWs.onclose = () => {
       State.wsConnected = false;
-      if (typeof updateConnectBtn === 'function') updateConnectBtn();
-      /* إعادة الاتصال دائماً — سواء كان هناك محفظة أو لا */
+      updateConnectBtn();
+      /* إعادة الاتصال دائماً */
       _mainWsReconTimer = setTimeout(startMainWs, 4000);
     };
 
-  } catch (e) { console.warn('[WS]', e.message); }
+  } catch (e) {
+    console.warn('[WS]', e.message);
+    State.wsConnected = false;
+    updateConnectBtn();
+  }
 }
 
 function wsMainClose() {
