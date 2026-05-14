@@ -1,11 +1,10 @@
 /* ═══════════════════════════════════════
    positions.js — عرض الصفقات والتصفية
-   ✅ resetPosFingerprint — يُجبر إعادة الرسم الفوري
-   ✅ data-sz-idx — يعكس الحجم الفعلي دائماً
+   ✅ resetPosFingerprint — إعادة رسم فوري
+   ✅ data-sz-idx — حجم حي من pos.szi
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ════ Symbol helpers ════ */
 function shortCoinPos(c) {
   const raw = c.includes(':') ? c.split(':')[1] : c;
   if (raw === 'GOLD') return 'XAU';
@@ -15,7 +14,6 @@ function apiAsset(sym) {
   return (sym === 'XAU') ? ASSETS['GOLD'] : ASSETS[sym];
 }
 
-/* ════ تحليل أوامر TP/SL ════ */
 function parseTpslFromOrders(orders, coin) {
   const r = { tp:null, sl:null, tpOid:null, slOid:null };
   for (const o of orders || []) {
@@ -30,7 +28,6 @@ function parseTpslFromOrders(orders, coin) {
   return r;
 }
 
-/* ════ حساب سعر التصفية ════ */
 function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
   const side     = sziOz > 0 ? 1 : -1;
@@ -66,7 +63,6 @@ function liqPriceDisplay(sym, entryPxOz, sziOz, balance) {
   return { text:`$${fmt(liqDisp, a.pxDp)}`, ounce:liqOz };
 }
 
-/* ════ حساب أسعار TP/SL ════ */
 function calcTpPrice(ep, szi, pnl) {
   const sz = parseFloat(szi), e = parseFloat(ep);
   if (!sz || !e) return e;
@@ -79,7 +75,6 @@ function calcSlPrice(ep, szi, sl) {
   return sz > 0 ? e - sl / sz : e + sl / Math.abs(sz);
 }
 
-/* ════ رسوم التمويل ════ */
 function updateFundingFromPositions(positions) {
   const acc = {};
   for (const p of positions || []) {
@@ -112,19 +107,14 @@ function startFundingTimer() {
   State._fundingTimer = setInterval(fetchFundingRates, 60_000);
 }
 
-/* ════ Render الصفقات ════ */
+/* ════ Render ════ */
 let _posFingerprint = '';
 
-/* ✅ يُجبر إعادة بناء DOM كاملة في المرة القادمة */
-function resetPosFingerprint() {
-  _posFingerprint = '';
-}
+function resetPosFingerprint() { _posFingerprint = ''; }
 
 function renderPositions() {
   const count = State.positions.length;
-
-  /* ✅ fingerprint يشمل szi لاكتشاف أي تغيير في الحجم */
-  const fp = State.positions.map(p =>
+  const fp    = State.positions.map(p =>
     `${p.position.coin}|${p.position.szi}|${p.tpsl?.tp||''}|${p.tpsl?.sl||''}`
   ).join(';');
 
@@ -134,17 +124,14 @@ function renderPositions() {
 
   const totalPnl = State.positions.reduce((s, p) => s + parseFloat(p.position.unrealizedPnl || 0), 0);
 
-  /* تحديث PnL والحجم والسعر بسلاسة بدون إعادة بناء DOM */
+  /* تحديث سلس بدون إعادة بناء DOM */
   State.positions.forEach((p, i) => {
-    /* PnL */
     const pnl = parseFloat(p.position.unrealizedPnl || 0);
     const pEl = document.querySelector(`[data-pnl-idx="${i}"]`);
     if (pEl) {
       pEl.textContent = `${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}`;
       pEl.className   = `pos-pnl ${pnl >= 0 ? 'pos' : 'neg'}`;
     }
-
-    /* ✅ حجم المركز — يُحدَّث ديناميكياً من pos.szi الفعلي */
     const szEl = document.querySelector(`[data-sz-idx="${i}"]`);
     if (szEl) {
       const sym    = shortCoinPos(p.position.coin);
@@ -154,8 +141,6 @@ function renderPositions() {
       const disp   = isGram ? sziOz * TROY : sziOz;
       szEl.textContent = `${Math.abs(disp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}`;
     }
-
-    /* السعر الحالي */
     const cpEl = document.querySelector(`[data-curpx-idx="${i}"]`);
     if (cpEl) {
       const sym = shortCoinPos(p.position.coin);
@@ -163,8 +148,6 @@ function renderPositions() {
       const cur = State.prices[sym]?.mid;
       cpEl.textContent = cur ? `$${fmt(cur, a.pxDp)}` : '—';
     }
-
-    /* سعر التصفية */
     const liqEl = document.querySelector(`[data-liq-idx="${i}"]`);
     if (liqEl) {
       const sym     = shortCoinPos(p.position.coin);
@@ -179,15 +162,16 @@ function renderPositions() {
 
   const tEl = $('totalPnl');
   if (tEl) {
-    tEl.textContent = `${totalPnl >= 0 ? '+' : ''}$${fmt(totalPnl, 2)}`;
+    tEl.textContent = count > 0 ? `${totalPnl >= 0 ? '+' : ''}$${fmt(totalPnl, 2)}` : '';
     tEl.className   = `positions-pnl ${totalPnl >= 0 ? 'pos' : 'neg'}`;
   }
 
-  /* إعادة بناء DOM فقط عند تغيير حقيقي */
   if (fp === _posFingerprint) return;
   _posFingerprint = fp;
 
   const list = $('positionsList');
+  if (!list) return;
+
   if (!count) {
     list.innerHTML = '<div class="positions-empty">📂 لا توجد صفقات مفتوحة</div>';
     return;
@@ -200,7 +184,6 @@ function renderPositions() {
     const sym       = shortCoinPos(pos.coin);
     const a         = ASSETS[sym] || { name:sym, unit:'', icon:'📊', pxDp:2, szDp:2, lev:10 };
     const isGram    = !!a.gram;
-    /* ✅ الحجم يُحسب من pos.szi مباشرة */
     const sziDisp   = isGram ? sziOz * TROY : sziOz;
     const entryDisp = isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
     const curPx     = State.prices[sym]?.mid;
