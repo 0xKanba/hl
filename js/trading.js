@@ -1,14 +1,14 @@
 /* ═══════════════════════════════════════
    trading.js — تنفيذ الصفقات وإغلاقها
-   ✅ إغلاق بسيط كما كان — بدون شريط
-   ✅ optimistic update فوري للحجم
-   ✅ _multiPoll — 3 استعلامات متتالية
+   ✅ إغلاق بسيط كما كان
+   ✅ guard 20 ثانية + multiPoll يبدأ بعد 5 ثواني
    ✅ رياضيات صحيحة لكل الأصول
 ═══════════════════════════════════════ */
 'use strict';
 
 /* ════ فتح صفقة ════ */
 function askTrade(isBuy) {
+  if (State.isGuest) return _promptConnect();
   const qty = parseFloat($('qtyInput').value || State.qty || 0);
   if (!qty || qty <= 0) return toast('أدخل الكمية أولاً', 'err');
   const a = ASSETS[State.asset], p = State.prices[State.asset];
@@ -58,7 +58,7 @@ async function execTrade() {
   setBtnLoading('confirmExecute', '⏳');
   showLoader(`${a.icon} ${isBuy ? 'شراء' : 'بيع'} ${qty} ${a.unit}...`);
   try {
-    try { await hlExchange({ type:'updateLeverage', asset:a.idx, isCross:a.cross, leverage:a.lev }); } catch (e) { console.warn('[lev]', e.message); }
+    try { await hlExchange({ type:'updateLeverage', asset:a.idx, isCross:a.cross, leverage:a.lev }); } catch {}
     const slip = sym === 'NQ' ? 0.03 : 0.02;
     const res  = await hlExchange({
       type: 'order',
@@ -74,8 +74,6 @@ async function execTrade() {
     if (status?.filled) {
       const f = status.filled;
       closeModal('modalConfirm');
-      /* ✅ تحديث optimistic فوري لحجم المركز بعد فتح صفقة */
-      _applyOptimisticOpen(sym, a, isBuy, +f.totalSz, +f.avgPx);
       const dispSz = a.gram ? (+f.totalSz * TROY).toFixed(2) : f.totalSz;
       toast(`✅ مُنفَّذ — ${a.icon} ${dispSz} ${a.unit} @ ${fmt(parseFloat(f.avgPx) / (a.gram ? TROY : 1), a.pxDp)}`, 'ok', 5000);
     } else if (status?.resting) {
@@ -92,51 +90,16 @@ async function execTrade() {
   finally { resetBtn('confirmExecute'); hideLoader(); }
 }
 
-/* ════ تحديث فوري بعد فتح صفقة ════
-   إذا كان هناك مركز مفتوح بنفس الأصل → دمج (netting)
-   وإلا → إضافة مركز جديد مؤقت حتى يأتي API
-*/
-function _applyOptimisticOpen(sym, a, isBuy, filledOz, avgPxOz) {
-  State._lastOptimisticClose = Date.now();
-  const coin      = a.coin;
-  const existing  = State.positions.findIndex(p => {
-    const raw = p.position.coin.includes(':') ? p.position.coin.split(':')[1] : p.position.coin;
-    const s   = raw === 'GOLD' ? 'XAU' : (COIN_TO_SYM[raw] || raw);
-    return s === sym;
-  });
-
-  if (existing >= 0) {
-    const pos    = State.positions[existing].position;
-    const oldSzi = parseFloat(pos.szi);
-    /* netted size: long + buy = أكبر، long + sell = أصغر */
-    const addSzi = isBuy ? filledOz : -filledOz;
-    const newSzi = oldSzi + addSzi;
-    if (Math.abs(newSzi) < 1e-8) {
-      /* الصفقة أُغلقت كلياً بالشراء/البيع العكسي */
-      State.positions.splice(existing, 1);
-    } else {
-      pos.szi           = newSzi.toFixed(8);
-      pos.unrealizedPnl = '0';
-    }
-  }
-  /* إذا لم يكن هناك مركز موجود يضيف API لاحقاً */
-  resetPosFingerprint();
-  renderPositions();
-}
-
-/* ════ استعلام متعدد بعد أي تنفيذ ════ */
+/* ════ استعلام متعدد — يبدأ بعد 5 ثواني (وقت تسوية Hyperliquid) ════ */
 function _multiPoll() {
-  setTimeout(() => pollAccount().catch(() => {}), 2500);
-  setTimeout(() => pollAccount().catch(() => {}), 6000);
-  setTimeout(() => pollAccount().catch(() => {}), 11000);
+  setTimeout(() => pollAccount().catch(() => {}), 5000);
+  setTimeout(() => pollAccount().catch(() => {}), 9000);
+  setTimeout(() => pollAccount().catch(() => {}), 15000);
 }
 
-/* ════════════════════════════════════════
-   إغلاق صفقة — بسيط كما كان
-   ✅ لا شريط لا أزرار — فقط تأكيد وإغلاق
-   ✅ optimistic update فوري للحجم
-════════════════════════════════════════ */
+/* ════ إغلاق صفقة ════ */
 window.askClose = function (i) {
+  if (State.isGuest) return _promptConnect();
   const p = State.positions[i]; if (!p) return;
   const pos      = p.position;
   const sziOz    = parseFloat(pos.szi);
@@ -200,10 +163,10 @@ async function execClose() {
   const midOz    = isGram
     ? (gramPx > 0 ? gramPx * TROY : State.prices['GOLD']?.mid)
     : State.prices[sym]?.mid;
-  if (!midOz || midOz <= 0) { toast('سعر غير متاح، انتظر لحظة', 'err'); closeModal('modalClose'); return; }
+  if (!midOz || midOz <= 0) { toast('سعر غير متاح، انتظر لحظة', 'err'); return; }
 
-  const aDisp    = ASSETS[sym] || aApi;
-  const idx      = State.pendingClose;
+  const aDisp = ASSETS[sym] || aApi;
+  const idx   = State.pendingClose;
 
   setBtnLoading('closeExecute', '⏳');
   showLoader(`إغلاق ${aDisp.icon || ''} ${aDisp.name || ''}...`);
@@ -221,14 +184,17 @@ async function execClose() {
 
     closeModal('modalClose');
 
-    /* ✅ حذف فوري من الذاكرة */
+    /* ✅ guard 20 ثانية + حذف optimistic فوري */
     State._lastOptimisticClose = Date.now();
+    State._emptyPosCount       = 0;
     State.positions.splice(idx, 1);
     resetPosFingerprint();
     renderPositions();
 
     toast(`✅ أُغلقت — ${aDisp.icon || ''} ${aDisp.name || ''}`, 'ok', 4000);
     State.pendingClose = null;
+
+    /* ✅ أول استعلام بعد 5 ثواني */
     _multiPoll();
 
   } catch (e) { toast(tradeErr(e.message), 'err', 6000); }
@@ -237,6 +203,7 @@ async function execClose() {
 
 /* ════ إغلاق جميع الصفقات ════ */
 function askCloseAll() {
+  if (State.isGuest) return _promptConnect();
   if (!State.positions.length) return toast('لا توجد صفقات', 'info');
   $('closeAllDetails').innerHTML = State.positions.map(p => {
     const pos = p.position, pnl = parseFloat(pos.unrealizedPnl || 0);
@@ -280,6 +247,7 @@ async function execCloseAll() {
       } catch (e) { fail++; console.warn('[closeAll]', sym, e.message); }
     }
     State._lastOptimisticClose = Date.now();
+    State._emptyPosCount       = 0;
     State.positions = [];
     resetPosFingerprint();
     renderPositions();
@@ -287,4 +255,15 @@ async function execCloseAll() {
     toast(`✅ أُغلق ${ok} مركز${fail ? ` · فشل ${fail}` : ''}`, 'ok', 5000);
     _multiPoll();
   } finally { resetBtn('closeAllExecute'); hideLoader(); }
+}
+
+/* ════ طلب الاتصال عند محاولة إجراء من زائر ════ */
+function _promptConnect() {
+  toast('اربط محفظتك أولاً — انقر على زر "اتصال"', 'info', 4000);
+  /* إضاءة زر الاتصال */
+  const btn = $('btnConnect');
+  if (btn) {
+    btn.style.transform = 'scale(1.2)';
+    setTimeout(() => { btn.style.transform = ''; }, 600);
+  }
 }
