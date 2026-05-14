@@ -4,10 +4,13 @@
 'use strict';
 
 const State = {
+  /* المحفظة والأصل الحالي */
   wallet: null,
   asset:  'CL',
   qty:    0.1,
+  isGuest: true,          /* ✅ وضع الزائر — يتحول false بعد login */
 
+  /* أسعار الأصول */
   prices: {
     XAU:    { bid:0, ask:0, mid:0 },
     NQ:     { bid:0, ask:0, mid:0 },
@@ -18,11 +21,13 @@ const State = {
   prevMid:    { XAU:0, NQ:0, GOLD:0, SILVER:0, CL:0 },
   prevDayPx:  { XAU:0, NQ:0, GOLD:0, SILVER:0, CL:0 },
 
+  /* بيانات الحساب */
   fundingRates: {},
   positions:    [],
   openOrders:   [],
   balance:      null,
 
+  /* مؤقتات */
   timers:        [],
   priceTimer:    null,
   _balTimer:     null,
@@ -30,21 +35,32 @@ const State = {
   _fundingTimer: null,
   _sessionTimer: null,
 
+  /* صفقات معلقة */
   pendingTrade: null,
   pendingClose: null,
   pendingTP:    null,
   pendingSL:    null,
 
+  /* PIN وقفل */
   lastPinTime:         0,
   pinCallback:         null,
   isLocked:            false,
   currentPinInput:     '',
   currentSetPinInput:  '',
 
+  /* إحالة */
   referrerSet: false,
 
+  /* إحصائيات الجلسة */
   sessionStats: { XAU:null, NQ:null, GOLD:null, SILVER:null, CL:null },
 
-  /* ✅ يحمي التحديث الـ optimistic من الكتابة فوقه */
-  _lastOptimisticClose: 0
+  /* ✅ حماية الصفقات من الاختفاء
+     _lastOptimisticClose : وقت آخر إغلاق — guard 20 ثانية
+     _emptyPosCount       : عداد استجابات API فارغة (يتطلب 2 متتاليتين)
+  */
+  _lastOptimisticClose: 0,
+  _emptyPosCount:       0,
+
+  /* اتصال Hyperliquid */
+  wsConnected: false
 };
