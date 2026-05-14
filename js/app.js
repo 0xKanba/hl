@@ -1,221 +1,301 @@
 /* ═══════════════════════════════════════
-   auth.js — دخول وخروج + وضع الزائر
-   ✅ الموقع يعمل بدون محفظة
-   ✅ زر الاتصال: لون حسب Hyperliquid WS
-      نص حسب وجود محفظة محلياً
+   app.js — تهيئة التطبيق وربط الأحداث
+   ✅ وضع الزائر — الموقع يعمل بدون محفظة
+   ✅ زر "اتصال" في Footer
+   ✅ إغلاق بسيط كما كان
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ════ إنشاء محفظة جديدة ════ */
-function createNewWallet() {
-  const wallet = ethers.Wallet.createRandom();
-  const key    = wallet.privateKey;
-  const input  = $('privateKey');
-  if (input) { input.value = key; input.type = 'text'; }
-  navigator.clipboard?.writeText(key).catch(() => {});
-  alert(`✅ تم إنشاء محفظة جديدة!\n\nالمفتاح الخاص:\n${key}\n\n⚠️ احفظه الآن في مكان آمن!`);
-  toast('✅ المفتاح جاهز — احفظه!', 'ok', 6000);
+/* ════ ساعة عربية UTC+3 ════ */
+const _AR_MONTHS = [
+  'يناير','فبراير','مارس','أبريل','مايو','يونيو',
+  'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'
+];
+
+function _startDatetimeClock() {
+  const el = document.getElementById('dtClock');
+  if (!el) return;
+  const tick = () => {
+    const now = new Date(Date.now() + 3 * 3600000);
+    const d   = String(now.getUTCDate()).padStart(2,'0');
+    const mo  = _AR_MONTHS[now.getUTCMonth()];
+    const y   = now.getUTCFullYear();
+    let   h   = now.getUTCHours();
+    const m   = String(now.getUTCMinutes()).padStart(2,'0');
+    const s   = String(now.getUTCSeconds()).padStart(2,'0');
+    const ap  = h >= 12 ? 'مساءً' : 'صباحاً';
+    h = h % 12 || 12;
+    el.textContent = `${d} ${mo} ${y} · ${String(h).padStart(2,'0')}:${m}:${s} ${ap}`;
+  };
+  tick();
+  setInterval(tick, 1000);
 }
 
-/* ════ وضع الزائر — يُستدعى عند فتح الصفحة بدون محفظة ════ */
-function initGuestMode() {
-  State.isGuest = true;
-  $('loginScreen')?.classList.add('hidden');
-  $('appScreen')?.classList.remove('hidden');
-
-  _showGuestBanner();
-  switchAsset('CL');
-  _fetchPricesBackground();
-  State.timers.push(setInterval(pollPrices, 2000));
-  startSessionPolling();
-
-  updateConnectBtn();
-}
-
-/* ════ تسجيل الدخول ════ */
-async function login() {
-  let key = $('privateKey').value.trim();
-  if (!key) return toast('أدخل المفتاح الخاص', 'err');
-  key = key.startsWith('0x') ? key : '0x' + key;
-  if (!/^0x[0-9a-fA-F]{64}$/.test(key)) return toast('المفتاح 64 حرف هكساديسيمال', 'err');
-
-  setBtnLoading('loginBtn', '⏳');
-  try {
-    State.wallet  = new ethers.Wallet(key);
-    State.isGuest = false;
-    localStorage.setItem(LS_KEY, key);
-
-    setTxt('navAddress', State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4));
-    $('withdrawAddress').value = State.wallet.address;
-
-    closeModal('modalLogin');
-    _hideGuestBanner();
-    loadQuickState();
-    _fetchPricesBackground();
-    pollAccount().catch(() => {});
-    autoSetReferrer();
-
-    State.timers.push(setInterval(pollAccount, 4000));
-    startFundingTimer();
-
-    updateConnectBtn();
-    toast('مرحباً 🤝', 'ok');
-
-    if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
-      setTimeout(() => { if (State.wallet) lockApp(); }, 300);
-
-  } catch (e) {
-    State.wallet  = null;
-    State.isGuest = true;
-    updateConnectBtn();
-    toast('خطأ: ' + e.message.slice(0, 80), 'err');
-  } finally { resetBtn('loginBtn'); }
-}
-
-/* ════ جلب الأسعار الأولي ════ */
-function _fetchPricesBackground() {
-  const uniqueCoins = {};
-  Object.keys(ASSETS).forEach(sym => {
-    if (sym === 'XAU') return;
-    const c = ASSETS[sym].coin;
-    if (!uniqueCoins[c]) uniqueCoins[c] = sym;
-  });
-  Object.entries(uniqueCoins).forEach(([coinStr, sym]) => {
-    hlInfo({ type: 'l2Book', coin: coinStr })
-      .then(lb => {
-        const bid = parseFloat(lb.levels?.[0]?.[0]?.px || 0);
-        const ask = parseFloat(lb.levels?.[1]?.[0]?.px || 0);
-        const mid = (bid && ask) ? (bid + ask) / 2 : 0;
-        if (!mid) return;
-        if (sym === 'GOLD') {
-          State.prices['GOLD'] = { bid, ask, mid };
-          _updateTab('GOLD', mid, ASSETS['GOLD'].pxDp);
-          State.prevMid['GOLD'] = mid;
-          if (State.asset === 'GOLD') updatePriceUI();
-          const gm = mid / TROY;
-          State.prices['XAU'] = { bid: bid / TROY, ask: ask / TROY, mid: gm };
-          _updateTab('XAU', gm, ASSETS['XAU'].pxDp);
-          State.prevMid['XAU'] = gm;
-          if (State.asset === 'XAU') updatePriceUI();
-        } else {
-          State.prices[sym] = { bid, ask, mid };
-          _updateTab(sym, mid, ASSETS[sym].pxDp);
-          State.prevMid[sym] = mid;
-          if (sym === State.asset) updatePriceUI();
-        }
-      })
-      .catch(() => {});
+/* ════ جدول الأشهر ════ */
+function _initMonthsPanel() {
+  const bar   = document.getElementById('datetimeBar');
+  const panel = document.getElementById('monthsPanel');
+  if (!bar || !panel) return;
+  bar.addEventListener('click', () => panel.classList.toggle('hidden'));
+  document.addEventListener('click', e => {
+    if (!bar.contains(e.target) && !panel.contains(e.target))
+      panel.classList.add('hidden');
   });
 }
 
-/* ════ تسجيل الخروج ════ */
-function doLogout() {
-  State.timers.forEach(clearInterval);
-  clearInterval(State.priceTimer);
-  clearInterval(State._balTimer);
-  clearInterval(State._clockTimer);
-  clearInterval(State._sessionTimer);
-  clearInterval(State._fundingTimer);
-  wsMainClose();
-
-  localStorage.removeItem(LS_KEY);
-  localStorage.removeItem(PIN_KEY);
-  localStorage.removeItem(LOCKED_KEY);
-  localStorage.removeItem(LAST_PIN_KEY);
-  localStorage.removeItem(QSTATE_KEY);
-
-  State.wallet     = null;
-  State.positions  = [];
-  State.openOrders = [];
-  State.isLocked   = false;
-  State.timers     = [];
-  State.isGuest    = true;
-  State._lastOptimisticClose = 0;
-  State._emptyPosCount       = 0;
-
-  closeModal('modalLogout');
-  closeModal('modalPIN');
-  closeModal('modalSetPIN');
-  closeModal('modalForgotPIN');
-
-  _showGuestBanner();
-  updateConnectBtn();
-  resetPosFingerprint();
-  renderPositions();
-  toast('تم الخروج بنجاح', 'info');
-
-  /* أعد تشغيل الأسعار */
-  startMainWs();
-  State.timers.push(setInterval(pollPrices, 2000));
-  startSessionPolling();
+/* ════ Options Context Menu ════ */
+function openOptions() {
+  const ov = document.getElementById('optsOverlay');
+  if (!ov) return;
+  ov.classList.remove('hidden');
+  ov.classList.add('visible');
 }
 
-/* ════ Guest Banner ════ */
-function _showGuestBanner() {
-  let b = $('guestBanner');
-  if (!b) {
-    b = document.createElement('div');
-    b.id = 'guestBanner';
-    b.className = 'guest-banner';
-    b.innerHTML = `
-      <span class="gb-msg">🔒 اربط محفظتك لبدء التداول وعرض صفقاتك المفتوحة</span>
-      <button class="gb-btn" onclick="openLoginModal()">اتصال ←</button>`;
-    const main = $('appScreen');
-    if (main) {
-      const footer = main.querySelector('.footer');
-      if (footer) main.insertBefore(b, footer);
-      else main.appendChild(b);
-    }
-  }
-  b.classList.remove('hidden');
+function closeOptions() {
+  const ov = document.getElementById('optsOverlay');
+  if (!ov) return;
+  ov.classList.add('closing');
+  setTimeout(() => {
+    ov.classList.remove('visible', 'closing');
+    ov.classList.add('hidden');
+  }, 120);
 }
 
-function _hideGuestBanner() {
-  $('guestBanner')?.classList.add('hidden');
+function _initOptsBackdrop() {
+  const ov = document.getElementById('optsOverlay');
+  if (!ov) return;
+  ov.addEventListener('click', e => { if (e.target === ov) closeOptions(); });
 }
 
-/* ════ فتح modal الدخول ════ */
-function openLoginModal() {
-  openModal('modalLogin');
-  setTimeout(() => $('privateKey')?.focus(), 200);
-}
+/* ════ الحدث الرئيسي ════ */
+document.addEventListener('DOMContentLoaded', () => {
 
-/* ════════════════════════════════════════════════
-   ✅ updateConnectBtn — المنطق:
-   
-   لونه (Hyperliquid WS):
-     أخضر  → State.wsConnected === true
-     أصفر  → WS تحاول الاتصال (لم يُفتح بعد)
-     أحمر  → State.wsConnected === false
+  _startDatetimeClock();
+  _initMonthsPanel();
+  _initOptsBackdrop();
 
-   نصه (المحفظة المحلية):
-     "متصل"  → State.wallet موجود (محفظة مربوطة)
-     "اتصال" → State.isGuest (لا محفظة)
-════════════════════════════════════════════════ */
-function updateConnectBtn() {
-  const btn = $('btnConnect');
-  if (!btn) return;
+  /* ═══ modal تسجيل الدخول (يُفتح من زر اتصال) ═══ */
+  $('loginBtn').onclick     = login;
+  $('privateKey').onkeydown = e => e.key === 'Enter' && login();
+  $('toggleKey').onclick    = () => {
+    const i = $('privateKey');
+    i.type = i.type === 'password' ? 'text' : 'password';
+    $('toggleKey').textContent = i.type === 'password' ? '👁' : '🙈';
+  };
+  $('createWalletBtn')?.addEventListener('click', createNewWallet);
+  $('loginClose')?.addEventListener('click', () => closeModal('modalLogin'));
 
-  /* النص — حسب المحفظة المحلية */
-  const hasWallet = !!State.wallet;
-  btn.dataset.label = hasWallet ? 'متصل' : 'اتصال';
+  /* ── تبديل الأصول ── */
+  document.querySelectorAll('.tab[data-asset]').forEach(t =>
+    t.onclick = () => switchAsset(t.dataset.asset)
+  );
 
-  /* اللون — حسب اتصال Hyperliquid */
-  if (State.wsConnected) {
-    btn.className = 'footer-connect-btn ws-connected';
-  } else {
-    /* إذا كان WS لم يُفتح بعد (أول تحميل) → أصفر */
-    const wasEverConnected = btn.dataset.everConnected === '1';
-    if (!wasEverConnected) {
-      btn.className = 'footer-connect-btn ws-connecting';
+  /* ── Footer ── */
+  $('btnChart').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    ChartModule.open(State.asset);
+  };
+
+  /* ✅ زر الاتصال الكروي */
+  $('btnConnect').onclick = () => {
+    if (State.isGuest) {
+      openLoginModal();
     } else {
-      btn.className = 'footer-connect-btn ws-disconnected';
+      /* متصل — انقر يعرض خيارات الحساب */
+      openOptions();
     }
+  };
+
+  $('btnOptions').onclick = openOptions;
+  $('optsClose').onclick  = closeOptions;
+
+  /* ── قائمة الخيارات ── */
+  $('optBalance').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    showBalance();
+  };
+  $('optHistory').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    showHistory();
+  };
+  $('optCalendar').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    if (typeof openCalendar === 'function') openCalendar();
+  };
+  $('optDeposit').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    openModal('modalDeposit');
+  };
+  $('optWithdraw').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    openModal('modalWithdraw');
+  };
+  $('optLogout').onclick = () => openModal('modalLogout');
+
+  /* ── أزرار الشراء والبيع ── */
+  $('btnBuy').onclick  = () => askTrade(true);
+  $('btnSell').onclick = () => askTrade(false);
+
+  $('qtyInput').oninput = function () {
+    State.qty = parseFloat(this.value) || 0;
+  };
+
+  $('qty100').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    const a   = ASSETS[State.asset];
+    const bal = State.balance?.total || 0;
+    const px  = State.prices[State.asset]?.mid;
+    if (!bal || !px) return toast('رصيد غير متاح', 'err');
+    State.qty = parseFloat(wire((bal * a.lev) / px, a.szDp));
+    $('qtyInput').value = State.qty;
+    toast(`✅ ${State.qty} ${a.unit}`, 'ok');
+  };
+
+  /* ── تأكيد فتح صفقة ── */
+  $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
+  $('confirmExecute').onclick = () => requirePin(execTrade);
+
+  /* ── إغلاق صفقة ── */
+  $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
+  $('closeExecute').onclick = () => requirePin(execClose);
+
+  /* ── إغلاق الكل ── */
+  $('btnCloseAll').onclick     = askCloseAll;
+  $('closeAllCancel').onclick  = () => closeModal('modalCloseAll');
+  $('closeAllExecute').onclick = () => requirePin(execCloseAll);
+
+  /* ── TP ── */
+  $('tpCancel').onclick  = () => { closeModal('modalTP'); State.pendingTP = null; };
+  $('tpExecute').onclick = () => requirePin(execTP);
+  $('tpDelete').onclick  = () => requirePin(deleteTP);
+  $('tpAmount').oninput  = recalcTpPreview;
+
+  /* ── SL ── */
+  $('slCancel').onclick  = () => { closeModal('modalSL'); State.pendingSL = null; };
+  $('slExecute').onclick = () => requirePin(execSL);
+  $('slDelete').onclick  = () => requirePin(deleteSL);
+  $('slAmount').oninput  = recalcSlPreview;
+
+  /* ── الرصيد ── */
+  $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
+
+  /* ── السجل ── */
+  $('historyClose').onclick = () => closeModal('modalHistory');
+
+  /* ── الإيداع ── */
+  $('depositCancel').onclick  = () => closeModal('modalDeposit');
+  $('depositExecute').onclick = () => requirePin(doDeposit);
+
+  /* ── السحب ── */
+  $('withdrawCancel').onclick  = () => closeModal('modalWithdraw');
+  $('withdrawExecute').onclick = () => requirePin(doWithdraw);
+
+  $('withdrawAmount').addEventListener('input', function () {
+    const amt  = parseFloat(this.value || 0);
+    const prev = $('withdrawPreview');
+    if (!prev) return;
+    if (!amt || amt <= 0) { prev.classList.add('hidden'); return; }
+    prev.classList.remove('hidden');
+    const sendEl = $('wpSend'), netEl = $('wpNet');
+    if (sendEl) sendEl.textContent = `$${amt.toFixed(2)}`;
+    if (netEl)  netEl.textContent  = `$${Math.max(0, amt - 1).toFixed(2)} USDC`;
+  });
+
+  $('withdrawAddress').addEventListener('click', function () { this.select(); });
+  $('withdrawAddress').addEventListener('input', function () {
+    if (this.value.trim() === 'كاش')
+      this.value = '0x0640F5Bfc50AC53eC68C435a60cB0ffF5C555FAD';
+  });
+
+  /* ── تسجيل الخروج ── */
+  $('logoutCancel').onclick  = () => closeModal('modalLogout');
+  $('logoutExecute').onclick = doLogout;
+
+  /* ── نسخ العنوان ── */
+  function _copyAddr() {
+    if (!State.wallet) return;
+    navigator.clipboard?.writeText(State.wallet.address)
+      .then(() => toast('✅ تم نسخ العنوان', 'info', 2000))
+      .catch(() => toast('تعذّر النسخ', 'err'));
   }
+  $('navAddress').onclick = _copyAddr;
+  $('navCopyBtn')?.addEventListener('click', _copyAddr);
 
-  /* عند الاتصال الأول نضع علامة */
-  if (State.wsConnected) btn.dataset.everConnected = '1';
+  /* ── القفل اليدوي ── */
+  $('btnLock').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    lockApp(true);
+  };
 
-  /* تحديث محتوى الزر */
-  btn.innerHTML = `<span class="cb-dot"></span><span class="cb-lbl">${hasWallet ? 'متصل' : 'اتصال'}</span>`;
-}
+  /* ── شعار سيولة → شرح ── */
+  $('navLogo')?.addEventListener('click', e => {
+    e.preventDefault(); e.stopPropagation();
+    openModal('modalAbout');
+  });
+  $('aboutClose').onclick = () => closeModal('modalAbout');
+
+  /* ── PIN ── */
+  $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
+  $('pinLogout').onclick = () => {
+    $('forgotStep1').classList.remove('hidden');
+    $('forgotStep2').classList.add('hidden');
+    openModal('modalForgotPIN');
+  };
+  $('forgotCancel').onclick = () => closeModal('modalForgotPIN');
+  $('forgotStep1').onclick  = () => {
+    $('forgotStep1').classList.add('hidden');
+    $('forgotStep2').classList.remove('hidden');
+  };
+  $('forgotStep2').onclick = () => { closeModal('modalForgotPIN'); doLogout(); };
+
+  $('setPinCancel').onclick = () => {
+    closeModal('modalSetPIN');
+    State.currentSetPinInput = '';
+    updateSetPinDots();
+    State.pinCallback = null;
+  };
+
+  /* ── لوحة أرقام بالكيبورد ── */
+  document.addEventListener('keydown', e => {
+    const isPinOpen    = $('modalPIN').classList.contains('open');
+    const isSetPinOpen = $('modalSetPIN').classList.contains('open');
+    if (!State.isLocked && !isPinOpen && !isSetPinOpen) return;
+    if (e.key >= '0' && e.key <= '9') {
+      if (isSetPinOpen) appendSetPin(e.key); else appendPin(e.key);
+    } else if (e.key === 'Backspace') {
+      if (isSetPinOpen) backspaceSetPin(); else backspacePin();
+    }
+  });
+
+  /* ── إغلاق modals بالنقر خارجها ── */
+  document.querySelectorAll('.modal-overlay').forEach(o => o.onclick = e => {
+    if (e.target !== o) return;
+    if (o.id === 'modalPIN' && State.isLocked) return;
+    if (o.id === 'modalSetPIN') { State.currentSetPinInput = ''; updateSetPinDots(); }
+    o.classList.remove('open');
+  });
+
+  /* ═══════════════════════════════════════════
+     ✅ التهيئة الرئيسية
+     الأولوية:
+     1. بدء الأسعار فوراً (بدون محفظة)
+     2. إذا كان مفتاح محفوظ → دخول تلقائي
+     3. وإلا → وضع الزائر
+  ═══════════════════════════════════════════ */
+
+  /* ابدأ WS + أسعار فوراً بدون انتظار */
+  startMainWs();
+
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved) {
+    /* دخول تلقائي بمفتاح محفوظ */
+    $('privateKey').value = saved;
+    /* اذهب مباشرة للتطبيق */
+    $('loginScreen')?.classList.add('hidden');
+    $('appScreen')?.classList.remove('hidden');
+    login();
+  } else {
+    /* وضع الزائر */
+    initGuestMode();
+  }
+});
