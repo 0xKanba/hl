@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════
    app.js — تهيئة التطبيق وربط الأحداث
-   ✅ إغلاق بسيط كما كان — بدون شريط
+   ✅ وضع الزائر — الموقع يعمل بدون محفظة
+   ✅ زر "اتصال" في Footer
+   ✅ إغلاق بسيط كما كان
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -62,20 +64,17 @@ function closeOptions() {
 function _initOptsBackdrop() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
-  ov.addEventListener('click', e => {
-    if (e.target === ov) closeOptions();
-  });
+  ov.addEventListener('click', e => { if (e.target === ov) closeOptions(); });
 }
 
 /* ════ الحدث الرئيسي ════ */
 document.addEventListener('DOMContentLoaded', () => {
 
-  /* ── شريط التاريخ والساعة ── */
   _startDatetimeClock();
   _initMonthsPanel();
   _initOptsBackdrop();
 
-  /* ── تسجيل الدخول ── */
+  /* ═══ modal تسجيل الدخول (يُفتح من زر اتصال) ═══ */
   $('loginBtn').onclick     = login;
   $('privateKey').onkeydown = e => e.key === 'Enter' && login();
   $('toggleKey').onclick    = () => {
@@ -84,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('toggleKey').textContent = i.type === 'password' ? '👁' : '🙈';
   };
   $('createWalletBtn')?.addEventListener('click', createNewWallet);
+  $('loginClose')?.addEventListener('click', () => closeModal('modalLogin'));
 
   /* ── تبديل الأصول ── */
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
@@ -91,46 +91,57 @@ document.addEventListener('DOMContentLoaded', () => {
   );
 
   /* ── Footer ── */
-  $('btnChart').onclick   = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+  $('btnChart').onclick = () => {
+    if (State.isGuest) return _promptConnect();
     ChartModule.open(State.asset);
   };
+
+  /* ✅ زر الاتصال الكروي */
+  $('btnConnect').onclick = () => {
+    if (State.isGuest) {
+      openLoginModal();
+    } else {
+      /* متصل — انقر يعرض خيارات الحساب */
+      openOptions();
+    }
+  };
+
   $('btnOptions').onclick = openOptions;
   $('optsClose').onclick  = closeOptions;
 
   /* ── قائمة الخيارات ── */
   $('optBalance').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    if (State.isGuest) return _promptConnect();
     showBalance();
   };
   $('optHistory').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    if (State.isGuest) return _promptConnect();
     showHistory();
   };
   $('optCalendar').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    if (State.isGuest) return _promptConnect();
     if (typeof openCalendar === 'function') openCalendar();
   };
   $('optDeposit').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    if (State.isGuest) return _promptConnect();
     openModal('modalDeposit');
   };
   $('optWithdraw').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+    if (State.isGuest) return _promptConnect();
     openModal('modalWithdraw');
   };
   $('optLogout').onclick = () => openModal('modalLogout');
 
-  /* ── فتح صفقة ── */
-  $('btnBuy').onclick  = () => State.wallet ? askTrade(true)  : toast('سجّل الدخول أولاً', 'err');
-  $('btnSell').onclick = () => State.wallet ? askTrade(false) : toast('سجّل الدخول أولاً', 'err');
+  /* ── أزرار الشراء والبيع ── */
+  $('btnBuy').onclick  = () => askTrade(true);
+  $('btnSell').onclick = () => askTrade(false);
 
   $('qtyInput').oninput = function () {
     State.qty = parseFloat(this.value) || 0;
   };
 
   $('qty100').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول', 'err');
+    if (State.isGuest) return _promptConnect();
     const a   = ASSETS[State.asset];
     const bal = State.balance?.total || 0;
     const px  = State.prices[State.asset]?.mid;
@@ -144,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
   $('confirmExecute').onclick = () => requirePin(execTrade);
 
-  /* ── إغلاق صفقة — بسيط كما كان ── */
+  /* ── إغلاق صفقة ── */
   $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
   $('closeExecute').onclick = () => requirePin(execClose);
 
@@ -168,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ── الرصيد ── */
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
 
-  /* ── سجل الصفقات ── */
+  /* ── السجل ── */
   $('historyClose').onclick = () => closeModal('modalHistory');
 
   /* ── الإيداع ── */
@@ -211,9 +222,12 @@ document.addEventListener('DOMContentLoaded', () => {
   $('navCopyBtn')?.addEventListener('click', _copyAddr);
 
   /* ── القفل اليدوي ── */
-  $('btnLock').onclick = () => lockApp(true);
+  $('btnLock').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    lockApp(true);
+  };
 
-  /* ── شعار سيولة → شرح التطبيق ── */
+  /* ── شعار سيولة → شرح ── */
   $('navLogo')?.addEventListener('click', e => {
     e.preventDefault(); e.stopPropagation();
     openModal('modalAbout');
@@ -261,10 +275,27 @@ document.addEventListener('DOMContentLoaded', () => {
     o.classList.remove('open');
   });
 
-  /* ── استعادة الجلسة تلقائياً ── */
-  const saved = localStorage.getItem(LS_KEY);
-  if (saved) { $('privateKey').value = saved; login(); }
+  /* ═══════════════════════════════════════════
+     ✅ التهيئة الرئيسية
+     الأولوية:
+     1. بدء الأسعار فوراً (بدون محفظة)
+     2. إذا كان مفتاح محفوظ → دخول تلقائي
+     3. وإلا → وضع الزائر
+  ═══════════════════════════════════════════ */
 
-  if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
-    setTimeout(() => { if (State.wallet) lockApp(); }, 500);
+  /* ابدأ WS + أسعار فوراً بدون انتظار */
+  startMainWs();
+
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved) {
+    /* دخول تلقائي بمفتاح محفوظ */
+    $('privateKey').value = saved;
+    /* اذهب مباشرة للتطبيق */
+    $('loginScreen')?.classList.add('hidden');
+    $('appScreen')?.classList.remove('hidden');
+    login();
+  } else {
+    /* وضع الزائر */
+    initGuestMode();
+  }
 });
