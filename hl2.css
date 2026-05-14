@@ -1,22 +1,23 @@
 /* ═══════════════════════════════════════════════════════
    hl2.css — سيولة · إضافات التصميم
+   ✅ زر اتصال كروي مستقل — خلفية كاملة واضحة
    ✅ Footer · Options · Trade Panel
-   ✅ زر الاتصال الكروي
    ✅ Guest Banner
    ✅ High Contrast + Glow
 ═══════════════════════════════════════════════════════ */
 
 /* ──────────────────────────────────────
-   Footer
+   Footer — ثلاثة عناصر
 ────────────────────────────────────── */
 .footer {
   display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
   gap: 8px !important;
   padding: 6px 12px max(8px, env(safe-area-inset-bottom)) !important;
   background: var(--bg-card) !important;
   border-top: 1px solid var(--border) !important;
   flex-shrink: 0 !important;
-  align-items: center !important;
 }
 
 .footer-main-btn {
@@ -49,57 +50,118 @@
 .fmb-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
 .fmb-lbl  { font-size: 14px; font-weight: 800; }
 
-/* ✅ زر الاتصال الكروي */
+/* ══════════════════════════════════════════════════════
+   ✅ زر الاتصال الكروي — مستقل تماماً
+   ● خلفية كاملة (solid) لا border فقط
+   ● ثلاث حالات: متصل (أخضر) | جاري (أصفر) | منقطع (أحمر)
+   ● النص: "متصل" أو "اتصال"
+══════════════════════════════════════════════════════ */
 .footer-connect-btn {
-  width: 44px; height: 44px;
+  /* حجم ثابت — كروي تماماً */
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
   border-radius: 50%;
-  border: 2.5px solid;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 1px;
-  cursor: pointer;
-  transition: all .2s;
-  flex-shrink: 0;
+  border: none;
+  outline: none;
+
+  /* تخطيط داخلي */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+
+  /* فونت */
   font-family: var(--font-ui);
-  font-size: 9px; font-weight: 900;
-  letter-spacing: .3px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .2px;
+  line-height: 1;
+
+  cursor: pointer;
+  flex-shrink: 0;
   position: relative;
+  overflow: hidden;
+  transition: transform .15s, box-shadow .2s;
+  -webkit-tap-highlight-color: transparent;
 }
-.footer-connect-btn:active { transform: scale(.90); }
 
-/* متصل — أخضر */
-.footer-connect-btn.connected {
-  background: radial-gradient(circle at 40% 35%, rgba(0,230,118,.3), rgba(0,180,90,.15));
-  border-color: var(--hc-up);
-  color: var(--hc-up);
-  box-shadow: var(--glow-up), inset 0 0 8px rgba(0,230,118,.1);
-}
-.footer-connect-btn.connected::before {
-  content: '';
-  position: absolute;
-  inset: 3px;
+.footer-connect-btn:active { transform: scale(.88); }
+
+/* نقطة الحالة */
+.cb-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, rgba(0,255,127,.25), transparent 70%);
+  background: rgba(255,255,255,.9);
+  flex-shrink: 0;
+  box-shadow: 0 0 4px rgba(255,255,255,.8);
 }
 
-/* غير متصل / زائر — أحمر */
-.footer-connect-btn.disconnected {
-  background: radial-gradient(circle at 40% 35%, rgba(255,61,61,.2), rgba(180,0,0,.1));
-  border-color: var(--hc-dn);
-  color: var(--hc-dn);
-  box-shadow: var(--glow-dn);
+/* النص */
+.cb-lbl {
+  font-size: 9px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.35);
+  white-space: nowrap;
 }
 
-/* جاري الاتصال — أصفر */
-.footer-connect-btn.connecting {
-  background: radial-gradient(circle at 40% 35%, rgba(255,214,0,.2), rgba(180,150,0,.1));
-  border-color: var(--hc-warn);
-  color: var(--hc-warn);
-  animation: connectPulse 1.5s ease-in-out infinite;
+/* ── حالة: متصل بـ Hyperliquid ← أخضر ── */
+.footer-connect-btn.ws-connected {
+  background: radial-gradient(circle at 38% 32%, #2dff99, #00b85e);
+  box-shadow:
+    0 0 0 3px rgba(0,230,118,.25),
+    0 0 18px rgba(0,230,118,.60),
+    0 0 36px rgba(0,230,118,.25),
+    inset 0 1px 0 rgba(255,255,255,.3);
+  color: #fff;
 }
-@keyframes connectPulse {
-  0%,100% { box-shadow: 0 0 8px rgba(255,214,0,.4); }
-  50%     { box-shadow: 0 0 20px rgba(255,214,0,.7); }
+.footer-connect-btn.ws-connected .cb-dot {
+  background: #fff;
+  box-shadow: 0 0 6px #fff, 0 0 12px rgba(255,255,255,.6);
+  animation: dotPulseGreen 2s ease-in-out infinite;
+}
+
+@keyframes dotPulseGreen {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%     { opacity:.6; transform:scale(.8); }
+}
+
+/* ── حالة: جاري الاتصال ← أصفر ── */
+.footer-connect-btn.ws-connecting {
+  background: radial-gradient(circle at 38% 32%, #ffe033, #c8a000);
+  box-shadow:
+    0 0 0 3px rgba(255,214,0,.25),
+    0 0 16px rgba(255,214,0,.55),
+    inset 0 1px 0 rgba(255,255,255,.25);
+  color: #1a1200;
+  animation: connectingPulse 1.4s ease-in-out infinite;
+}
+.footer-connect-btn.ws-connecting .cb-lbl { color: #1a1200; text-shadow: none; }
+.footer-connect-btn.ws-connecting .cb-dot {
+  background: #1a1200;
+  opacity: .7;
+}
+
+@keyframes connectingPulse {
+  0%,100% { box-shadow: 0 0 0 3px rgba(255,214,0,.25), 0 0 16px rgba(255,214,0,.55); }
+  50%     { box-shadow: 0 0 0 6px rgba(255,214,0,.15), 0 0 28px rgba(255,214,0,.80); }
+}
+
+/* ── حالة: منقطع ← أحمر ── */
+.footer-connect-btn.ws-disconnected {
+  background: radial-gradient(circle at 38% 32%, #ff5555, #cc0000);
+  box-shadow:
+    0 0 0 3px rgba(255,61,61,.25),
+    0 0 16px rgba(255,61,61,.55),
+    inset 0 1px 0 rgba(255,255,255,.2);
+  color: #fff;
+}
+.footer-connect-btn.ws-disconnected .cb-dot {
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255,255,255,.7);
 }
 
 /* ──────────────────────────────────────
@@ -111,7 +173,7 @@
   justify-content: space-between;
   gap: 10px;
   padding: 9px 14px;
-  background: color-mix(in srgb, var(--hc-ac) 10%, var(--bg-elev));
+  background: color-mix(in srgb, var(--hc-ac) 12%, var(--bg-elev));
   border-bottom: 1.5px solid color-mix(in srgb, var(--hc-ac) 40%, transparent);
   flex-shrink: 0;
   animation: slideDown .22s ease;
@@ -125,35 +187,21 @@
 
 .gb-msg {
   font-size: 12px; font-weight: 700;
-  color: var(--text-secondary); flex: 1;
-  line-height: 1.4;
+  color: var(--text-secondary); flex: 1; line-height: 1.4;
 }
-
 .gb-btn {
   background: linear-gradient(135deg, var(--hc-ac), #a8502f);
-  color: #fff;
-  border: none;
+  color: #fff; border: none;
   border-radius: var(--r-pill);
   padding: 7px 16px;
   font-size: 13px; font-weight: 900;
   font-family: var(--font-ui);
-  cursor: pointer;
-  white-space: nowrap;
+  cursor: pointer; white-space: nowrap;
   box-shadow: var(--glow-ac);
-  transition: filter .15s;
-  flex-shrink: 0;
+  transition: filter .15s; flex-shrink: 0;
 }
 .gb-btn:hover  { filter: brightness(1.1); }
 .gb-btn:active { transform: scale(.94); }
-
-/* ──────────────────────────────────────
-   أزرار مجمدة في وضع الزائر
-────────────────────────────────────── */
-.guest-disabled {
-  opacity: .45 !important;
-  pointer-events: none !important;
-  filter: grayscale(.4) !important;
-}
 
 /* ──────────────────────────────────────
    Z-INDEX
