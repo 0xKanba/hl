@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════
    auth.js — دخول وخروج + وضع الزائر
-   ✅ الموقع يعمل بدون محفظة (أسعار مباشرة)
-   ✅ زر "اتصال" يُظهر صفحة المفتاح الخاص
-   ✅ عند الدخول: تحميل الصفقات + الرصيد
+   ✅ الموقع يعمل بدون محفظة
+   ✅ زر الاتصال: لون حسب Hyperliquid WS
+      نص حسب وجود محفظة محلياً
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -17,25 +17,18 @@ function createNewWallet() {
   toast('✅ المفتاح جاهز — احفظه!', 'ok', 6000);
 }
 
-/* ════ تهيئة وضع الزائر (يُستدعى عند فتح الصفحة) ════ */
+/* ════ وضع الزائر — يُستدعى عند فتح الصفحة بدون محفظة ════ */
 function initGuestMode() {
   State.isGuest = true;
-
-  /* أظهر شاشة التطبيق فوراً */
   $('loginScreen')?.classList.add('hidden');
   $('appScreen')?.classList.remove('hidden');
 
-  /* أظهر banner الزائر */
   _showGuestBanner();
-
-  /* ابدأ الأسعار بدون محفظة */
   switchAsset('CL');
   _fetchPricesBackground();
   State.timers.push(setInterval(pollPrices, 2000));
   startSessionPolling();
-  startMainWs();
 
-  /* حالة الاتصال */
   updateConnectBtn();
 }
 
@@ -52,41 +45,34 @@ async function login() {
     State.isGuest = false;
     localStorage.setItem(LS_KEY, key);
 
-    setTxt('navAddress', State.wallet.address.slice(0,6) + '...' + State.wallet.address.slice(-4));
+    setTxt('navAddress', State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4));
     $('withdrawAddress').value = State.wallet.address;
 
-    /* أغلق شاشة الدخول إذا كانت مفتوحة */
     closeModal('modalLogin');
-
-    /* أزل banner الزائر */
     _hideGuestBanner();
-
-    /* تحميل بيانات الحساب */
     loadQuickState();
     _fetchPricesBackground();
     pollAccount().catch(() => {});
     autoSetReferrer();
-    toast('مرحباً 🤝', 'ok');
 
-    /* مؤقتات إضافية للحساب */
     State.timers.push(setInterval(pollAccount, 4000));
     startFundingTimer();
 
-    /* تحديث زر الاتصال */
     updateConnectBtn();
+    toast('مرحباً 🤝', 'ok');
 
-    /* PIN إذا كان محدداً */
     if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
       setTimeout(() => { if (State.wallet) lockApp(); }, 300);
 
   } catch (e) {
     State.wallet  = null;
     State.isGuest = true;
+    updateConnectBtn();
     toast('خطأ: ' + e.message.slice(0, 80), 'err');
   } finally { resetBtn('loginBtn'); }
 }
 
-/* ════ جلب الأسعار الأولي في الخلفية ════ */
+/* ════ جلب الأسعار الأولي ════ */
 function _fetchPricesBackground() {
   const uniqueCoins = {};
   Object.keys(ASSETS).forEach(sym => {
@@ -94,9 +80,8 @@ function _fetchPricesBackground() {
     const c = ASSETS[sym].coin;
     if (!uniqueCoins[c]) uniqueCoins[c] = sym;
   });
-
   Object.entries(uniqueCoins).forEach(([coinStr, sym]) => {
-    hlInfo({ type:'l2Book', coin:coinStr })
+    hlInfo({ type: 'l2Book', coin: coinStr })
       .then(lb => {
         const bid = parseFloat(lb.levels?.[0]?.[0]?.px || 0);
         const ask = parseFloat(lb.levels?.[1]?.[0]?.px || 0);
@@ -108,7 +93,7 @@ function _fetchPricesBackground() {
           State.prevMid['GOLD'] = mid;
           if (State.asset === 'GOLD') updatePriceUI();
           const gm = mid / TROY;
-          State.prices['XAU'] = { bid:bid/TROY, ask:ask/TROY, mid:gm };
+          State.prices['XAU'] = { bid: bid / TROY, ask: ask / TROY, mid: gm };
           _updateTab('XAU', gm, ASSETS['XAU'].pxDp);
           State.prevMid['XAU'] = gm;
           if (State.asset === 'XAU') updatePriceUI();
@@ -153,14 +138,19 @@ function doLogout() {
   closeModal('modalSetPIN');
   closeModal('modalForgotPIN');
 
-  /* عد لوضع الزائر بدلاً من شاشة الدخول */
   _showGuestBanner();
   updateConnectBtn();
+  resetPosFingerprint();
   renderPositions();
   toast('تم الخروج بنجاح', 'info');
+
+  /* أعد تشغيل الأسعار */
+  startMainWs();
+  State.timers.push(setInterval(pollPrices, 2000));
+  startSessionPolling();
 }
 
-/* ════ banner الزائر ════ */
+/* ════ Guest Banner ════ */
 function _showGuestBanner() {
   let b = $('guestBanner');
   if (!b) {
@@ -168,11 +158,14 @@ function _showGuestBanner() {
     b.id = 'guestBanner';
     b.className = 'guest-banner';
     b.innerHTML = `
-      <span class="gb-msg">🔒 اربط محفظتك لبدء التداول وعرض صفقاتك</span>
+      <span class="gb-msg">🔒 اربط محفظتك لبدء التداول وعرض صفقاتك المفتوحة</span>
       <button class="gb-btn" onclick="openLoginModal()">اتصال ←</button>`;
-    /* أدرجه فوق شريط التداول */
     const main = $('appScreen');
-    if (main) main.insertBefore(b, main.querySelector('.main'));
+    if (main) {
+      const footer = main.querySelector('.footer');
+      if (footer) main.insertBefore(b, footer);
+      else main.appendChild(b);
+    }
   }
   b.classList.remove('hidden');
 }
@@ -187,18 +180,42 @@ function openLoginModal() {
   setTimeout(() => $('privateKey')?.focus(), 200);
 }
 
-/* ════ زر الاتصال — تحديث الحالة ════ */
-function updateConnectBtn() {
-  const btn  = $('btnConnect');
-  const lbl  = $('btnConnectLbl');
-  if (!btn || !lbl) return;
+/* ════════════════════════════════════════════════
+   ✅ updateConnectBtn — المنطق:
+   
+   لونه (Hyperliquid WS):
+     أخضر  → State.wsConnected === true
+     أصفر  → WS تحاول الاتصال (لم يُفتح بعد)
+     أحمر  → State.wsConnected === false
 
-  if (State.isGuest) {
-    btn.className  = 'footer-connect-btn disconnected';
-    lbl.textContent = 'اتصال';
+   نصه (المحفظة المحلية):
+     "متصل"  → State.wallet موجود (محفظة مربوطة)
+     "اتصال" → State.isGuest (لا محفظة)
+════════════════════════════════════════════════ */
+function updateConnectBtn() {
+  const btn = $('btnConnect');
+  if (!btn) return;
+
+  /* النص — حسب المحفظة المحلية */
+  const hasWallet = !!State.wallet;
+  btn.dataset.label = hasWallet ? 'متصل' : 'اتصال';
+
+  /* اللون — حسب اتصال Hyperliquid */
+  if (State.wsConnected) {
+    btn.className = 'footer-connect-btn ws-connected';
   } else {
-    const ok = State.wsConnected;
-    btn.className  = `footer-connect-btn ${ok ? 'connected' : 'connecting'}`;
-    lbl.textContent = ok ? 'متصل' : 'جاري...';
+    /* إذا كان WS لم يُفتح بعد (أول تحميل) → أصفر */
+    const wasEverConnected = btn.dataset.everConnected === '1';
+    if (!wasEverConnected) {
+      btn.className = 'footer-connect-btn ws-connecting';
+    } else {
+      btn.className = 'footer-connect-btn ws-disconnected';
+    }
   }
+
+  /* عند الاتصال الأول نضع علامة */
+  if (State.wsConnected) btn.dataset.everConnected = '1';
+
+  /* تحديث محتوى الزر */
+  btn.innerHTML = `<span class="cb-dot"></span><span class="cb-lbl">${hasWallet ? 'متصل' : 'اتصال'}</span>`;
 }
