@@ -1,8 +1,9 @@
 /* ═══════════════════════════════════════════════════════
    hl2.css — سيولة · إضافات التصميم
-   ✅ High Contrast ألوان حادة + glow
    ✅ Footer · Options · Trade Panel
-   ✅ شريط التاريخ · جدول الأشهر · Nav Logo
+   ✅ زر الاتصال الكروي
+   ✅ Guest Banner
+   ✅ High Contrast + Glow
 ═══════════════════════════════════════════════════════ */
 
 /* ──────────────────────────────────────
@@ -15,6 +16,7 @@
   background: var(--bg-card) !important;
   border-top: 1px solid var(--border) !important;
   flex-shrink: 0 !important;
+  align-items: center !important;
 }
 
 .footer-main-btn {
@@ -32,9 +34,7 @@
 }
 .footer-main-btn:active { transform: scale(.95); }
 .footer-main-btn:hover  {
-  border-color: var(--hc-ac);
-  color: var(--hc-ac);
-  background: var(--ac-dim);
+  border-color: var(--hc-ac); color: var(--hc-ac); background: var(--ac-dim);
 }
 
 .footer-opts-btn {
@@ -49,8 +49,114 @@
 .fmb-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
 .fmb-lbl  { font-size: 14px; font-weight: 800; }
 
+/* ✅ زر الاتصال الكروي */
+.footer-connect-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 2.5px solid;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  transition: all .2s;
+  flex-shrink: 0;
+  font-family: var(--font-ui);
+  font-size: 9px; font-weight: 900;
+  letter-spacing: .3px;
+  position: relative;
+}
+.footer-connect-btn:active { transform: scale(.90); }
+
+/* متصل — أخضر */
+.footer-connect-btn.connected {
+  background: radial-gradient(circle at 40% 35%, rgba(0,230,118,.3), rgba(0,180,90,.15));
+  border-color: var(--hc-up);
+  color: var(--hc-up);
+  box-shadow: var(--glow-up), inset 0 0 8px rgba(0,230,118,.1);
+}
+.footer-connect-btn.connected::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(0,255,127,.25), transparent 70%);
+}
+
+/* غير متصل / زائر — أحمر */
+.footer-connect-btn.disconnected {
+  background: radial-gradient(circle at 40% 35%, rgba(255,61,61,.2), rgba(180,0,0,.1));
+  border-color: var(--hc-dn);
+  color: var(--hc-dn);
+  box-shadow: var(--glow-dn);
+}
+
+/* جاري الاتصال — أصفر */
+.footer-connect-btn.connecting {
+  background: radial-gradient(circle at 40% 35%, rgba(255,214,0,.2), rgba(180,150,0,.1));
+  border-color: var(--hc-warn);
+  color: var(--hc-warn);
+  animation: connectPulse 1.5s ease-in-out infinite;
+}
+@keyframes connectPulse {
+  0%,100% { box-shadow: 0 0 8px rgba(255,214,0,.4); }
+  50%     { box-shadow: 0 0 20px rgba(255,214,0,.7); }
+}
+
 /* ──────────────────────────────────────
-   Z-INDEX طبقات هندسية
+   Guest Banner
+────────────────────────────────────── */
+.guest-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 14px;
+  background: color-mix(in srgb, var(--hc-ac) 10%, var(--bg-elev));
+  border-bottom: 1.5px solid color-mix(in srgb, var(--hc-ac) 40%, transparent);
+  flex-shrink: 0;
+  animation: slideDown .22s ease;
+}
+.guest-banner.hidden { display: none !important; }
+
+@keyframes slideDown {
+  from { opacity:0; transform:translateY(-8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+.gb-msg {
+  font-size: 12px; font-weight: 700;
+  color: var(--text-secondary); flex: 1;
+  line-height: 1.4;
+}
+
+.gb-btn {
+  background: linear-gradient(135deg, var(--hc-ac), #a8502f);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-pill);
+  padding: 7px 16px;
+  font-size: 13px; font-weight: 900;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: var(--glow-ac);
+  transition: filter .15s;
+  flex-shrink: 0;
+}
+.gb-btn:hover  { filter: brightness(1.1); }
+.gb-btn:active { transform: scale(.94); }
+
+/* ──────────────────────────────────────
+   أزرار مجمدة في وضع الزائر
+────────────────────────────────────── */
+.guest-disabled {
+  opacity: .45 !important;
+  pointer-events: none !important;
+  filter: grayscale(.4) !important;
+}
+
+/* ──────────────────────────────────────
+   Z-INDEX
 ────────────────────────────────────── */
 .opts-overlay   { z-index: 200 !important; }
 .modal-overlay  { z-index: 300 !important; }
@@ -92,14 +198,12 @@
   text-align: center; cursor: pointer;
   transition: background .08s, color .10s;
 }
-.opts-item:last-child { border-bottom: none; }
-.opts-item:active     { background: var(--bg-elev); }
-.opts-item:hover      { color: var(--hc-ac); }
-
-.opts-item-logout       { color: var(--hc-dn); font-weight: 800; }
-.opts-item-logout:hover { color: var(--hc-dn); filter: brightness(1.15); }
+.opts-item:last-child  { border-bottom: none; }
+.opts-item:active      { background: var(--bg-elev); }
+.opts-item:hover       { color: var(--hc-ac); }
+.opts-item-logout      { color: var(--hc-dn); font-weight: 800; }
+.opts-item-logout:hover{ color: var(--hc-dn); filter: brightness(1.15); }
 .opts-item-logout:active { background: var(--dn-dim); }
-
 .opts-item-cancel {
   color: var(--text-secondary); font-weight: 900;
   background: var(--bg-elev);
@@ -108,9 +212,9 @@
 .opts-item-cancel:active { background: var(--bg-input); }
 
 /* ──────────────────────────────────────
-   Toast position فوق Footer
+   Toast position
 ────────────────────────────────────── */
-#toast { bottom: 68px !important; }
+#toast { bottom: 76px !important; }
 
 /* ──────────────────────────────────────
    شريط التاريخ والوقت
@@ -121,12 +225,10 @@
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
   cursor: pointer; flex-shrink: 0;
-  transition: background .15s;
-  user-select: none;
+  transition: background .15s; user-select: none;
 }
 .datetime-bar:hover  { background: var(--bg-input); }
 .datetime-bar:active { opacity: .8; }
-
 .dt-clock {
   font-family: var(--font-ui);
   font-size: 13px; font-weight: 800;
@@ -146,13 +248,7 @@
   animation: slideDown .18s ease;
 }
 .months-panel.hidden { display: none; }
-@keyframes slideDown {
-  from { opacity:0; transform:translateY(-6px); }
-  to   { opacity:1; transform:translateY(0); }
-}
-.months-grid {
-  display: grid; grid-template-columns: repeat(4,1fr); gap: 5px;
-}
+.months-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; }
 @media (min-width: 480px) { .months-grid { grid-template-columns: repeat(6,1fr); } }
 .month-item {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -174,14 +270,8 @@
 }
 .nav-logo-btn:hover  { background: var(--ac-dim); }
 .nav-logo-btn:active { opacity: .7; }
-.nav-logo-icon {
-  font-size: 18px; line-height: 1;
-  filter: drop-shadow(0 0 7px rgba(255,140,66,.85));
-}
-.nav-logo-text {
-  font-size: 16px; font-weight: 900;
-  color: var(--text-primary); letter-spacing: .4px; white-space: nowrap;
-}
+.nav-logo-icon { font-size: 18px; line-height: 1; filter: drop-shadow(0 0 7px rgba(255,140,66,.85)); }
+.nav-logo-text { font-size: 16px; font-weight: 900; color: var(--text-primary); letter-spacing: .4px; white-space: nowrap; }
 
 /* ──────────────────────────────────────
    Trade Panel
@@ -195,7 +285,6 @@
   gap: 8px !important; flex-shrink: 0 !important;
   box-shadow: var(--glow-bdr) !important;
 }
-
 .qty-input-row {
   display: grid !important;
   grid-template-columns: 1fr auto auto !important;
@@ -208,47 +297,26 @@
   border-radius: var(--r-sm); background: var(--bg-input);
   border: 1.5px solid var(--border-strong); min-width: 0;
 }
-.qty-input:focus {
-  border-color: var(--hc-ac);
-  box-shadow: 0 0 0 3px var(--ac-dim), var(--glow-ac);
-}
+.qty-input:focus { border-color: var(--hc-ac); box-shadow: 0 0 0 3px var(--ac-dim), var(--glow-ac); }
 .qty-100 {
   background: var(--hc-ac) !important; color: #fff !important;
   border-radius: var(--r-sm) !important;
   padding: 0 11px !important; font-size: 11px !important;
   font-weight: 900 !important; font-family: var(--font-mono) !important;
   white-space: nowrap !important; flex-shrink: 0 !important;
-  border: none !important;
-  box-shadow: var(--glow-ac) !important;
+  border: none !important; box-shadow: var(--glow-ac) !important;
 }
 .qty-100:hover { filter: brightness(1.12); }
-
 .qty-unit {
   font-size: 11px; font-weight: 800; color: var(--text-secondary);
   display: flex; align-items: center; justify-content: center;
   min-width: 30px; white-space: nowrap;
 }
-
-.trade-buttons {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 7px !important;
-}
-.btn-trade {
-  border-radius: var(--r-md); min-height: 42px;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 1px;
-  border: none;
-}
+.trade-buttons { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 7px !important; }
+.btn-trade { border-radius: var(--r-md); min-height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: none; }
 .btn-trade:disabled { opacity: .45; pointer-events: none; }
-.btn-buy  {
-  background: linear-gradient(155deg, var(--hc-up), #007c3a) !important;
-  box-shadow: var(--glow-up), 0 3px 12px rgba(0,0,0,.4) !important;
-}
-.btn-sell {
-  background: linear-gradient(155deg, var(--hc-dn), #a00000) !important;
-  box-shadow: var(--glow-dn), 0 3px 12px rgba(0,0,0,.4) !important;
-}
+.btn-buy  { background: linear-gradient(155deg, var(--hc-up), #007c3a) !important; box-shadow: var(--glow-up), 0 3px 12px rgba(0,0,0,.4) !important; }
+.btn-sell { background: linear-gradient(155deg, var(--hc-dn), #a00000) !important; box-shadow: var(--glow-dn), 0 3px 12px rgba(0,0,0,.4) !important; }
 .btn-label { font-size: 15px; font-weight: 900; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
 .btn-price { font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,.88); font-weight: 700; }
 
@@ -263,10 +331,7 @@
   font-size: 13px; line-height: 1.7; color: var(--text-secondary);
 }
 .about-section { display: flex; flex-direction: column; gap: 8px; }
-.about-item {
-  display: flex; align-items: flex-start; gap: 12px;
-  background: var(--bg-input); border-radius: var(--r-sm); padding: 10px 12px;
-}
+.about-item { display: flex; align-items: flex-start; gap: 12px; background: var(--bg-input); border-radius: var(--r-sm); padding: 10px 12px; }
 .about-icon { font-size: 20px; line-height: 1; flex-shrink: 0; margin-top: 1px; }
 .about-item div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .about-item strong { font-size: 13px; font-weight: 900; color: var(--text-primary); }
