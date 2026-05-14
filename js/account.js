@@ -2,7 +2,8 @@
    account.js — الحساب والتاريخ والمحفظة
    ✅ رصيد بسيط كما كان (3 حقول)
    ✅ حد أدنى إيداع $5
-   ✅ pollAccount يحترم optimistic guard
+   ✅ guard 20 ثانية بعد الإغلاق
+   ✅ يتطلب تأكيدان متتاليان قبل إخفاء صفقات
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -48,8 +49,9 @@ function _withdrawErr(msg) {
 async function pollAccount() {
   if (!State.wallet) return;
 
-  /* ✅ حماية الـ optimistic update لمدة 10 ثواني */
-  const skipPos = (Date.now() - (State._lastOptimisticClose || 0)) < 10000;
+  /* ✅ guard 20 ثانية بعد أي إغلاق optimistic */
+  const msSinceClose  = Date.now() - (State._lastOptimisticClose || 0);
+  const inGuardWindow = msSinceClose < 20000;
 
   try {
     const [native, spot, xyz, openOrders] = await Promise.all([
@@ -75,23 +77,54 @@ async function pollAccount() {
     const floatPnl = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
     State.balance  = { total, margin, floatPnl };
 
-    /* ✅ لا تعيد الكتابة على الـ optimistic أثناء فترة الحماية */
-    if (!skipPos) {
-      State.positions = rawPos.map(p => {
-        const existing = State.positions.find(e => e.position.coin === p.position.coin);
-        const tpsl     = parseTpslFromOrders(State.openOrders, p.position.coin);
-        if (existing && !tpsl.tp && !tpsl.sl && existing.tpsl) return { ...p, tpsl: existing.tpsl };
-        return { ...p, tpsl };
-      });
-      updateFundingFromPositions(rawPos);
-      renderPositions();
+    /* ✅ منطق الاستقرار:
+       لا نحذف صفقات إذا:
+       1. داخل نافذة guard بعد إغلاق
+       2. API أعادت فارغة بعد كانت مملوءة — نحتاج 2 استجابة فارغة متتالية
+    */
+    if (inGuardWindow) {
+      /* فقط نحدث PnL والأسعار بدون تغيير هيكل الصفقات */
+      if (rawPos.length > 0) {
+        /* صفقات حقيقية موجودة في الـ API — نحدث كل شيء */
+        State._emptyPosCount = 0;
+        _applyPositions(rawPos);
+      }
+      /* إذا API فارغة في guard window → لا نفعل شيء */
+      return;
     }
 
+    if (State.positions.length > 0 && rawPos.length === 0) {
+      /* ✅ API أعادت فارغة — انتظر تأكيد ثانٍ */
+      State._emptyPosCount = (State._emptyPosCount || 0) + 1;
+      if (State._emptyPosCount < 2) {
+        /* الأول: تجاهل — قد يكون خطأ مؤقت */
+        return;
+      }
+      /* الثاني: تأكد — الصفقات أُغلقت فعلاً */
+      State._emptyPosCount = 0;
+    } else {
+      State._emptyPosCount = 0;
+    }
+
+    _applyPositions(rawPos);
     autoSetReferrer();
+
   } catch (e) { console.warn('[pollAccount]', e.message); }
 }
 
-/* ════ عرض الرصيد — بسيط كما كان ════ */
+/* ✅ تطبيق بيانات الصفقات الجديدة */
+function _applyPositions(rawPos) {
+  State.positions = rawPos.map(p => {
+    const existing = State.positions.find(e => e.position.coin === p.position.coin);
+    const tpsl     = parseTpslFromOrders(State.openOrders, p.position.coin);
+    if (existing && !tpsl.tp && !tpsl.sl && existing.tpsl) return { ...p, tpsl: existing.tpsl };
+    return { ...p, tpsl };
+  });
+  updateFundingFromPositions(rawPos);
+  renderPositions();
+}
+
+/* ════ عرض الرصيد — بسيط 3 حقول ════ */
 async function showBalance() {
   openModal('modalBalance');
   await _renderBalance();
@@ -136,7 +169,7 @@ async function _renderBalance() {
       </div>
       <div class="balance-auto-note">↻ تحديث تلقائي كل 2 ثانية</div>`;
   } catch {
-    el.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب الرصيد — تحقق من الاتصال</div>`;
+    el.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب الرصيد</div>`;
   }
 }
 
@@ -224,7 +257,7 @@ async function showHistory() {
         <div class="hist-grid">
           <div class="hist-cell"><span class="hist-lbl">الحجم</span><span class="hist-val">${szDisp.toFixed(isGram?2:a.szDp)} ${a.unit}</span></div>
           <div class="hist-cell"><span class="hist-lbl">السعر</span><span class="hist-val">$${fmt(pxDisp,a.pxDp)}</span></div>
-          <div class="hist-cell"><span class="hist-lbl">رسوم التداول</span><span class="hist-val" style="color:var(--warn)">-$${fmt(fee,4)}</span></div>
+          <div class="hist-cell"><span class="hist-lbl">رسوم التداول</span><span class="hist-val" style="color:var(--hc-warn)">-$${fmt(fee,4)}</span></div>
           <div class="hist-cell"><span class="hist-lbl">رسوم التمويل</span><span class="hist-val ${fundCls}">${fundSign}$${Math.abs(fundUsd).toFixed(4)}</span></div>
           <div class="hist-cell"><span class="hist-lbl">🏁 الإجمالي</span><span class="hist-val ${tCls}">${totalPnl>=0?'+':''}$${fmt(totalPnl,2)}</span></div>
           <div class="hist-cell"><span class="hist-lbl">التوقيت</span><span class="hist-val">${dateStr} — ${timeStr}</span></div>
@@ -233,7 +266,7 @@ async function showHistory() {
     }).join('');
   } catch {
     if (sub) sub.textContent = '';
-    list.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب السجل — تحقق من الاتصال</div>`;
+    list.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب السجل</div>`;
   }
 }
 
@@ -254,14 +287,12 @@ async function doDeposit() {
     ], w);
     const bridge = new ethers.Contract(BRDG_CA, ['function deposit(address,uint64) external'], w);
     const raw    = ethers.parseUnits(amt.toString(), 6);
-
-    const bal = await usdc.balanceOf(w.address);
+    const bal    = await usdc.balanceOf(w.address);
     if (bal < raw) throw new Error('رصيد USDC غير كافٍ على Arbitrum');
 
-    showLoader('انتظر موافقة المحفظة على الإيداع...');
+    showLoader('انتظر موافقة المحفظة...');
     await (await usdc.approve(BRDG_CA, raw)).wait();
-
-    showLoader('جارٍ إرسال USDC عبر جسر Hyperliquid...');
+    showLoader('جارٍ إرسال USDC...');
     await (await bridge.deposit(w.address, raw)).wait();
 
     closeModal('modalDeposit');
@@ -269,36 +300,25 @@ async function doDeposit() {
     setTimeout(pollAccount, 6000);
   } catch (e) {
     toast(`⚠️ ${_depositErr(e.message)}`, 'err', 5000);
-  } finally {
-    resetBtn('depositExecute');
-    hideLoader();
-  }
+  } finally { resetBtn('depositExecute'); hideLoader(); }
 }
 
 /* ════ سحب USDC ════ */
 async function doWithdraw() {
   const amt  = parseFloat($('withdrawAmount').value || 0);
   const dest = $('withdrawAddress').value.trim();
-
-  if (!amt || amt <= 0)
-    return toast('أدخل المبلغ المراد سحبه', 'err');
-  if (amt < 2)
-    return toast('الحد الأدنى للسحب $2 (بعد رسوم $1)', 'err');
-  if (!/^0x[0-9a-fA-F]{40}$/.test(dest))
-    return toast('عنوان المحفظة غير صحيح — تحقق منه', 'err');
-  if (!State.wallet)
-    return toast('يجب تسجيل الدخول أولاً', 'err');
+  if (!amt || amt <= 0) return toast('أدخل المبلغ المراد سحبه', 'err');
+  if (amt < 2)          return toast('الحد الأدنى للسحب $2 (بعد رسوم $1)', 'err');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(dest)) return toast('عنوان المحفظة غير صحيح', 'err');
+  if (!State.wallet)    return toast('يجب تسجيل الدخول أولاً', 'err');
 
   setBtnLoading('withdrawExecute', '⏳');
   showLoader('انتظر توقيع طلب السحب...');
   try {
     const nonce  = Date.now();
     const to     = dest.toLowerCase();
-    const action = {
-      type:'withdraw3', hyperliquidChain:'Mainnet',
-      signatureChainId:'0xa4b1', destination:to,
-      amount:amt.toFixed(2), time:nonce
-    };
+    const action = { type:'withdraw3', hyperliquidChain:'Mainnet',
+      signatureChainId:'0xa4b1', destination:to, amount:amt.toFixed(2), time:nonce };
     const sig = await State.wallet.signTypedData(
       { name:'HyperliquidSignTransaction', version:'1', chainId:42161,
         verifyingContract:'0x0000000000000000000000000000000000000000' },
@@ -311,23 +331,17 @@ async function doWithdraw() {
       { hyperliquidChain:'Mainnet', destination:to, amount:action.amount, time:nonce }
     );
     const { r, s, v } = ethers.Signature.from(sig);
-
-    showLoader('جارٍ إرسال طلب السحب إلى Hyperliquid...');
+    showLoader('جارٍ إرسال طلب السحب...');
     const res = await fetch(HL_API + '/exchange', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ action, nonce, signature:{ r, s, v } })
     });
     const d = await res.json();
     if (d.status !== 'ok') throw new Error(JSON.stringify(d));
-
     closeModal('modalWithdraw');
-    const net = (amt - 1).toFixed(2);
-    toast(`✅ طلب السحب مقبول — سيصلك $${net} USDC قريباً`, 'ok', 6000);
+    toast(`✅ طلب السحب مقبول — سيصلك $${(amt-1).toFixed(2)} USDC`, 'ok', 6000);
     setTimeout(pollAccount, 5000);
   } catch (e) {
     toast(`⚠️ ${_withdrawErr(e.message)}`, 'err', 5000);
-  } finally {
-    resetBtn('withdrawExecute');
-    hideLoader();
-  }
+  } finally { resetBtn('withdrawExecute'); hideLoader(); }
 }
