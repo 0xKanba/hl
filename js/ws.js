@@ -1,5 +1,7 @@
 /* ═══════════════════════════════════════
    ws.js — WebSocket BBO (أسعار لحظية)
+   ✅ يُحدِّث State.wsConnected
+   ✅ يُحدِّث زر الاتصال فوراً
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -26,13 +28,11 @@ function _onWsBbo(data) {
   if (!mid) return;
 
   if (raw === 'GOLD') {
-    // ── أونصة ذهب ──
     State.prices['GOLD'] = { bid, ask, mid };
     _updateTab('GOLD', mid, ASSETS['GOLD'].pxDp);
     State.prevMid['GOLD'] = mid;
     if (State.asset === 'GOLD') updatePriceUI();
 
-    // ── غرام ذهب (XAU) = أونصة ÷ TROY ──
     const gm = mid / TROY, gBid = bid / TROY, gAsk = ask / TROY;
     State.prices['XAU'] = { bid:gBid, ask:gAsk, mid:gm };
     _updateTab('XAU', gm, ASSETS['XAU'].pxDp);
@@ -54,8 +54,10 @@ function startMainWs() {
   wsMainClose();
   try {
     _mainWs = new WebSocket('wss://api.hyperliquid.xyz/ws');
+
     _mainWs.onopen = () => {
       if (!_mainWs) return;
+      /* اشترك في BBO لكل الأصول */
       const seen = new Set();
       Object.values(ASSETS).forEach(a => {
         if (!seen.has(a.coin)) {
@@ -63,21 +65,38 @@ function startMainWs() {
           _mainWs.send(JSON.stringify({ method:'subscribe', subscription:{ type:'bbo', coin:a.coin } }));
         }
       });
+      /* ✅ تحديث حالة الاتصال */
+      State.wsConnected = true;
+      if (typeof updateConnectBtn === 'function') updateConnectBtn();
     };
+
     _mainWs.onmessage = e => {
       try {
         const msg = JSON.parse(e.data);
         if (msg.channel === 'bbo' && msg.data) _onWsBbo(msg.data);
       } catch {}
     };
-    _mainWs.onerror  = () => {};
-    _mainWs.onclose  = () => {
-      if (State.wallet) _mainWsReconTimer = setTimeout(startMainWs, 4000);
+
+    _mainWs.onerror = () => {
+      State.wsConnected = false;
+      if (typeof updateConnectBtn === 'function') updateConnectBtn();
     };
+
+    _mainWs.onclose = () => {
+      State.wsConnected = false;
+      if (typeof updateConnectBtn === 'function') updateConnectBtn();
+      /* إعادة الاتصال دائماً — سواء كان هناك محفظة أو لا */
+      _mainWsReconTimer = setTimeout(startMainWs, 4000);
+    };
+
   } catch (e) { console.warn('[WS]', e.message); }
 }
 
 function wsMainClose() {
   clearTimeout(_mainWsReconTimer);
-  if (_mainWs) { try { _mainWs.close(); } catch {} _mainWs = null; }
+  if (_mainWs) {
+    try { _mainWs.close(); } catch {}
+    _mainWs = null;
+  }
+  State.wsConnected = false;
 }
