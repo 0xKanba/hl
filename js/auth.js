@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════
-   auth.js — دخول وخروج
-   ✅ عرض فوري بدون انتظار API
+   auth.js — دخول وخروج + وضع الزائر
+   ✅ الموقع يعمل بدون محفظة (أسعار مباشرة)
+   ✅ زر "اتصال" يُظهر صفحة المفتاح الخاص
+   ✅ عند الدخول: تحميل الصفقات + الرصيد
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -15,6 +17,28 @@ function createNewWallet() {
   toast('✅ المفتاح جاهز — احفظه!', 'ok', 6000);
 }
 
+/* ════ تهيئة وضع الزائر (يُستدعى عند فتح الصفحة) ════ */
+function initGuestMode() {
+  State.isGuest = true;
+
+  /* أظهر شاشة التطبيق فوراً */
+  $('loginScreen')?.classList.add('hidden');
+  $('appScreen')?.classList.remove('hidden');
+
+  /* أظهر banner الزائر */
+  _showGuestBanner();
+
+  /* ابدأ الأسعار بدون محفظة */
+  switchAsset('CL');
+  _fetchPricesBackground();
+  State.timers.push(setInterval(pollPrices, 2000));
+  startSessionPolling();
+  startMainWs();
+
+  /* حالة الاتصال */
+  updateConnectBtn();
+}
+
 /* ════ تسجيل الدخول ════ */
 async function login() {
   let key = $('privateKey').value.trim();
@@ -24,50 +48,46 @@ async function login() {
 
   setBtnLoading('loginBtn', '⏳');
   try {
-    State.wallet = new ethers.Wallet(key);
+    State.wallet  = new ethers.Wallet(key);
+    State.isGuest = false;
     localStorage.setItem(LS_KEY, key);
 
-    setTxt('navAddress', State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4));
+    setTxt('navAddress', State.wallet.address.slice(0,6) + '...' + State.wallet.address.slice(-4));
     $('withdrawAddress').value = State.wallet.address;
 
-    /* ══ عرض الشاشة فوراً ══ */
-    $('loginScreen').classList.add('hidden');
-    $('appScreen').classList.remove('hidden');
-    switchAsset('CL');
+    /* أغلق شاشة الدخول إذا كانت مفتوحة */
+    closeModal('modalLogin');
 
-    /* ══ تحميل الكاش المحفوظ فوراً (بدون loader) ══ */
+    /* أزل banner الزائر */
+    _hideGuestBanner();
+
+    /* تحميل بيانات الحساب */
     loadQuickState();
-
-    /* ══ جلب الأسعار في الخلفية — كل سعر يظهر فور وصوله ══ */
     _fetchPricesBackground();
-
-    /* ══ بيانات الحساب في الخلفية ══ */
     pollAccount().catch(() => {});
-
     autoSetReferrer();
     toast('مرحباً 🤝', 'ok');
 
-    /* ══ بدء التحديثات الدورية ══ */
-    State.timers.push(
-      setInterval(pollPrices,  2000),
-      setInterval(pollAccount, 3000)
-    );
-    /* ✅ startMainClock() محذوفة — الساعة تعمل من _startDatetimeClock() في app.js */
-    startSessionPolling();
-    startMainWs();
+    /* مؤقتات إضافية للحساب */
+    State.timers.push(setInterval(pollAccount, 4000));
     startFundingTimer();
 
+    /* تحديث زر الاتصال */
+    updateConnectBtn();
+
+    /* PIN إذا كان محدداً */
+    if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
+      setTimeout(() => { if (State.wallet) lockApp(); }, 300);
+
   } catch (e) {
-    State.wallet = null;
+    State.wallet  = null;
+    State.isGuest = true;
     toast('خطأ: ' + e.message.slice(0, 80), 'err');
-  } finally {
-    resetBtn('loginBtn');
-  }
+  } finally { resetBtn('loginBtn'); }
 }
 
-/* ════ جلب الأسعار الأولي في الخلفية بدون loader ════ */
+/* ════ جلب الأسعار الأولي في الخلفية ════ */
 function _fetchPricesBackground() {
-  /* كل سعر مستقل — يُحدّث UI فور وصوله */
   const uniqueCoins = {};
   Object.keys(ASSETS).forEach(sym => {
     if (sym === 'XAU') return;
@@ -124,15 +144,61 @@ function doLogout() {
   State.openOrders = [];
   State.isLocked   = false;
   State.timers     = [];
+  State.isGuest    = true;
+  State._lastOptimisticClose = 0;
+  State._emptyPosCount       = 0;
 
   closeModal('modalLogout');
   closeModal('modalPIN');
   closeModal('modalSetPIN');
   closeModal('modalForgotPIN');
 
-  $('appScreen').classList.add('hidden');
-  $('loginScreen').classList.remove('hidden');
-  $('privateKey').value = '';
-
+  /* عد لوضع الزائر بدلاً من شاشة الدخول */
+  _showGuestBanner();
+  updateConnectBtn();
+  renderPositions();
   toast('تم الخروج بنجاح', 'info');
+}
+
+/* ════ banner الزائر ════ */
+function _showGuestBanner() {
+  let b = $('guestBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'guestBanner';
+    b.className = 'guest-banner';
+    b.innerHTML = `
+      <span class="gb-msg">🔒 اربط محفظتك لبدء التداول وعرض صفقاتك</span>
+      <button class="gb-btn" onclick="openLoginModal()">اتصال ←</button>`;
+    /* أدرجه فوق شريط التداول */
+    const main = $('appScreen');
+    if (main) main.insertBefore(b, main.querySelector('.main'));
+  }
+  b.classList.remove('hidden');
+}
+
+function _hideGuestBanner() {
+  $('guestBanner')?.classList.add('hidden');
+}
+
+/* ════ فتح modal الدخول ════ */
+function openLoginModal() {
+  openModal('modalLogin');
+  setTimeout(() => $('privateKey')?.focus(), 200);
+}
+
+/* ════ زر الاتصال — تحديث الحالة ════ */
+function updateConnectBtn() {
+  const btn  = $('btnConnect');
+  const lbl  = $('btnConnectLbl');
+  if (!btn || !lbl) return;
+
+  if (State.isGuest) {
+    btn.className  = 'footer-connect-btn disconnected';
+    lbl.textContent = 'اتصال';
+  } else {
+    const ok = State.wsConnected;
+    btn.className  = `footer-connect-btn ${ok ? 'connected' : 'connecting'}`;
+    lbl.textContent = ok ? 'متصل' : 'جاري...';
+  }
 }
