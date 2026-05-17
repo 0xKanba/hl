@@ -1,21 +1,19 @@
 /* ═══════════════════════════════════════
    ws.js — WebSocket BBO (أسعار لحظية)
-   ✅ يُحدِّث State.wsConnected عند كل حدث
-   ✅ يستدعي updateConnectBtn فوراً
+   ✅ لا وميض ألوان عند تغيير السعر
+   ✅ يُحدِّث State.wsConnected
 ═══════════════════════════════════════ */
 'use strict';
 
 let _mainWs = null;
 let _mainWsReconTimer = null;
 
-/* ════ تحديث تاب السعر ════ */
+/* ════ تحديث تاب السعر — بدون وميض ════ */
 function _updateTab(sym, mid, dp) {
   const el = $(`price${sym}`);
   if (!el) return;
-  const dir = mid > State.prevMid[sym] ? 'up' : mid < State.prevMid[sym] ? 'dn' : '';
   el.textContent = fmt(mid, dp);
-  el.className = `tab-price${dir ? ' ' + dir : ''}`;
-  if (dir) setTimeout(() => el.className = 'tab-price', 800);
+  /* ✅ لا تغيير في className — لا وميض */
 }
 
 /* ════ معالجة BBO ════ */
@@ -67,9 +65,8 @@ function startMainWs() {
           }));
         }
       });
-      /* ✅ متصل بـ Hyperliquid */
       State.wsConnected = true;
-      updateConnectBtn();
+      if (typeof updateConnectBtn === 'function') updateConnectBtn();
     };
 
     _mainWs.onmessage = e => {
@@ -81,28 +78,24 @@ function startMainWs() {
 
     _mainWs.onerror = () => {
       State.wsConnected = false;
-      updateConnectBtn();
+      if (typeof updateConnectBtn === 'function') updateConnectBtn();
     };
 
     _mainWs.onclose = () => {
       State.wsConnected = false;
-      updateConnectBtn();
-      /* إعادة الاتصال دائماً */
+      if (typeof updateConnectBtn === 'function') updateConnectBtn();
       _mainWsReconTimer = setTimeout(startMainWs, 4000);
     };
 
   } catch (e) {
     console.warn('[WS]', e.message);
     State.wsConnected = false;
-    updateConnectBtn();
+    if (typeof updateConnectBtn === 'function') updateConnectBtn();
   }
 }
 
 function wsMainClose() {
   clearTimeout(_mainWsReconTimer);
-  if (_mainWs) {
-    try { _mainWs.close(); } catch {}
-    _mainWs = null;
-  }
+  if (_mainWs) { try { _mainWs.close(); } catch {} _mainWs = null; }
   State.wsConnected = false;
 }
