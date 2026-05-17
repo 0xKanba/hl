@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════
    app.js — تهيئة التطبيق وربط الأحداث
-   ✅ وضع الزائر — الموقع يعمل بدون محفظة
-   ✅ زر "اتصال" في Footer
-   ✅ إغلاق بسيط كما كان
+   ✅ تحديث الحساب كل 4 ثواني
+   ✅ تحديث الأسعار كل 3 ثواني
+   ✅ وضع الزائر + زر الاتصال
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -56,7 +56,7 @@ function closeOptions() {
   if (!ov) return;
   ov.classList.add('closing');
   setTimeout(() => {
-    ov.classList.remove('visible', 'closing');
+    ov.classList.remove('visible','closing');
     ov.classList.add('hidden');
   }, 120);
 }
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
   _initMonthsPanel();
   _initOptsBackdrop();
 
-  /* ═══ modal تسجيل الدخول (يُفتح من زر اتصال) ═══ */
+  /* ── modal تسجيل الدخول ── */
   $('loginBtn').onclick     = login;
   $('privateKey').onkeydown = e => e.key === 'Enter' && login();
   $('toggleKey').onclick    = () => {
@@ -101,7 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (State.isGuest) {
       openLoginModal();
     } else {
-      /* متصل — انقر يعرض خيارات الحساب */
       openOptions();
     }
   };
@@ -227,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lockApp(true);
   };
 
-  /* ── شعار سيولة → شرح ── */
+  /* ── شعار سيولة ── */
   $('navLogo')?.addEventListener('click', e => {
     e.preventDefault(); e.stopPropagation();
     openModal('modalAbout');
@@ -277,25 +276,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ═══════════════════════════════════════════
      ✅ التهيئة الرئيسية
-     الأولوية:
-     1. بدء الأسعار فوراً (بدون محفظة)
-     2. إذا كان مفتاح محفوظ → دخول تلقائي
+     1. WS + أسعار تبدأ فوراً للجميع
+     2. مفتاح محفوظ → دخول تلقائي
      3. وإلا → وضع الزائر
   ═══════════════════════════════════════════ */
-
-  /* ابدأ WS + أسعار فوراً بدون انتظار */
   startMainWs();
 
   const saved = localStorage.getItem(LS_KEY);
   if (saved) {
-    /* دخول تلقائي بمفتاح محفوظ */
     $('privateKey').value = saved;
-    /* اذهب مباشرة للتطبيق */
     $('loginScreen')?.classList.add('hidden');
     $('appScreen')?.classList.remove('hidden');
-    login();
+    login().then(() => {
+      /* ✅ بدء استعلامات الحساب كل 4 ثواني */
+      State.timers.push(setInterval(pollAccount, 4000));
+      /* ✅ بدء استعلامات الأسعار كل 3 ثواني */
+      State.timers.push(setInterval(pollPrices, 3000));
+      startSessionPolling();
+      startFundingTimer();
+    }).catch(() => {
+      initGuestMode();
+    });
   } else {
-    /* وضع الزائر */
     initGuestMode();
+    /* ✅ أسعار كل 3 ثواني حتى للزائر */
+    State.timers.push(setInterval(pollPrices, 3000));
   }
+
+  /* ✅ قفل تلقائي عند استعادة جلسة */
+  if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
+    setTimeout(() => { if (State.wallet) lockApp(); }, 600);
 });
