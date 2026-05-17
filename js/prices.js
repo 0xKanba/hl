@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════
    prices.js — جلب الأسعار وتحديث الواجهة
-   ✅ كل سعر يُحدَّث فور وصوله بدون انتظار
+   ✅ لا وميض ألوان — ألوان ثابتة
+   ✅ تحديث كل 3 ثواني (بدل 2)
+   ✅ prevDayPx كل 60 ثانية (بدل 30)
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -24,31 +26,35 @@ function _applyPrice(sym, bid, ask) {
 
   if (sym === 'GOLD') {
     State.prices['GOLD'] = { bid, ask, mid };
-    _updateTab('GOLD', mid, ASSETS['GOLD'].pxDp);
+    /* ✅ لا وميض — فقط تحديث النص */
+    _updateTabText('GOLD', mid, ASSETS['GOLD'].pxDp);
     State.prevMid['GOLD'] = mid;
     if (State.asset === 'GOLD') updatePriceUI();
 
     const gm = mid / TROY;
-    State.prices['XAU'] = { bid:bid/TROY, ask:ask/TROY, mid:gm };
-    _updateTab('XAU', gm, ASSETS['XAU'].pxDp);
+    State.prices['XAU'] = { bid: bid / TROY, ask: ask / TROY, mid: gm };
+    _updateTabText('XAU', gm, ASSETS['XAU'].pxDp);
     State.prevMid['XAU'] = gm;
     if (State.asset === 'XAU') updatePriceUI();
   } else {
     State.prices[sym] = { bid, ask, mid };
-    _updateTab(sym, mid, ASSETS[sym].pxDp);
+    _updateTabText(sym, mid, ASSETS[sym].pxDp);
     State.prevMid[sym] = mid;
     if (sym === State.asset) updatePriceUI();
   }
 }
 
-/* ════ جلب الأسعار (كل 2 ثانية) ════
-   كل عملة مستقلة — تُحدِّث UI فور وصولها
-   لا await مشترك = لا تأخير بسبب عملة بطيئة
-*/
+/* ✅ تحديث نص تاب — بدون className تغيير (لا وميض) */
+function _updateTabText(sym, mid, dp) {
+  const el = $(`price${sym}`);
+  if (el) el.textContent = fmt(mid, dp);
+}
+
+/* ════ جلب الأسعار — كل 3 ثواني ════ */
 function pollPrices() {
-  /* prevDayPx كل 30 ثانية */
-  if (_ctxCounter % 15 === 0) {
-    hlInfo({ type:'metaAndAssetCtxs', dex:'xyz' })
+  /* prevDayPx كل 20 دورة = كل 60 ثانية */
+  if (_ctxCounter % 20 === 0) {
+    hlInfo({ type: 'metaAndAssetCtxs', dex: 'xyz' })
       .then(xyz => {
         if (!Array.isArray(xyz) || !xyz[1]) return;
         xyz[0].universe.forEach((u, i) => {
@@ -68,9 +74,8 @@ function pollPrices() {
   }
   _ctxCounter++;
 
-  /* كل عملة تُجلب بشكل مستقل */
   Object.entries(_uniqueCoins()).forEach(([coinStr, sym]) => {
-    hlInfo({ type:'l2Book', coin:coinStr })
+    hlInfo({ type: 'l2Book', coin: coinStr })
       .then(lb => {
         const bid = parseFloat(lb.levels?.[0]?.[0]?.px || 0);
         const ask = parseFloat(lb.levels?.[1]?.[0]?.px || 0);
@@ -81,18 +86,24 @@ function pollPrices() {
   });
 }
 
-/* ════ تحديث واجهة السعر الرئيسي ════ */
+/* ════ تحديث واجهة السعر الرئيسي — بدون وميض ════ */
 function updatePriceUI() {
   const a = ASSETS[State.asset];
   const p = State.prices[State.asset];
   if (!p || !p.mid) return;
 
-  const prev = State.prevMid[State.asset];
-  const dir  = p.mid > prev ? 1 : p.mid < prev ? -1 : 0;
-  const cls  = dir > 0 ? 'up' : dir < 0 ? 'dn' : 'n';
+  /* ✅ بطاقة السعر — لون ثابت بدون تغيير animation */
+  const prevVal = State.prevMid[State.asset];
+  const dir     = p.mid > prevVal ? 1 : p.mid < prevVal ? -1 : 0;
+  const valCls  = dir > 0 ? 'up' : dir < 0 ? 'dn' : 'n';
 
-  $('priceCard').className = `price-card${dir > 0 ? ' up' : dir < 0 ? ' dn' : ''}`;
-  setText('priceValue', fmt(p.mid, a.pxDp), `price-value ${cls}`);
+  /* لا نغير class بطاقة السعر الكاملة — فقط لون الرقم */
+  const valEl = $('priceValue');
+  if (valEl) {
+    valEl.textContent = fmt(p.mid, a.pxDp);
+    valEl.className   = `price-value ${valCls}`;
+  }
+
   setTxt('buyPrice',  fmt(p.mid, a.pxDp));
   setTxt('sellPrice', fmt(p.mid, a.pxDp));
 
@@ -100,10 +111,12 @@ function updatePriceUI() {
   const prevDay = State.prevDayPx[State.asset];
   if (prevDay > 0) {
     const chg = ((p.mid - prevDay) / prevDay) * 100;
-    setText('priceDelta',
-      `تغيير 24 ساعة: ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`,
-      `price-delta ${chg > 0 ? 'up' : chg < 0 ? 'dn' : 'n'}`
-    );
+    const deltaCls = chg > 0 ? 'up' : chg < 0 ? 'dn' : 'n';
+    const deltaEl  = $('priceDelta');
+    if (deltaEl) {
+      deltaEl.textContent = `تغيير 24 ساعة: ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
+      deltaEl.className   = `price-delta ${deltaCls}`;
+    }
   }
 
   if (p.bid && p.ask)
@@ -118,7 +131,6 @@ function updatePriceUI() {
   setTxt('priceTimer', `↻ ${s}s`);
   State.priceTimer = setInterval(() => { s++; setTxt('priceTimer', `↻ ${s}s`); }, 1000);
 
-  /* معاينة TP/SL */
   if (typeof recalcTpPreview === 'function') recalcTpPreview();
   if (typeof recalcSlPreview === 'function') recalcSlPreview();
 }
