@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════
-   trading.js — تنفيذ الصفقات وإغلاقها
-   ✅ إغلاق بسيط كما كان
-   ✅ guard 20 ثانية + multiPoll يبدأ بعد 5 ثواني
-   ✅ رياضيات صحيحة لكل الأصول
+   trading.js
+   ✅ انزلاق 5% (بدل 2-3%)
+   ✅ إغلاق فوري + guard 20 ثانية
+   ✅ multiPoll يبدأ بعد 5 ثواني
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -26,7 +26,6 @@ function askTrade(isBuy) {
 
   const sziForLiq = isBuy ? ozQty : -ozQty;
   const liqInfo   = liqPriceDisplay(State.asset, tradeMid, sziForLiq, State.balance?.total || 0);
-  const liqCls    = liqInfo.text === 'آمن ✅' ? 'up' : 'sell';
 
   setTxt('confirmTitle',    `${a.icon} ${isBuy ? 'شراء ↑' : 'بيع ↓'} — ${a.name}`);
   setTxt('confirmSubtitle', `رافعة ${a.lev}x · تنفيذ فوري`);
@@ -35,7 +34,7 @@ function askTrade(isBuy) {
     <div class="confirm-row"><span class="confirm-key">سعر ${isGram ? 'الغرام' : 'الوحدة'}</span><span class="confirm-val">${fmt(p.mid, a.pxDp)} $</span></div>
     <div class="confirm-row"><span class="confirm-key">القيمة الكلية</span><span class="confirm-val">≈ $${usd}</span></div>
     <div class="confirm-row"><span class="confirm-key">الهامش المطلوب</span><span class="confirm-val warn">≈ $${mgn}</span></div>
-    <div class="confirm-row"><span class="confirm-key">التصفية التقريبية</span><span class="confirm-val ${liqCls}">${liqInfo.text}</span></div>
+    <div class="confirm-row"><span class="confirm-key">التصفية التقريبية</span><span class="confirm-val" style="color:var(--warn)">${liqInfo.text}</span></div>
     <div class="confirm-row"><span class="confirm-key">رسوم الفتح</span><span class="confirm-val fee">$${feeOpen} (${feeRatePct(State.asset)})</span></div>
     <div class="confirm-row"><span class="confirm-key">إجمالي الرسوم</span><span class="confirm-val fee">≈ $${feeTot}</span></div>`;
 
@@ -52,37 +51,43 @@ async function execTrade() {
   const a       = ASSETS[sym], p = State.prices[sym];
   const execQty = a.gram ? +(qty / TROY).toFixed(4) : qty;
   const execMid = a.gram ? p.mid * TROY : p.mid;
-  const execSzDp= a.gram ? 4 : a.szDp;
+  const execSzDp = a.gram ? 4 : a.szDp;
   if (!p?.mid) { toast('لا يوجد سعر', 'err'); closeModal('modalConfirm'); return; }
 
   setBtnLoading('confirmExecute', '⏳');
   showLoader(`${a.icon} ${isBuy ? 'شراء' : 'بيع'} ${qty} ${a.unit}...`);
   try {
-    try { await hlExchange({ type:'updateLeverage', asset:a.idx, isCross:a.cross, leverage:a.lev }); } catch {}
-    const slip = sym === 'NQ' ? 0.03 : 0.02;
+    try { await hlExchange({ type: 'updateLeverage', asset: a.idx, isCross: a.cross, leverage: a.lev }); } catch {}
+
+    /* ✅ انزلاق 5% لضمان التنفيذ */
+    const slip = 0.05;
     const res  = await hlExchange({
       type: 'order',
-      orders: [{ a:a.idx, b:isBuy,
+      orders: [{ a: a.idx, b: isBuy,
         p: wirePx(execMid * (isBuy ? 1 + slip : 1 - slip), execSzDp),
         s: wireSz(execQty, execSzDp),
-        r: false, t:{ limit:{ tif:'Ioc' } }
+        r: false, t: { limit: { tif: 'Ioc' } }
       }],
       grouping: 'na'
     });
+
     const status = res?.response?.data?.statuses?.[0];
     if (status?.error) throw new Error(status.error);
+
     if (status?.filled) {
       const f = status.filled;
       closeModal('modalConfirm');
       const dispSz = a.gram ? (+f.totalSz * TROY).toFixed(2) : f.totalSz;
-      toast(`✅ مُنفَّذ — ${a.icon} ${dispSz} ${a.unit} @ ${fmt(parseFloat(f.avgPx) / (a.gram ? TROY : 1), a.pxDp)}`, 'ok', 5000);
+      const dispPx = (parseFloat(f.avgPx) / (a.gram ? TROY : 1)).toFixed(a.pxDp);
+      toast(`✅ مُنفَّذ — ${a.icon} ${dispSz} ${a.unit} @ $${dispPx}`, 'ok', 5000);
     } else if (status?.resting) {
       closeModal('modalConfirm');
       toast(`⏳ أمر معلق — ${a.icon} ${qty} ${a.unit}`, 'info', 4000);
     } else {
       closeModal('modalConfirm');
-      toast('⚠️ لم يُنفَّذ — السوق بعيد', 'err', 5000);
+      toast('⚠️ لم يُنفَّذ — حاول مجدداً', 'err', 4000);
     }
+
     autoSetReferrer();
     State.pendingTrade = null;
     _multiPoll();
@@ -90,7 +95,7 @@ async function execTrade() {
   finally { resetBtn('confirmExecute'); hideLoader(); }
 }
 
-/* ════ استعلام متعدد — يبدأ بعد 5 ثواني (وقت تسوية Hyperliquid) ════ */
+/* ════ استعلام متعدد — يبدأ بعد 5 ثواني ════ */
 function _multiPoll() {
   setTimeout(() => pollAccount().catch(() => {}), 5000);
   setTimeout(() => pollAccount().catch(() => {}), 9000);
@@ -104,13 +109,13 @@ window.askClose = function (i) {
   const pos      = p.position;
   const sziOz    = parseFloat(pos.szi);
   const sym      = shortCoinPos(pos.coin);
-  const a        = ASSETS[sym] || { name:sym, unit:'', icon:'📊', pxDp:2, szDp:2 };
+  const a        = ASSETS[sym] || { name: sym, unit: '', icon: '📊', pxDp: 2, szDp: 2 };
   const isGram   = !!a.gram;
   const pnl      = parseFloat(pos.unrealizedPnl || 0);
   const curPx    = State.prices[sym]?.mid || 0;
   const sziDisp  = isGram ? Math.abs(sziOz) * TROY : Math.abs(sziOz);
   const dp       = isGram ? 2 : a.szDp;
-  const entryDisp= isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
+  const entryDisp = isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
   const isLong   = sziOz > 0;
   const closeFee = curPx
     ? (Math.abs(sziOz) * (isGram ? curPx * TROY : curPx) * feeRate(sym)).toFixed(4)
@@ -149,42 +154,43 @@ window.askClose = function (i) {
 
 async function execClose() {
   if (State.pendingClose === null) { closeModal('modalClose'); return; }
-  const p = State.positions[State.pendingClose];
+  const idx = State.pendingClose;
+  const p   = State.positions[idx];
   if (!p) { closeModal('modalClose'); return; }
 
-  const pos      = p.position;
-  const sziOz    = parseFloat(pos.szi);
-  const sym      = shortCoinPos(pos.coin);
-  const isGram   = !!ASSETS[sym]?.gram;
-  const aApi     = isGram ? ASSETS['GOLD'] : ASSETS[sym];
+  const pos    = p.position;
+  const sziOz  = parseFloat(pos.szi);
+  const sym    = shortCoinPos(pos.coin);
+  const isGram = !!ASSETS[sym]?.gram;
+  const aApi   = isGram ? ASSETS['GOLD'] : ASSETS[sym];
   if (!aApi) { toast('أصل غير معروف', 'err'); closeModal('modalClose'); return; }
 
-  const gramPx   = State.prices['XAU']?.mid;
-  const midOz    = isGram
+  const gramPx = State.prices['XAU']?.mid;
+  const midOz  = isGram
     ? (gramPx > 0 ? gramPx * TROY : State.prices['GOLD']?.mid)
     : State.prices[sym]?.mid;
   if (!midOz || midOz <= 0) { toast('سعر غير متاح، انتظر لحظة', 'err'); return; }
 
   const aDisp = ASSETS[sym] || aApi;
-  const idx   = State.pendingClose;
 
   setBtnLoading('closeExecute', '⏳');
   showLoader(`إغلاق ${aDisp.icon || ''} ${aDisp.name || ''}...`);
   try {
     const isBuy = sziOz < 0;
+    /* ✅ انزلاق 5% لضمان الإغلاق */
     await hlExchange({
       type: 'order',
-      orders: [{ a:aApi.idx, b:isBuy,
-        p: wirePx(midOz * (isBuy ? 1.02 : 0.98), aApi.szDp),
+      orders: [{ a: aApi.idx, b: isBuy,
+        p: wirePx(midOz * (isBuy ? 1.05 : 0.95), aApi.szDp),
         s: wire(Math.abs(sziOz), aApi.szDp),
-        r: true, t:{ limit:{ tif:'Ioc' } }
+        r: true, t: { limit: { tif: 'Ioc' } }
       }],
       grouping: 'na'
     });
 
     closeModal('modalClose');
 
-    /* ✅ guard 20 ثانية + حذف optimistic فوري */
+    /* ✅ إغلاق فوري من UI + guard 20 ثانية */
     State._lastOptimisticClose = Date.now();
     State._emptyPosCount       = 0;
     State.positions.splice(idx, 1);
@@ -193,8 +199,6 @@ async function execClose() {
 
     toast(`✅ أُغلقت — ${aDisp.icon || ''} ${aDisp.name || ''}`, 'ok', 4000);
     State.pendingClose = null;
-
-    /* ✅ أول استعلام بعد 5 ثواني */
     _multiPoll();
 
   } catch (e) { toast(tradeErr(e.message), 'err', 6000); }
@@ -208,7 +212,7 @@ function askCloseAll() {
   $('closeAllDetails').innerHTML = State.positions.map(p => {
     const pos = p.position, pnl = parseFloat(pos.unrealizedPnl || 0);
     const sym = shortCoinPos(pos.coin);
-    const a   = ASSETS[sym] || { name:sym, pxDp:2, icon:'📊' };
+    const a   = ASSETS[sym] || { name: sym, pxDp: 2, icon: '📊' };
     return `<div class="confirm-row">
       <span class="confirm-key">${a.icon} ${a.name}</span>
       <span class="confirm-val ${pnl >= 0 ? 'buy' : 'sell'}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}</span>
@@ -236,10 +240,10 @@ async function execCloseAll() {
         const isBuy = sziOz < 0;
         await hlExchange({
           type: 'order',
-          orders: [{ a:aApi.idx, b:isBuy,
-            p: wirePx(midOz * (isBuy ? 1.02 : 0.98), aApi.szDp),
+          orders: [{ a: aApi.idx, b: isBuy,
+            p: wirePx(midOz * (isBuy ? 1.05 : 0.95), aApi.szDp),
             s: wire(Math.abs(sziOz), aApi.szDp),
-            r: true, t:{ limit:{ tif:'Ioc' } }
+            r: true, t: { limit: { tif: 'Ioc' } }
           }],
           grouping: 'na'
         });
@@ -259,11 +263,10 @@ async function execCloseAll() {
 
 /* ════ طلب الاتصال عند محاولة إجراء من زائر ════ */
 function _promptConnect() {
-  toast('اربط محفظتك أولاً — انقر على زر "اتصال"', 'info', 4000);
-  /* إضاءة زر الاتصال */
+  toast('اربط محفظتك أولاً — انقر على زر الاتصال', 'info', 4000);
   const btn = $('btnConnect');
   if (btn) {
-    btn.style.transform = 'scale(1.2)';
+    btn.style.transform = 'scale(1.25)';
     setTimeout(() => { btn.style.transform = ''; }, 600);
   }
 }
