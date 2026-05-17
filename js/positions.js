@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════
-   positions.js — عرض الصفقات والتصفية
-   ✅ resetPosFingerprint — إعادة رسم فوري
-   ✅ data-sz-idx — حجم حي من pos.szi
+   positions.js
+   ✅ سعر التصفية رقم حقيقي (لا "آمن")
+   ✅ لا وميض — تحديث نص فقط
+   ✅ resetPosFingerprint للتحديث الفوري
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -15,7 +16,7 @@ function apiAsset(sym) {
 }
 
 function parseTpslFromOrders(orders, coin) {
-  const r = { tp:null, sl:null, tpOid:null, slOid:null };
+  const r = { tp: null, sl: null, tpOid: null, slOid: null };
   for (const o of orders || []) {
     if (o.coin !== coin || !o.isTrigger) continue;
     const ot = (o.orderType || '').toLowerCase();
@@ -28,39 +29,49 @@ function parseTpslFromOrders(orders, coin) {
   return r;
 }
 
+/* ════ سعر التصفية — معادلة Hyperliquid الرسمية ════
+   Isolated Long:  liq = entryPx * (1 - 1/lev + mmFrac)
+   Isolated Short: liq = entryPx * (1 + 1/lev - mmFrac)
+   Cross:          يستخدم الرصيد الكلي
+   mmFrac = 0.5 / lev  (نصف الهامش الأولي)
+*/
 function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
   const side     = sziOz > 0 ? 1 : -1;
   const absSize  = Math.abs(sziOz);
-  const mmRate   = 0.5 / maxLev;
+  const mmFrac   = 0.5 / maxLev;
   const notional = absSize * entryPxOz;
   let liq;
+
   if (isCross) {
     const bal        = balance > 0 ? balance : notional / maxLev;
-    const freeMargin = bal - notional * mmRate;
+    const freeMargin = bal - notional * mmFrac;
     if (freeMargin <= 0) {
+      /* الرصيد لا يكفي حتى الهامش */
       liq = side > 0 ? entryPxOz * 0.99 : entryPxOz * 1.01;
     } else {
       liq = entryPxOz - side * freeMargin / absSize;
     }
   } else {
+    /* Isolated — معادلة مباشرة */
     liq = side > 0
-      ? entryPxOz * (1 - 1 / maxLev + mmRate)
-      : entryPxOz * (1 + 1 / maxLev - mmRate);
+      ? entryPxOz * (1 - 1 / maxLev + mmFrac)
+      : entryPxOz * (1 + 1 / maxLev - mmFrac);
   }
-  if (liq <= 0) return 0;
-  if (side === -1 && liq > entryPxOz * 5) return null;
+
+  if (liq <= 0) return 0.01;
+  if (side === -1 && liq > entryPxOz * 8) return null;
   return liq;
 }
 
+/* ✅ يُرجع دائماً رقماً — لا كلمة "آمن" */
 function liqPriceDisplay(sym, entryPxOz, sziOz, balance) {
-  const a      = ASSETS[sym] || ASSETS['GOLD'] || { lev:20, cross:false, pxDp:2, gram:false };
+  const a      = ASSETS[sym] || ASSETS['GOLD'] || { lev: 20, cross: false, pxDp: 2, gram: false };
   const isGram = !!a.gram;
   const liqOz  = calcLiqPrice(entryPxOz, sziOz, balance, a.cross, a.lev);
-  if (liqOz === null) return { text:'—', ounce:null };
-  if (liqOz === 0)    return { text:'آمن ✅', ounce:0 };
+  if (liqOz === null) return { text: '—', ounce: null };
   const liqDisp = isGram ? liqOz / TROY : liqOz;
-  return { text:`$${fmt(liqDisp, a.pxDp)}`, ounce:liqOz };
+  return { text: `$${fmt(liqDisp, a.pxDp)}`, ounce: liqOz };
 }
 
 function calcTpPrice(ep, szi, pnl) {
@@ -75,15 +86,18 @@ function calcSlPrice(ep, szi, sl) {
   return sz > 0 ? e - sl / sz : e + sl / Math.abs(sz);
 }
 
+/* ════ رسوم التمويل من cumFunding.sinceOpen ════ */
 function updateFundingFromPositions(positions) {
   const acc = {};
   for (const p of positions || []) {
     const pos  = p.position, coin = pos.coin || '';
     const raw  = coin.includes(':') ? coin.split(':')[1] : coin;
     const sym  = raw === 'GOLD' ? 'XAU' : (COIN_TO_SYM[raw] || raw);
+    /* API: موجب = دفعت → نعرض معكوساً: موجب = ربحت */
     acc[sym] = -parseFloat(pos.cumFunding?.sinceOpen || 0);
   }
   State.fundingRates = acc;
+  /* تحديث عناصر DOM الموجودة بدون إعادة بناء */
   Object.entries(acc).forEach(([sym, usd]) => {
     document.querySelectorAll(`[data-funding-sym="${sym}"]`).forEach(el => {
       el.textContent = `${usd >= 0 ? '+' : '-'}$${Math.abs(usd).toFixed(4)}`;
@@ -95,7 +109,7 @@ function updateFundingFromPositions(positions) {
 async function fetchFundingRates() {
   if (!State.wallet) return;
   try {
-    const xyz    = await hlInfo({ type:'clearinghouseState', user:State.wallet.address, dex:'xyz' }).catch(() => ({}));
+    const xyz    = await hlInfo({ type: 'clearinghouseState', user: State.wallet.address, dex: 'xyz' }).catch(() => ({}));
     const rawPos = (xyz?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
     if (rawPos.length) updateFundingFromPositions(rawPos);
   } catch {}
@@ -107,7 +121,7 @@ function startFundingTimer() {
   State._fundingTimer = setInterval(fetchFundingRates, 60_000);
 }
 
-/* ════ Render ════ */
+/* ════ Render الصفقات ════ */
 let _posFingerprint = '';
 
 function resetPosFingerprint() { _posFingerprint = ''; }
@@ -115,7 +129,7 @@ function resetPosFingerprint() { _posFingerprint = ''; }
 function renderPositions() {
   const count = State.positions.length;
   const fp    = State.positions.map(p =>
-    `${p.position.coin}|${p.position.szi}|${p.tpsl?.tp||''}|${p.tpsl?.sl||''}`
+    `${p.position.coin}|${p.position.szi}|${p.tpsl?.tp || ''}|${p.tpsl?.sl || ''}`
   ).join(';');
 
   setTxt('positionsCount', count);
@@ -127,27 +141,34 @@ function renderPositions() {
   /* تحديث سلس بدون إعادة بناء DOM */
   State.positions.forEach((p, i) => {
     const pnl = parseFloat(p.position.unrealizedPnl || 0);
+
     const pEl = document.querySelector(`[data-pnl-idx="${i}"]`);
     if (pEl) {
       pEl.textContent = `${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}`;
       pEl.className   = `pos-pnl ${pnl >= 0 ? 'pos' : 'neg'}`;
     }
+
+    /* حجم المركز الحي */
     const szEl = document.querySelector(`[data-sz-idx="${i}"]`);
     if (szEl) {
       const sym    = shortCoinPos(p.position.coin);
-      const a      = ASSETS[sym] || { szDp:4, gram:false, unit:'' };
+      const a      = ASSETS[sym] || { szDp: 4, gram: false, unit: '' };
       const isGram = !!a.gram;
       const sziOz  = parseFloat(p.position.szi || 0);
       const disp   = isGram ? sziOz * TROY : sziOz;
       szEl.textContent = `${Math.abs(disp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}`;
     }
+
+    /* السعر الحالي */
     const cpEl = document.querySelector(`[data-curpx-idx="${i}"]`);
     if (cpEl) {
       const sym = shortCoinPos(p.position.coin);
-      const a   = ASSETS[sym] || { pxDp:2 };
+      const a   = ASSETS[sym] || { pxDp: 2 };
       const cur = State.prices[sym]?.mid;
       cpEl.textContent = cur ? `$${fmt(cur, a.pxDp)}` : '—';
     }
+
+    /* سعر التصفية */
     const liqEl = document.querySelector(`[data-liq-idx="${i}"]`);
     if (liqEl) {
       const sym     = shortCoinPos(p.position.coin);
@@ -156,7 +177,6 @@ function renderPositions() {
       const bal     = State.balance?.total || 0;
       const info    = liqPriceDisplay(sym, entryOz, sziOz, bal);
       liqEl.textContent = info.text;
-      liqEl.style.color = info.text === 'آمن ✅' ? 'var(--hc-up)' : 'var(--warn)';
     }
   });
 
@@ -166,6 +186,7 @@ function renderPositions() {
     tEl.className   = `positions-pnl ${totalPnl >= 0 ? 'pos' : 'neg'}`;
   }
 
+  /* إعادة بناء DOM فقط عند تغيير حقيقي */
   if (fp === _posFingerprint) return;
   _posFingerprint = fp;
 
@@ -174,6 +195,7 @@ function renderPositions() {
 
   if (!count) {
     list.innerHTML = '<div class="positions-empty">📂 لا توجد صفقات مفتوحة</div>';
+    if (typeof ChartModule !== 'undefined') ChartModule.refreshLines();
     return;
   }
 
@@ -182,7 +204,7 @@ function renderPositions() {
     const sziOz     = parseFloat(pos.szi);
     const pnl       = parseFloat(pos.unrealizedPnl || 0);
     const sym       = shortCoinPos(pos.coin);
-    const a         = ASSETS[sym] || { name:sym, unit:'', icon:'📊', pxDp:2, szDp:2, lev:10 };
+    const a         = ASSETS[sym] || { name: sym, unit: '', icon: '📊', pxDp: 2, szDp: 2, lev: 10 };
     const isGram    = !!a.gram;
     const sziDisp   = isGram ? sziOz * TROY : sziOz;
     const entryDisp = isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
@@ -195,6 +217,11 @@ function renderPositions() {
     const fundUsd   = State.fundingRates[sym] || State.fundingRates['GOLD'] || 0;
     const fundSign  = fundUsd >= 0 ? '+' : '-';
     const fundCls   = fundUsd >= 0 ? 'pos' : 'neg';
+
+    /* سعر التصفية للعرض */
+    const entryOz  = parseFloat(pos.entryPx || 0);
+    const bal      = State.balance?.total || 0;
+    const liqInfo  = liqPriceDisplay(sym, entryOz, sziOz, bal);
 
     return `<div class="position-item">
       <div class="pos-top">
@@ -222,7 +249,7 @@ function renderPositions() {
         </div>
         <div class="pos-data-item" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:4px;margin-top:2px;">
           <span class="pos-data-label">⚡ سعر التصفية</span>
-          <span class="pos-data-value" style="color:var(--warn)" data-liq-idx="${i}">—</span>
+          <span class="pos-data-value" style="color:var(--warn)" data-liq-idx="${i}">${liqInfo.text}</span>
         </div>
       </div>
       <div class="pos-tpsl-row">
