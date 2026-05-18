@@ -1,0 +1,35 @@
+name: Deploy Guard
+
+on:
+  push:
+    branches:
+      - demo
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: npm install
+
+      - run: npm run build
+
+      - name: Check deployment files
+        run: |
+
+          FAILED=0
+
+          find src -type f | while read FILE
+          do
+            NAME=$(basename "$FILE")
+
+            if ! find dist -name "$NAME" | grep -q .
+            then
+              echo "❌ $NAME لم ينشر"
+              FAILED=1
+            fi
+          done
+
+          exit $FAILED
