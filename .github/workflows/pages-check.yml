@@ -1,0 +1,47 @@
+name: Cloudflare Pages Check
+
+on:
+  push:
+    branches:
+      - demo
+
+jobs:
+  verify-pages:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check deployed files on Pages
+        run: |
+
+          DOMAIN="https://YOURSITE.pages.dev"
+
+          FAILED=0
+
+          echo "=== CHECKING LIVE FILES ==="
+
+          find . -type f \
+            ! -path "./.git/*" \
+            ! -path "./.github/*" \
+            | while read FILE
+          do
+
+            CLEAN=$(echo "$FILE" | sed 's|^\./||')
+
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$DOMAIN/$CLEAN")
+
+            if [ "$STATUS" != "200" ]; then
+              echo "❌ لم يتم تحديث أو نشر:"
+              echo "$CLEAN"
+              echo "HTTP: $STATUS"
+              echo ""
+
+              FAILED=1
+            else
+              echo "✅ $CLEAN"
+            fi
+
+          done
+
+          exit $FAILED
