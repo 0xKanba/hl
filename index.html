@@ -114,7 +114,7 @@
       <div class="tab-left"><img class="tab-img" src="/images/silver.svg" alt="SILVER" loading="eager"></div>
       <div class="tab-right"><span class="tab-price" id="priceSILVER">—</span></div>
     </button>
-    <button class="tab" data-asset="CL">
+    <button class="tab active" data-asset="CL">
       <div class="tab-left"><img class="tab-img" src="/images/oil.svg" alt="CL" loading="eager"></div>
       <div class="tab-right"><span class="tab-price" id="priceCL">—</span></div>
     </button>
@@ -130,14 +130,14 @@
         </div>
         <div class="price-data">
           <div class="price-asset" id="priceAssetName">نفط خام</div>
-          <div class="price-value" id="priceValue">—</div>
-          <div class="price-delta" id="priceDelta"></div>
+          <div class="price-value n" id="priceValue">—</div>
+          <div class="price-delta n" id="priceDelta"></div>
           <div class="price-session hidden" id="priceSession">
-            <span class="ps-chg" id="psChg"></span>
+            <span class="ps-chg n" id="psChg"></span>
             <span class="ps-divider">|</span>
-            <span class="ps-h"  id="psH"></span>
+            <span class="ps-h" id="psH"></span>
             <span class="ps-divider">|</span>
-            <span class="ps-l"  id="psL"></span>
+            <span class="ps-l" id="psL"></span>
           </div>
           <div class="price-meta-row">
             <span class="price-bid-ask" id="priceBidAsk"></span>
@@ -150,7 +150,7 @@
       <div class="trade-panel">
         <div class="qty-input-row">
           <input type="number" class="qty-input" id="qtyInput"
-                 placeholder="0.00" min="0" step="any">
+                 placeholder="0.00" min="0" step="any" inputmode="decimal">
           <button class="qty-100" id="qty100">100%</button>
           <span class="qty-unit" id="qtyUnit">برميل</span>
         </div>
@@ -182,16 +182,17 @@
     </div>
   </main>
 
-  <!-- ✅ Footer مع زر الاتصال الكروي في المنتصف -->
+  <!-- ✅ Footer — زر الاتصال الكروي في المنتصف مستقل -->
   <footer class="footer">
     <button class="footer-main-btn" id="btnChart">
       <span class="fmb-icon">📈</span>
       <span class="fmb-lbl">رسم بياني</span>
     </button>
 
-    <!-- ✅ زر الاتصال الكروي -->
-    <button class="footer-connect-btn disconnected" id="btnConnect" title="اتصال بالمحفظة">
-      <span id="btnConnectLbl">اتصال</span>
+    <!-- ✅ زر الاتصال — ws-connecting أصفر حتى يتصل Hyperliquid -->
+    <button class="footer-connect-btn ws-connecting" id="btnConnect" title="الاتصال بـ Hyperliquid">
+      <span class="cb-dot"></span>
+      <span class="cb-lbl">اتصال</span>
     </button>
 
     <button class="footer-main-btn footer-opts-btn" id="btnOptions">
@@ -201,7 +202,7 @@
   </footer>
 </div>
 
-<!-- شاشة الدخول القديمة — مخفية الآن (نستخدم modal بدلاً) -->
+<!-- شاشة الدخول القديمة — مخفية (نستخدم modal بدلاً) -->
 <div class="screen hidden" id="loginScreen">
   <div class="login-brand">
     <div class="login-icon">💧</div>
@@ -227,7 +228,7 @@
 
 <!-- ══ MODALS ══ -->
 
-<!-- ✅ modal تسجيل الدخول (يُفتح من زر اتصال) -->
+<!-- modal تسجيل الدخول (يُفتح من زر اتصال) -->
 <div class="modal-overlay" id="modalLogin">
   <div class="modal" style="max-width:440px;">
     <div class="modal-handle"></div>
@@ -277,7 +278,7 @@
   </div>
 </div>
 
-<!-- ✅ إغلاق صفقة — بسيط كما كان -->
+<!-- إغلاق صفقة -->
 <div class="modal-overlay overlay-fs" id="modalClose">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -379,14 +380,14 @@
   </div>
 </div>
 
-<!-- ✅ الإيداع — حد أدنى $5 -->
+<!-- الإيداع — حد أدنى $5 -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
     <h3 class="modal-title">💵 إيداع USDC</h3>
     <div class="form-group">
       <label>المبلغ (USDC)</label>
-      <input type="number" class="form-input" id="depositAmount" placeholder="10" min="5">
+      <input type="number" class="form-input" id="depositAmount" placeholder="10" min="5" inputmode="decimal">
     </div>
     <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال 1–3 دقائق.</p>
     <div class="modal-buttons">
@@ -407,7 +408,7 @@
     </div>
     <div class="form-group">
       <label>المبلغ المُرسَل (USDC)</label>
-      <input type="number" class="form-input" id="withdrawAmount" placeholder="21" min="2">
+      <input type="number" class="form-input" id="withdrawAmount" placeholder="21" min="2" inputmode="decimal">
     </div>
     <div class="withdraw-preview hidden" id="withdrawPreview">
       <div class="wp-row"><span>📤 المبلغ المُرسَل</span><span class="wp-val" id="wpSend">—</span></div>
