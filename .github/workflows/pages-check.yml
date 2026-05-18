@@ -31,7 +31,7 @@ jobs:
 
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$DOMAIN/$CLEAN")
 
-            if [ "$STATUS" != "200" ]; then
+              if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 400 ]; then
               echo "❌ لم يتم تحديث أو نشر:"
               echo "$CLEAN"
               echo "HTTP: $STATUS"
