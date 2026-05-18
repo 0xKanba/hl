@@ -12,24 +12,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: npm install
+      - name: Install
+        run: npm install
 
-      - run: npm run build
+      - name: Build
+        run: npm run build
 
-      - name: Check deployment files
+      - name: Verify dist folder
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ dist folder not found"
+            exit 1
+          fi
+
+      - name: Check missing files
         run: |
 
           FAILED=0
 
-          find src -type f | while read FILE
+          find . -type f \
+            ! -path "./dist/*" \
+            ! -path "./node_modules/*" \
+            ! -path "./.git/*" \
+            ! -path "./.github/*" \
+            ! -name "*.md" \
+            ! -name "package-lock.json" \
+            | while read FILE
           do
+
             NAME=$(basename "$FILE")
 
             if ! find dist -name "$NAME" | grep -q .
             then
-              echo "❌ $NAME لم ينشر"
+              echo "❌ لم ينشر: $NAME"
               FAILED=1
             fi
+
           done
 
           exit $FAILED
