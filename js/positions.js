@@ -124,7 +124,7 @@ function startFundingTimer() {
 /* ════ Render الصفقات ════ */
 let _posFingerprint = '';
 
-function resetPosFingerprint() { _posFingerprint = ''; }
+function resetPosFingerprint() { _posFingerprint = null; }
 
 function renderPositions() {
   const count = State.positions.length;
