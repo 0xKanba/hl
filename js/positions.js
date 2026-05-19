@@ -47,13 +47,11 @@ function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
     const bal        = balance > 0 ? balance : notional / maxLev;
     const freeMargin = bal - notional * mmFrac;
     if (freeMargin <= 0) {
-      /* الرصيد لا يكفي حتى الهامش */
       liq = side > 0 ? entryPxOz * 0.99 : entryPxOz * 1.01;
     } else {
       liq = entryPxOz - side * freeMargin / absSize;
     }
   } else {
-    /* Isolated — معادلة مباشرة */
     liq = side > 0
       ? entryPxOz * (1 - 1 / maxLev + mmFrac)
       : entryPxOz * (1 + 1 / maxLev - mmFrac);
@@ -93,11 +91,9 @@ function updateFundingFromPositions(positions) {
     const pos  = p.position, coin = pos.coin || '';
     const raw  = coin.includes(':') ? coin.split(':')[1] : coin;
     const sym  = raw === 'GOLD' ? 'XAU' : (COIN_TO_SYM[raw] || raw);
-    /* API: موجب = دفعت → نعرض معكوساً: موجب = ربحت */
     acc[sym] = -parseFloat(pos.cumFunding?.sinceOpen || 0);
   }
   State.fundingRates = acc;
-  /* تحديث عناصر DOM الموجودة بدون إعادة بناء */
   Object.entries(acc).forEach(([sym, usd]) => {
     document.querySelectorAll(`[data-funding-sym="${sym}"]`).forEach(el => {
       el.textContent = `${usd >= 0 ? '+' : '-'}$${Math.abs(usd).toFixed(4)}`;
@@ -122,7 +118,7 @@ function startFundingTimer() {
 }
 
 /* ════ Render الصفقات ════ */
-let _posFingerprint = '';
+let _posFingerprint = null;
 
 function resetPosFingerprint() { _posFingerprint = null; }
 
@@ -148,7 +144,6 @@ function renderPositions() {
       pEl.className   = `pos-pnl ${pnl >= 0 ? 'pos' : 'neg'}`;
     }
 
-    /* حجم المركز الحي */
     const szEl = document.querySelector(`[data-sz-idx="${i}"]`);
     if (szEl) {
       const sym    = shortCoinPos(p.position.coin);
@@ -159,7 +154,6 @@ function renderPositions() {
       szEl.textContent = `${Math.abs(disp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}`;
     }
 
-    /* السعر الحالي */
     const cpEl = document.querySelector(`[data-curpx-idx="${i}"]`);
     if (cpEl) {
       const sym = shortCoinPos(p.position.coin);
@@ -168,7 +162,6 @@ function renderPositions() {
       cpEl.textContent = cur ? `$${fmt(cur, a.pxDp)}` : '—';
     }
 
-    /* سعر التصفية */
     const liqEl = document.querySelector(`[data-liq-idx="${i}"]`);
     if (liqEl) {
       const sym     = shortCoinPos(p.position.coin);
@@ -218,7 +211,6 @@ function renderPositions() {
     const fundSign  = fundUsd >= 0 ? '+' : '-';
     const fundCls   = fundUsd >= 0 ? 'pos' : 'neg';
 
-    /* سعر التصفية للعرض */
     const entryOz  = parseFloat(pos.entryPx || 0);
     const bal      = State.balance?.total || 0;
     const liqInfo  = liqPriceDisplay(sym, entryOz, sziOz, bal);
