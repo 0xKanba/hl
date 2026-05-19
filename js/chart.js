@@ -26,7 +26,14 @@ const ChartModule = (function () {
   /* ──────────────────────────────────────
      Resolution mapping
   ────────────────────────────────────── */
-  const RES_TO_HL = { '1':'1m','5':'5m','15':'15m','60':'1h','240':'4h','1D':'1d' };
+  const RES_TO_HL = {
+    '1':  '1m',
+    '5':  '5m',
+    '15': '15m',
+    '60': '1h',
+    '240':'4h',
+    '1D': '1d'
+  };
 
   /* ──────────────────────────────────────
      Asset helpers
@@ -38,7 +45,8 @@ const ChartModule = (function () {
     return !!(typeof ASSETS !== 'undefined' && ASSETS[sym]?.gram);
   }
   function _a(sym) {
-    return (typeof ASSETS !== 'undefined' && ASSETS[sym]) || { pxDp:2, szDp:2, name:sym, unit:'', icon:'📊', lev:10, presets:[1], idx:0, cross:true };
+    return (typeof ASSETS !== 'undefined' && ASSETS[sym]) ||
+      { pxDp:2, szDp:2, name:sym, unit:'', icon:'📊', lev:10, presets:[1], idx:0, cross:true };
   }
 
   /* ──────────────────────────────────────
@@ -58,11 +66,14 @@ const ChartModule = (function () {
       if (typeof ASSETS === 'undefined') { cb([]); return; }
       const q = query.toLowerCase();
       cb(Object.keys(ASSETS).map(sym => ({
-        symbol: sym, full_name: sym, ticker: sym,
+        symbol:      sym,
+        full_name:   sym,
+        ticker:      sym,
         description: ASSETS[sym].name || sym,
-        exchange: 'Hyperliquid', type: 'commodity',
+        exchange:    'Hyperliquid',
+        type:        'commodity',
       })).filter(s =>
-        s.symbol.toLowerCase().includes(q) || s.description.includes(query)
+        s.symbol.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)
       ));
     },
 
@@ -103,7 +114,12 @@ const ChartModule = (function () {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: 'candleSnapshot',
-            req:  { coin: _coin(sym), interval: hlIv, startTime: from * 1000, endTime: to * 1000 }
+            req:  {
+              coin:      _coin(sym),
+              interval:  hlIv,
+              startTime: from * 1000,
+              endTime:   to   * 1000
+            }
           })
         });
         const raw = await res.json();
@@ -120,7 +136,9 @@ const ChartModule = (function () {
           volume: +c.v || 0,
         })).sort((a, b) => a.time - b.time);
         onHistory(bars, { noData: bars.length === 0 });
-      } catch (e) { onError(e.message); }
+      } catch (e) {
+        onError(e.message);
+      }
     },
 
     subscribeBars(symInfo, resolution, onRealtime, uid) {
@@ -142,11 +160,15 @@ const ChartModule = (function () {
     const hlIv = RES_TO_HL[resolution] || '1h';
     if (_rtWs && _rtWs.readyState === WebSocket.OPEN && _rtCoin === coin && _rtIv === hlIv) return;
     _disconnectRt();
-    _rtCoin = coin; _rtIv = hlIv;
+    _rtCoin = coin;
+    _rtIv   = hlIv;
     try {
       _rtWs = new WebSocket(HL_WS);
       _rtWs.onopen = () => {
-        _rtWs?.send(JSON.stringify({ method:'subscribe', subscription:{ type:'candle', coin, interval:hlIv } }));
+        _rtWs?.send(JSON.stringify({
+          method: 'subscribe',
+          subscription: { type: 'candle', coin, interval: hlIv }
+        }));
       };
       _rtWs.onmessage = e => {
         try {
@@ -169,13 +191,15 @@ const ChartModule = (function () {
         if (_visible && Object.keys(_subscribers).length)
           _rtTimer = setTimeout(() => _connectRt(_sym, _currentRes), 4000);
       };
+      _rtWs.onerror = () => {};
     } catch {}
   }
 
   function _disconnectRt() {
     clearTimeout(_rtTimer);
     if (_rtWs) { try { _rtWs.close(); } catch {} _rtWs = null; }
-    _rtCoin = null; _rtIv = null;
+    _rtCoin = null;
+    _rtIv   = null;
   }
 
   /* ──────────────────────────────────────
@@ -210,7 +234,7 @@ const ChartModule = (function () {
   border: 1.5px solid rgba(255,140,66,.25);
   background: rgba(255,140,66,.12);
   font-family: 'Cairo', sans-serif; white-space: nowrap; cursor: pointer;
-  transition: filter .15s;
+  -webkit-tap-highlight-color: transparent;
 }
 .c-back:active { opacity: .7; }
 .c-asset-info { display: flex; align-items: center; gap: 5px; }
@@ -219,6 +243,7 @@ const ChartModule = (function () {
 .c-lock-btn {
   background: none; border: none; font-size: 16px; cursor: pointer;
   color: var(--text-secondary); padding: 4px; line-height: 1;
+  -webkit-tap-highlight-color: transparent;
 }
 .c-lock-btn:active { opacity: .6; }
 
@@ -238,6 +263,7 @@ const ChartModule = (function () {
   display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 2px;
   transition: transform .12s;
+  -webkit-tap-highlight-color: transparent;
 }
 .cbt-btn:active { transform: scale(.93); }
 .cbt-buy  { background: linear-gradient(150deg, #2da44e, #1a7f37); box-shadow: 0 2px 10px rgba(0,180,70,.25); }
@@ -290,7 +316,9 @@ const ChartModule = (function () {
 .cf-row:last-child { border:none; }
 .cf-key { font-size:12px;color:var(--text-secondary);font-weight:700; }
 .cf-val { font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text-primary); }
-.cf-val.g { color:#2da44e; } .cf-val.r { color:#e5534b; } .cf-val.w { color:var(--hc-warn,#ffd600); }
+.cf-val.g { color:#2da44e; }
+.cf-val.r { color:#e5534b; }
+.cf-val.w { color:var(--hc-warn,#ffd600); }
 .cf-btns { display:grid;grid-template-columns:1fr 1fr;gap:8px; }
 .cf-cancel {
   padding:12px;border-radius:999px;border:1.5px solid var(--border-strong);
@@ -367,9 +395,11 @@ const ChartModule = (function () {
      Update trade bar header per asset
   ────────────────────────────────────── */
   function _updateHeader(sym) {
-    const a = _a(sym);
-    const ic = document.getElementById('_cIcon'), nm = document.getElementById('_cName');
-    const qu = document.getElementById('_cQtyUnit'), qi = document.getElementById('_cQty');
+    const a  = _a(sym);
+    const ic = document.getElementById('_cIcon');
+    const nm = document.getElementById('_cName');
+    const qu = document.getElementById('_cQtyUnit');
+    const qi = document.getElementById('_cQty');
     if (ic) ic.textContent = a.icon || '📊';
     if (nm) nm.textContent = a.name || sym;
     if (qu) qu.textContent = a.unit || '';
@@ -391,7 +421,6 @@ const ChartModule = (function () {
      Build / destroy TradingView widget
   ────────────────────────────────────── */
   function _buildWidget(sym) {
-    /* Destroy existing */
     if (_widget) {
       try { _widget.remove(); } catch {}
       _widget = null;
@@ -399,29 +428,33 @@ const ChartModule = (function () {
     _subscribers = {};
     _disconnectRt();
 
+    /* Clear container so TV has a clean mount */
+    const container = document.getElementById('_tvContainer');
+    if (container) container.innerHTML = '';
+
     if (typeof TradingView === 'undefined') {
-      console.error('[ChartModule] TradingView not loaded — check /charting_library/charting_library.standalone.js');
+      console.error('[ChartModule] TradingView not loaded — ensure /charting_library/charting_library.standalone.js is included');
       return;
     }
 
     _currentRes = '60';
 
     _widget = new TradingView.widget({
-      autosize:           true,
-      symbol:             sym,
-      interval:           _currentRes,
-      container:          '_tvContainer',
-      datafeed:           _datafeed,
-      library_path:       '/charting_library/',
-      locale:             'ar',
-      timezone:           'Asia/Baghdad',
-      theme:              'Dark',
-      style:              '1',  /* Candlestick */
-      debug:              false,
-      enable_publishing:  false,
+      autosize:            true,
+      symbol:              sym,
+      interval:            _currentRes,
+      container:           '_tvContainer',
+      datafeed:            _datafeed,
+      library_path:        '/charting_library/',
+      locale:              'ar',
+      timezone:            'Asia/Baghdad',
+      theme:               'Dark',
+      style:               '1',
+      debug:               false,
+      enable_publishing:   false,
       allow_symbol_change: false,
-      save_image:         false,
-      loading_screen: { backgroundColor: '#131722', foregroundColor: '#ff8c42' },
+      save_image:          false,
+      loading_screen:      { backgroundColor: '#131722', foregroundColor: '#ff8c42' },
 
       disabled_features: [
         'header_symbol_search',
@@ -448,30 +481,28 @@ const ChartModule = (function () {
       ],
 
       overrides: {
-        /* Candles */
-        'mainSeriesProperties.candleStyle.upColor':          '#26a69a',
-        'mainSeriesProperties.candleStyle.downColor':        '#ef5350',
-        'mainSeriesProperties.candleStyle.borderUpColor':    '#26a69a',
-        'mainSeriesProperties.candleStyle.borderDownColor':  '#ef5350',
-        'mainSeriesProperties.candleStyle.wickUpColor':      '#26a69a',
-        'mainSeriesProperties.candleStyle.wickDownColor':    '#ef5350',
-        /* Pane */
-        'paneProperties.background':                         '#131722',
-        'paneProperties.backgroundType':                     'solid',
-        'paneProperties.vertGridProperties.color':           'rgba(255,255,255,0.04)',
-        'paneProperties.horzGridProperties.color':           'rgba(255,255,255,0.04)',
-        /* Scales */
-        'scalesProperties.textColor':                        '#9da0a3',
-        'scalesProperties.fontSize':                         11,
-        'scalesProperties.backgroundColor':                  '#1e2128',
+        'mainSeriesProperties.candleStyle.upColor':         '#26a69a',
+        'mainSeriesProperties.candleStyle.downColor':       '#ef5350',
+        'mainSeriesProperties.candleStyle.borderUpColor':   '#26a69a',
+        'mainSeriesProperties.candleStyle.borderDownColor': '#ef5350',
+        'mainSeriesProperties.candleStyle.wickUpColor':     '#26a69a',
+        'mainSeriesProperties.candleStyle.wickDownColor':   '#ef5350',
+        'paneProperties.background':                        '#131722',
+        'paneProperties.backgroundType':                    'solid',
+        'paneProperties.vertGridProperties.color':          'rgba(255,255,255,0.04)',
+        'paneProperties.horzGridProperties.color':          'rgba(255,255,255,0.04)',
+        'scalesProperties.textColor':                       '#9da0a3',
+        'scalesProperties.fontSize':                        11,
+        'scalesProperties.backgroundColor':                 '#1e2128',
       },
     });
 
-    /* Track resolution changes from the built-in header */
     _widget.onChartReady(() => {
       _updateBtnPx();
       try {
-        _widget.activeChart().onIntervalChanged().subscribe(null, iv => { _currentRes = iv; });
+        _widget.activeChart().onIntervalChanged().subscribe(null, iv => {
+          _currentRes = iv;
+        });
       } catch {}
     });
   }
@@ -484,12 +515,14 @@ const ChartModule = (function () {
       return typeof toast !== 'undefined' && toast('سجّل الدخول أولاً', 'err');
 
     const qty = parseFloat(document.getElementById('_cQty')?.value || 0);
-    if (!qty || qty <= 0) return typeof toast !== 'undefined' && toast('أدخل الكمية', 'err');
+    if (!qty || qty <= 0)
+      return typeof toast !== 'undefined' && toast('أدخل الكمية', 'err');
 
     const a    = _a(_sym);
     const gram = _isGram(_sym);
     const mid  = (typeof State !== 'undefined' ? State.prices[_sym]?.mid : 0) || 0;
-    if (!mid) return typeof toast !== 'undefined' && toast('لا يوجد سعر', 'err');
+    if (!mid)
+      return typeof toast !== 'undefined' && toast('لا يوجد سعر', 'err');
 
     const midOz = gram ? mid * TL : mid;
     const qtyOz = gram ? qty / TL : qty;
@@ -503,17 +536,18 @@ const ChartModule = (function () {
     if (!wrap) return;
 
     const ov = document.createElement('div');
-    ov.id = '_cfOv'; ov.className = 'cf-ov';
+    ov.id = '_cfOv';
+    ov.className = 'cf-ov';
     ov.innerHTML = `
       <div class="cf-card">
         <div class="cf-hdl"></div>
-        <div class="cf-title" style="color:${isBuy?'#2da44e':'#e5534b'}">
-          ${a.icon||'📊'} ${isBuy?'شراء ▲':'بيع ▼'} — ${a.name}
+        <div class="cf-title" style="color:${isBuy ? '#2da44e' : '#e5534b'}">
+          ${a.icon || '📊'} ${isBuy ? 'شراء ▲' : 'بيع ▼'} — ${a.name}
         </div>
         <div class="cf-rows">
           <div class="cf-row">
             <span class="cf-key">الكمية</span>
-            <span class="cf-val">${qty.toFixed(gram?2:a.szDp)} ${a.unit}</span>
+            <span class="cf-val">${qty.toFixed(gram ? 2 : a.szDp)} ${a.unit}</span>
           </div>
           <div class="cf-row">
             <span class="cf-key">السعر</span>
@@ -529,13 +563,13 @@ const ChartModule = (function () {
           </div>
           <div class="cf-row">
             <span class="cf-key">التصفية التقريبية</span>
-            <span class="cf-val ${isBuy?'r':'g'}">≈ $${liqD}</span>
+            <span class="cf-val ${isBuy ? 'r' : 'g'}">≈ $${liqD}</span>
           </div>
         </div>
         <div class="cf-btns">
           <button class="cf-cancel" id="_cfC">إلغاء ✕</button>
-          <button class="cf-exec ${isBuy?'g':'r'}" id="_cfX">
-            ${isBuy?'✅ تأكيد الشراء':'✅ تأكيد البيع'}
+          <button class="cf-exec ${isBuy ? 'g' : 'r'}" id="_cfX">
+            ${isBuy ? '✅ تأكيد الشراء' : '✅ تأكيد البيع'}
           </button>
         </div>
       </div>`;
@@ -544,10 +578,14 @@ const ChartModule = (function () {
     ov.addEventListener('click', e => { if (e.target === ov) _hideCf(); });
     document.getElementById('_cfC').onclick = _hideCf;
     document.getElementById('_cfX').onclick = () =>
-      typeof requirePin !== 'undefined' ? requirePin(() => _execTrade(isBuy, qty)) : _execTrade(isBuy, qty);
+      typeof requirePin !== 'undefined'
+        ? requirePin(() => _execTrade(isBuy, qty))
+        : _execTrade(isBuy, qty);
   }
 
-  function _hideCf() { document.getElementById('_cfOv')?.remove(); }
+  function _hideCf() {
+    document.getElementById('_cfOv')?.remove();
+  }
 
   async function _execTrade(isBuy, qty) {
     if (!State?.wallet) return;
@@ -555,34 +593,55 @@ const ChartModule = (function () {
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="cf-spin"></span>'; }
 
     const gram  = _isGram(_sym);
-    const aApi  = gram ? (typeof ASSETS !== 'undefined' ? ASSETS['GOLD'] : _a(_sym)) : _a(_sym);
-    const mid   = State.prices[_sym]?.mid || 0;
+    const aApi  = gram
+      ? (typeof ASSETS !== 'undefined' ? ASSETS['GOLD'] : _a(_sym))
+      : _a(_sym);
+    const mid   = (typeof State !== 'undefined' ? State.prices[_sym]?.mid : 0) || 0;
     const midOz = gram ? mid * TL : mid;
     if (!midOz) { _hideCf(); return; }
     const qtyOz = gram ? qty / TL : qty;
 
     try {
-      try { await hlExchange({ type:'updateLeverage', asset:aApi.idx, isCross:aApi.cross, leverage:aApi.lev }); } catch {}
+      try {
+        await hlExchange({
+          type: 'updateLeverage',
+          asset: aApi.idx, isCross: aApi.cross, leverage: aApi.lev
+        });
+      } catch {}
+
       await hlExchange({
         type: 'order',
-        orders: [{ a:aApi.idx, b:isBuy,
+        orders: [{
+          a: aApi.idx,
+          b: isBuy,
           p: wirePx(midOz * (isBuy ? 1.05 : 0.95), aApi.szDp),
           s: wireSz(qtyOz, aApi.szDp),
-          r: false, t: { limit:{ tif:'Ioc' } }
+          r: false,
+          t: { limit: { tif: 'Ioc' } }
         }],
         grouping: 'na'
       });
+
       _hideCf();
       const dispA = _a(_sym);
-      const disp  = gram ? qty.toFixed(2) + ' غرام' : qty.toFixed(dispA.szDp) + ' ' + dispA.unit;
-      typeof toast !== 'undefined' && toast(`✅ ${dispA.icon||''} ${isBuy?'شراء':'بيع'} ${disp}`, 'ok', 4000);
+      const disp  = gram
+        ? qty.toFixed(2) + ' غرام'
+        : qty.toFixed(dispA.szDp) + ' ' + dispA.unit;
+      typeof toast !== 'undefined' &&
+        toast(`✅ ${dispA.icon || ''} ${isBuy ? 'شراء' : 'بيع'} ${disp}`, 'ok', 4000);
       if (typeof pollAccount !== 'undefined') setTimeout(pollAccount, 2000);
+
     } catch (e) {
       typeof toast !== 'undefined' && toast(
-        typeof tradeErr !== 'undefined' ? tradeErr(e.message) : '❌ ' + e.message.slice(0, 100),
+        typeof tradeErr !== 'undefined'
+          ? tradeErr(e.message)
+          : '❌ ' + e.message.slice(0, 100),
         'err', 5000
       );
-      if (btn) { btn.disabled = false; btn.innerHTML = isBuy ? '✅ تأكيد الشراء' : '✅ تأكيد البيع'; }
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = isBuy ? '✅ تأكيد الشراء' : '✅ تأكيد البيع';
+      }
     }
   }
 
@@ -607,12 +666,12 @@ const ChartModule = (function () {
     }
     _subscribers = {};
     _disconnectRt();
+    const container = document.getElementById('_tvContainer');
+    if (container) container.innerHTML = '';
     document.getElementById('chartScreen')?.classList.add('hidden');
   }
 
   function switchInterval(iv) {
-    /* TradingView interval controls are in the built-in header.
-       If needed externally: _widget.activeChart().setResolution(iv, cb) */
     if (!_widget) return;
     try {
       _widget.onChartReady(() => {
@@ -625,14 +684,11 @@ const ChartModule = (function () {
     if (!_visible || sym === _sym) return;
     _sym = sym;
     _updateHeader(sym);
-    /* Rebuild widget with new symbol — safest approach */
     _buildWidget(sym);
   }
 
   function refreshLines() {
-    /* TradingView built-in series lines are not needed here
-       since the chart handles price display natively.
-       Reserved for future createPositionLine() enhancement. */
+    /* Reserved for future position line integration */
   }
 
   return { open, close, switchInterval, switchAssetChart, refreshLines };
