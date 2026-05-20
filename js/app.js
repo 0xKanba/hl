@@ -3,6 +3,7 @@
    ✅ تحديث الحساب كل 4 ثواني
    ✅ تحديث الأسعار كل 3 ثواني
    ✅ وضع الزائر + زر الاتصال
+   ✅ نظام مظهر Dark/Light مع AMOLED
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -43,6 +44,38 @@ function _initMonthsPanel() {
   });
 }
 
+/* ════ نظام المظهر — Dark AMOLED / Light ════ */
+function _applyTheme(theme, animate) {
+  if (animate) {
+    document.documentElement.classList.add('theme-transitioning');
+    setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 320);
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('btnTheme');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+function _initTheme() {
+  /* الأولوية: localStorage → تفضيل النظام */
+  const saved      = localStorage.getItem('hl_theme');
+  const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme      = saved || (systemDark ? 'dark' : 'light');
+  _applyTheme(theme, false);
+
+  /* استماع لتغيير تفضيل النظام (بدون override يدوي) */
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (!localStorage.getItem('hl_theme'))
+      _applyTheme(e.matches ? 'dark' : 'light', true);
+  });
+}
+
+function _toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next    = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('hl_theme', next);
+  _applyTheme(next, true);
+}
+
 /* ════ Options Context Menu ════ */
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
@@ -69,6 +102,10 @@ function _initOptsBackdrop() {
 
 /* ════ الحدث الرئيسي ════ */
 document.addEventListener('DOMContentLoaded', () => {
+
+  /* ── مظهر النظام ── */
+  _initTheme();
+  document.getElementById('btnTheme').onclick = _toggleTheme;
 
   _startDatetimeClock();
   _initMonthsPanel();
@@ -288,9 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('loginScreen')?.classList.add('hidden');
     $('appScreen')?.classList.remove('hidden');
     login().then(() => {
-      /* ✅ بدء استعلامات الحساب كل 4 ثواني */
       State.timers.push(setInterval(pollAccount, 4000));
-      /* ✅ بدء استعلامات الأسعار كل 3 ثواني */
       State.timers.push(setInterval(pollPrices, 3000));
       startSessionPolling();
       startFundingTimer();
@@ -299,7 +334,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   } else {
     initGuestMode();
-    /* ✅ أسعار كل 3 ثواني حتى للزائر */
     State.timers.push(setInterval(pollPrices, 3000));
   }
 
