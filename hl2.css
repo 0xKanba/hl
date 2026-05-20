@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════
    hl2.css — سيولة · إضافات التصميم
-   ✅ زر اتصال كروي — خلفية كاملة واضحة
+   ✅ theme-aware — dark/light
    ✅ Footer · Options · Trade Panel · Guest Banner
 ═══════════════════════════════════════════════════════ */
 
@@ -49,60 +49,36 @@
 .fmb-lbl  { font-size: 14px; font-weight: 800; }
 
 /* ══════════════════════════════════════════════════════
-   ✅ زر الاتصال الكروي — مستقل تماماً
-   خلفية solid كاملة — ليس border فقط
+   زر الاتصال الكروي
 ══════════════════════════════════════════════════════ */
 .footer-connect-btn {
-  width: 54px;
-  height: 54px;
-  min-width: 54px;
-  border-radius: 50%;
-  border: none;
-  outline: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .2px;
-  line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
+  width: 54px; height: 54px; min-width: 54px;
+  border-radius: 50%; border: none; outline: none;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2px; font-family: var(--font-ui);
+  font-size: 9px; font-weight: 900;
+  letter-spacing: .2px; line-height: 1;
+  cursor: pointer; flex-shrink: 0;
+  position: relative; overflow: hidden;
   transition: transform .15s;
   -webkit-tap-highlight-color: transparent;
 }
 .footer-connect-btn:active { transform: scale(.87); }
 
-/* نقطة الحالة */
 .cb-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.95);
-  flex-shrink: 0;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,.95); flex-shrink: 0;
   box-shadow: 0 0 5px rgba(255,255,255,.8);
 }
-
-/* النص */
 .cb-lbl {
-  font-size: 9px; font-weight: 900;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0,0,0,.4);
-  white-space: nowrap;
+  font-size: 9px; font-weight: 900; color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,.4); white-space: nowrap;
 }
 
-/* ── متصل بـ Hyperliquid — أخضر ── */
 .footer-connect-btn.ws-connected {
   background: linear-gradient(145deg, #00e676, #00a152);
-  box-shadow:
-    0 0 0 3px rgba(0,230,118,.30),
-    0 0 20px rgba(0,230,118,.65),
-    0 0 40px rgba(0,230,118,.25),
-    inset 0 1px 0 rgba(255,255,255,.35);
+  box-shadow: 0 0 0 3px rgba(0,230,118,.30), 0 0 20px rgba(0,230,118,.65), 0 0 40px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.35);
 }
 .footer-connect-btn.ws-connected .cb-dot {
   background: #fff;
@@ -111,71 +87,51 @@
 }
 @keyframes dotPulse {
   0%,100% { opacity:1; transform:scale(1); }
-  50%     { opacity:.5; transform:scale(.75); }
+  50%      { opacity:.5; transform:scale(.75); }
 }
 
-/* ── جاري الاتصال — أصفر ── */
 .footer-connect-btn.ws-connecting {
   background: linear-gradient(145deg, #ffd600, #c8a000);
-  box-shadow:
-    0 0 0 3px rgba(255,214,0,.30),
-    0 0 16px rgba(255,214,0,.60),
-    inset 0 1px 0 rgba(255,255,255,.3);
+  box-shadow: 0 0 0 3px rgba(255,214,0,.30), 0 0 16px rgba(255,214,0,.60), inset 0 1px 0 rgba(255,255,255,.3);
   animation: connectPulse 1.4s ease-in-out infinite;
 }
 .footer-connect-btn.ws-connecting .cb-lbl { color: #1a1200; text-shadow: none; }
 .footer-connect-btn.ws-connecting .cb-dot { background: rgba(26,18,0,.7); box-shadow: none; }
 @keyframes connectPulse {
   0%,100% { box-shadow: 0 0 0 3px rgba(255,214,0,.30), 0 0 16px rgba(255,214,0,.60); }
-  50%     { box-shadow: 0 0 0 6px rgba(255,214,0,.15), 0 0 30px rgba(255,214,0,.85); }
+  50%      { box-shadow: 0 0 0 6px rgba(255,214,0,.15), 0 0 30px rgba(255,214,0,.85); }
 }
 
-/* ── منقطع — أحمر ── */
 .footer-connect-btn.ws-disconnected {
   background: linear-gradient(145deg, #ff3d3d, #cc0000);
-  box-shadow:
-    0 0 0 3px rgba(255,61,61,.30),
-    0 0 16px rgba(255,61,61,.60),
-    inset 0 1px 0 rgba(255,255,255,.2);
+  box-shadow: 0 0 0 3px rgba(255,61,61,.30), 0 0 16px rgba(255,61,61,.60), inset 0 1px 0 rgba(255,255,255,.2);
 }
 .footer-connect-btn.ws-disconnected .cb-dot {
-  background: #fff;
-  box-shadow: 0 0 5px rgba(255,255,255,.7);
+  background: #fff; box-shadow: 0 0 5px rgba(255,255,255,.7);
 }
 
 /* ──────────────────────────────────────
    Guest Banner
 ────────────────────────────────────── */
 .guest-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 9px 14px;
   background: color-mix(in srgb, var(--hc-ac) 12%, var(--bg-elev));
   border-bottom: 1.5px solid color-mix(in srgb, var(--hc-ac) 40%, transparent);
-  flex-shrink: 0;
-  animation: slideDownBanner .22s ease;
+  flex-shrink: 0; animation: slideDownBanner .22s ease;
 }
 .guest-banner.hidden { display: none !important; }
 @keyframes slideDownBanner {
   from { opacity:0; transform:translateY(-8px); }
   to   { opacity:1; transform:translateY(0); }
 }
-.gb-msg {
-  font-size: 12px; font-weight: 700;
-  color: var(--text-secondary); flex: 1; line-height: 1.4;
-}
+.gb-msg { font-size: 12px; font-weight: 700; color: var(--text-secondary); flex: 1; line-height: 1.4; }
 .gb-btn {
   background: linear-gradient(135deg, var(--hc-ac), #a8502f);
-  color: #fff; border: none;
-  border-radius: var(--r-pill);
-  padding: 7px 16px;
-  font-size: 13px; font-weight: 900;
-  font-family: var(--font-ui);
-  cursor: pointer; white-space: nowrap;
-  box-shadow: var(--glow-ac);
-  transition: filter .15s; flex-shrink: 0;
+  color: #fff; border: none; border-radius: var(--r-pill);
+  padding: 7px 16px; font-size: 13px; font-weight: 900;
+  font-family: var(--font-ui); cursor: pointer; white-space: nowrap;
+  box-shadow: var(--glow-ac); transition: filter .15s; flex-shrink: 0;
 }
 .gb-btn:hover  { filter: brightness(1.1); }
 .gb-btn:active { transform: scale(.94); }
