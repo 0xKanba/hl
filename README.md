@@ -76,6 +76,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 هيكل المشروع
@@ -83,8 +84,6 @@
 ```text
 .
 ├── README.md
-├── app.js
-├── chart.js
 ├── charting_library
 │   ├── bundles
 │   │   ├── 1049.3418d3509b4f6a41c2eb.css
@@ -751,6 +750,6 @@
 ├── x2.png
 └── x3.png
 
-11 directories, 658 files
+11 directories, 656 files
 ```
 <!-- TREE END -->
