@@ -40,7 +40,7 @@ jobs:
           # بناء الهيكل الجديد مع إضافة العنوان داخل العلامات
           echo "<!-- TREE START -->" > new_tree.txt
           echo "" >> new_tree.txt
-          echo "# 📂 هيكل المشروع" >> new_tree.txt
+          echo "# 📂 repo tree" >> new_tree.txt
           echo "" >> new_tree.txt
           echo '```text' >> new_tree.txt
           cat tree.txt >> new_tree.txt
