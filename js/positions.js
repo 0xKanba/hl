@@ -1,9 +1,3 @@
-/* ═══════════════════════════════════════
-   positions.js
-   ✅ سعر التصفية رقم حقيقي (لا "آمن")
-   ✅ لا وميض — تحديث نص فقط
-   ✅ resetPosFingerprint للتحديث الفوري
-═══════════════════════════════════════ */
 'use strict';
 
 function shortCoinPos(c) {
@@ -29,20 +23,13 @@ function parseTpslFromOrders(orders, coin) {
   return r;
 }
 
-/* ════ سعر التصفية — معادلة Hyperliquid الرسمية ════
-   Isolated Long:  liq = entryPx * (1 - 1/lev + mmFrac)
-   Isolated Short: liq = entryPx * (1 + 1/lev - mmFrac)
-   Cross:          يستخدم الرصيد الكلي
-   mmFrac = 0.5 / lev  (نصف الهامش الأولي)
-*/
 function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
-  const side     = sziOz > 0 ? 1 : -1;
-  const absSize  = Math.abs(sziOz);
-  const mmFrac   = 0.5 / maxLev;
+  const side    = sziOz > 0 ? 1 : -1;
+  const absSize = Math.abs(sziOz);
+  const mmFrac  = 0.5 / maxLev;
   const notional = absSize * entryPxOz;
   let liq;
-
   if (isCross) {
     const bal        = balance > 0 ? balance : notional / maxLev;
     const freeMargin = bal - notional * mmFrac;
@@ -56,13 +43,11 @@ function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
       ? entryPxOz * (1 - 1 / maxLev + mmFrac)
       : entryPxOz * (1 + 1 / maxLev - mmFrac);
   }
-
   if (liq <= 0) return 0.01;
   if (side === -1 && liq > entryPxOz * 8) return null;
   return liq;
 }
 
-/* ✅ يُرجع دائماً رقماً — لا كلمة "آمن" */
 function liqPriceDisplay(sym, entryPxOz, sziOz, balance) {
   const a      = ASSETS[sym] || ASSETS['GOLD'] || { lev: 20, cross: false, pxDp: 2, gram: false };
   const isGram = !!a.gram;
@@ -84,7 +69,7 @@ function calcSlPrice(ep, szi, sl) {
   return sz > 0 ? e - sl / sz : e + sl / Math.abs(sz);
 }
 
-/* ════ رسوم التمويل من cumFunding.sinceOpen ════ */
+/* ════ Funding ════ */
 function updateFundingFromPositions(positions) {
   const acc = {};
   for (const p of positions || []) {
@@ -117,7 +102,8 @@ function startFundingTimer() {
   State._fundingTimer = setInterval(fetchFundingRates, 60_000);
 }
 
-/* ════ Render الصفقات ════ */
+/* ════ Render ════ */
+/* ✅ null sentinel — empty string '' equals '' causing ghost cards bug */
 let _posFingerprint = null;
 
 function resetPosFingerprint() { _posFingerprint = null; }
@@ -125,7 +111,7 @@ function resetPosFingerprint() { _posFingerprint = null; }
 function renderPositions() {
   const count = State.positions.length;
   const fp    = State.positions.map(p =>
-    `${p.position.coin}|${p.position.szi}|${p.tpsl?.tp || ''}|${p.tpsl?.sl || ''}`
+    `${p.position.coin}|${p.position.szi}|${p.tpsl?.tp||''}|${p.tpsl?.sl||''}`
   ).join(';');
 
   setTxt('positionsCount', count);
@@ -134,11 +120,10 @@ function renderPositions() {
 
   const totalPnl = State.positions.reduce((s, p) => s + parseFloat(p.position.unrealizedPnl || 0), 0);
 
-  /* تحديث سلس بدون إعادة بناء DOM */
+  /* Live-update existing DOM nodes without rebuild */
   State.positions.forEach((p, i) => {
-    const pnl = parseFloat(p.position.unrealizedPnl || 0);
-
-    const pEl = document.querySelector(`[data-pnl-idx="${i}"]`);
+    const pnl  = parseFloat(p.position.unrealizedPnl || 0);
+    const pEl  = document.querySelector(`[data-pnl-idx="${i}"]`);
     if (pEl) {
       pEl.textContent = `${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}`;
       pEl.className   = `pos-pnl ${pnl >= 0 ? 'pos' : 'neg'}`;
@@ -179,7 +164,7 @@ function renderPositions() {
     tEl.className   = `positions-pnl ${totalPnl >= 0 ? 'pos' : 'neg'}`;
   }
 
-  /* إعادة بناء DOM فقط عند تغيير حقيقي */
+  /* ✅ Full DOM rebuild only when structure changes */
   if (fp === _posFingerprint) return;
   _posFingerprint = fp;
 
@@ -210,30 +195,29 @@ function renderPositions() {
     const fundUsd   = State.fundingRates[sym] || State.fundingRates['GOLD'] || 0;
     const fundSign  = fundUsd >= 0 ? '+' : '-';
     const fundCls   = fundUsd >= 0 ? 'pos' : 'neg';
-
-    const entryOz  = parseFloat(pos.entryPx || 0);
-    const bal      = State.balance?.total || 0;
-    const liqInfo  = liqPriceDisplay(sym, entryOz, sziOz, bal);
+    const entryOz   = parseFloat(pos.entryPx || 0);
+    const bal       = State.balance?.total || 0;
+    const liqInfo   = liqPriceDisplay(sym, entryOz, sziOz, bal);
 
     return `<div class="position-item">
       <div class="pos-top">
         <div>
           <div class="pos-name">${a.icon} ${a.name}</div>
-          <div class="pos-dir ${isLong ? 'long' : 'short'}">${isLong ? '▲ شراء' : '▼ بيع'} · رافعة ${a.lev}x</div>
+          <div class="pos-dir ${isLong?'long':'short'}">${isLong?'▲ شراء':'▼ بيع'} · رافعة ${a.lev}x</div>
         </div>
         <div class="pos-right">
-          <div class="pos-pnl ${pCls}" data-pnl-idx="${i}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}</div>
-          <div class="pos-size" data-sz-idx="${i}">${Math.abs(sziDisp).toFixed(isGram ? 2 : a.szDp)} ${a.unit}</div>
+          <div class="pos-pnl ${pCls}" data-pnl-idx="${i}">${pnl>=0?'+':''}$${fmt(pnl,2)}</div>
+          <div class="pos-size" data-sz-idx="${i}">${Math.abs(sziDisp).toFixed(isGram?2:a.szDp)} ${a.unit}</div>
         </div>
       </div>
       <div class="pos-data-grid">
         <div class="pos-data-item">
           <span class="pos-data-label">سعر الدخول</span>
-          <span class="pos-data-value">$${fmt(entryDisp, a.pxDp)}</span>
+          <span class="pos-data-value">$${fmt(entryDisp,a.pxDp)}</span>
         </div>
         <div class="pos-data-item">
           <span class="pos-data-label">السعر الحالي</span>
-          <span class="pos-data-value" data-curpx-idx="${i}">${curPx ? `$${fmt(curPx, a.pxDp)}` : '—'}</span>
+          <span class="pos-data-value" data-curpx-idx="${i}">${curPx?`$${fmt(curPx,a.pxDp)}`:'—'}</span>
         </div>
         <div class="pos-data-item">
           <span class="pos-data-label">رسوم التمويل</span>
@@ -245,13 +229,13 @@ function renderPositions() {
         </div>
       </div>
       <div class="pos-tpsl-row">
-        <button class="tpsl-btn ${tpDisp ? 'tp-set' : 'tp-unset'}" onclick="openTP(${i})">
+        <button class="tpsl-btn ${tpDisp?'tp-set':'tp-unset'}" onclick="openTP(${i})">
           <span class="sub">🎯 جني الربح</span>
-          <span class="val">${tpDisp ? `$${fmt(tpDisp, a.pxDp)}` : 'تعيين'}</span>
+          <span class="val">${tpDisp?`$${fmt(tpDisp,a.pxDp)}`:'تعيين'}</span>
         </button>
-        <button class="tpsl-btn ${slDisp ? 'sl-set' : 'sl-unset'}" onclick="openSL(${i})">
+        <button class="tpsl-btn ${slDisp?'sl-set':'sl-unset'}" onclick="openSL(${i})">
           <span class="sub">🛡 وقف الخسارة</span>
-          <span class="val">${slDisp ? `$${fmt(slDisp, a.pxDp)}` : 'تعيين'}</span>
+          <span class="val">${slDisp?`$${fmt(slDisp,a.pxDp)}`:'تعيين'}</span>
         </button>
       </div>
       <div class="pos-actions-row">

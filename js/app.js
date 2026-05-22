@@ -1,13 +1,5 @@
-/* ═══════════════════════════════════════
-   app.js — تهيئة التطبيق وربط الأحداث
-   ✅ تحديث الحساب كل 4 ثواني
-   ✅ تحديث الأسعار كل 3 ثواني
-   ✅ وضع الزائر + زر الاتصال
-   ✅ نظام مظهر Dark/Light مع AMOLED
-═══════════════════════════════════════ */
 'use strict';
 
-/* ════ ساعة عربية UTC+3 ════ */
 const _AR_MONTHS = [
   'يناير','فبراير','مارس','أبريل','مايو','يونيو',
   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'
@@ -32,7 +24,6 @@ function _startDatetimeClock() {
   setInterval(tick, 1000);
 }
 
-/* ════ جدول الأشهر ════ */
 function _initMonthsPanel() {
   const bar   = document.getElementById('datetimeBar');
   const panel = document.getElementById('monthsPanel');
@@ -44,7 +35,7 @@ function _initMonthsPanel() {
   });
 }
 
-/* ════ نظام المظهر — Dark AMOLED / Light ════ */
+/* ════ Theme system ════ */
 function _applyTheme(theme, animate) {
   if (animate) {
     document.documentElement.classList.add('theme-transitioning');
@@ -56,27 +47,22 @@ function _applyTheme(theme, animate) {
 }
 
 function _initTheme() {
-  /* الأولوية: localStorage → تفضيل النظام */
-  const saved      = localStorage.getItem('hl_theme');
-  const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const theme      = saved || (systemDark ? 'dark' : 'light');
-  _applyTheme(theme, false);
-
-  /* استماع لتغيير تفضيل النظام (بدون override يدوي) */
+  const saved = localStorage.getItem('hl_theme');
+  const sys   = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  _applyTheme(saved || sys, false);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-    if (!localStorage.getItem('hl_theme'))
-      _applyTheme(e.matches ? 'dark' : 'light', true);
+    if (!localStorage.getItem('hl_theme')) _applyTheme(e.matches ? 'dark' : 'light', true);
   });
 }
 
 function _toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme') || 'dark';
-  const next    = current === 'dark' ? 'light' : 'dark';
+  const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
   localStorage.setItem('hl_theme', next);
   _applyTheme(next, true);
 }
 
-/* ════ Options Context Menu ════ */
+/* ════ Options menu ════ */
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
@@ -100,18 +86,17 @@ function _initOptsBackdrop() {
   ov.addEventListener('click', e => { if (e.target === ov) closeOptions(); });
 }
 
-/* ════ الحدث الرئيسي ════ */
+/* ════ DOMContentLoaded ════ */
 document.addEventListener('DOMContentLoaded', () => {
 
-  /* ── مظهر النظام ── */
   _initTheme();
-  document.getElementById('btnTheme').onclick = _toggleTheme;
+  const themeBtn = document.getElementById('btnTheme');
+  if (themeBtn) themeBtn.onclick = _toggleTheme;
 
   _startDatetimeClock();
   _initMonthsPanel();
   _initOptsBackdrop();
 
-  /* ── modal تسجيل الدخول ── */
   $('loginBtn').onclick     = login;
   $('privateKey').onkeydown = e => e.key === 'Enter' && login();
   $('toggleKey').onclick    = () => {
@@ -122,64 +107,39 @@ document.addEventListener('DOMContentLoaded', () => {
   $('createWalletBtn')?.addEventListener('click', createNewWallet);
   $('loginClose')?.addEventListener('click', () => closeModal('modalLogin'));
 
-  /* ── تبديل الأصول ── */
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
     t.onclick = () => switchAsset(t.dataset.asset)
   );
 
-  /* ── Footer ── */
   $('btnChart').onclick = () => {
     if (State.isGuest) return _promptConnect();
     ChartModule.open(State.asset);
   };
 
-  /* ✅ زر الاتصال الكروي */
   $('btnConnect').onclick = () => {
-    if (State.isGuest) {
-      openLoginModal();
-    } else {
-      openOptions();
-    }
+    if (State.isGuest) openLoginModal();
+    else openOptions();
   };
 
   $('btnOptions').onclick = openOptions;
   $('optsClose').onclick  = closeOptions;
 
-  /* ── قائمة الخيارات ── */
-  $('optBalance').onclick = () => {
-    if (State.isGuest) return _promptConnect();
-    showBalance();
-  };
-  $('optHistory').onclick = () => {
-    if (State.isGuest) return _promptConnect();
-    showHistory();
-  };
-  $('optCalendar').onclick = () => {
-    if (State.isGuest) return _promptConnect();
-    if (typeof openCalendar === 'function') openCalendar();
-  };
-  $('optDeposit').onclick = () => {
-    if (State.isGuest) return _promptConnect();
-    openModal('modalDeposit');
-  };
-  $('optWithdraw').onclick = () => {
-    if (State.isGuest) return _promptConnect();
-    openModal('modalWithdraw');
-  };
-  $('optLogout').onclick = () => openModal('modalLogout');
+  $('optBalance').onclick  = () => { if (State.isGuest) return _promptConnect(); showBalance(); };
+  $('optHistory').onclick  = () => { if (State.isGuest) return _promptConnect(); showHistory(); };
+  $('optCalendar').onclick = () => { if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
+  $('optDeposit').onclick  = () => { if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
+  $('optWithdraw').onclick = () => { if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
+  $('optLogout').onclick   = () => openModal('modalLogout');
 
-  /* ── أزرار الشراء والبيع ── */
   $('btnBuy').onclick  = () => askTrade(true);
   $('btnSell').onclick = () => askTrade(false);
 
-  $('qtyInput').oninput = function () {
-    State.qty = parseFloat(this.value) || 0;
-  };
+  $('qtyInput').oninput = function () { State.qty = parseFloat(this.value) || 0; };
 
   $('qty100').onclick = () => {
     if (State.isGuest) return _promptConnect();
     const a   = ASSETS[State.asset];
-    const bal = State.balance?.total || 0;
+    const bal = State.balance?.available || State.balance?.total || 0;
     const px  = State.prices[State.asset]?.mid;
     if (!bal || !px) return toast('رصيد غير متاح', 'err');
     State.qty = parseFloat(wire((bal * a.lev) / px, a.szDp));
@@ -187,42 +147,32 @@ document.addEventListener('DOMContentLoaded', () => {
     toast(`✅ ${State.qty} ${a.unit}`, 'ok');
   };
 
-  /* ── تأكيد فتح صفقة ── */
   $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
   $('confirmExecute').onclick = () => requirePin(execTrade);
 
-  /* ── إغلاق صفقة ── */
   $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
   $('closeExecute').onclick = () => requirePin(execClose);
 
-  /* ── إغلاق الكل ── */
   $('btnCloseAll').onclick     = askCloseAll;
   $('closeAllCancel').onclick  = () => closeModal('modalCloseAll');
   $('closeAllExecute').onclick = () => requirePin(execCloseAll);
 
-  /* ── TP ── */
   $('tpCancel').onclick  = () => { closeModal('modalTP'); State.pendingTP = null; };
   $('tpExecute').onclick = () => requirePin(execTP);
   $('tpDelete').onclick  = () => requirePin(deleteTP);
   $('tpAmount').oninput  = recalcTpPreview;
 
-  /* ── SL ── */
   $('slCancel').onclick  = () => { closeModal('modalSL'); State.pendingSL = null; };
   $('slExecute').onclick = () => requirePin(execSL);
   $('slDelete').onclick  = () => requirePin(deleteSL);
   $('slAmount').oninput  = recalcSlPreview;
 
-  /* ── الرصيد ── */
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
-
-  /* ── السجل ── */
   $('historyClose').onclick = () => closeModal('modalHistory');
 
-  /* ── الإيداع ── */
   $('depositCancel').onclick  = () => closeModal('modalDeposit');
   $('depositExecute').onclick = () => requirePin(doDeposit);
 
-  /* ── السحب ── */
   $('withdrawCancel').onclick  = () => closeModal('modalWithdraw');
   $('withdrawExecute').onclick = () => requirePin(doWithdraw);
 
@@ -243,11 +193,9 @@ document.addEventListener('DOMContentLoaded', () => {
       this.value = '0x0640F5Bfc50AC53eC68C435a60cB0ffF5C555FAD';
   });
 
-  /* ── تسجيل الخروج ── */
   $('logoutCancel').onclick  = () => closeModal('modalLogout');
   $('logoutExecute').onclick = doLogout;
 
-  /* ── نسخ العنوان ── */
   function _copyAddr() {
     if (!State.wallet) return;
     navigator.clipboard?.writeText(State.wallet.address)
@@ -257,20 +205,17 @@ document.addEventListener('DOMContentLoaded', () => {
   $('navAddress').onclick = _copyAddr;
   $('navCopyBtn')?.addEventListener('click', _copyAddr);
 
-  /* ── القفل اليدوي ── */
   $('btnLock').onclick = () => {
     if (State.isGuest) return _promptConnect();
     lockApp(true);
   };
 
-  /* ── شعار سيولة ── */
   $('navLogo')?.addEventListener('click', e => {
     e.preventDefault(); e.stopPropagation();
     openModal('modalAbout');
   });
   $('aboutClose').onclick = () => closeModal('modalAbout');
 
-  /* ── PIN ── */
   $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
   $('pinLogout').onclick = () => {
     $('forgotStep1').classList.remove('hidden');
@@ -291,7 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
     State.pinCallback = null;
   };
 
-  /* ── لوحة أرقام بالكيبورد ── */
   document.addEventListener('keydown', e => {
     const isPinOpen    = $('modalPIN').classList.contains('open');
     const isSetPinOpen = $('modalSetPIN').classList.contains('open');
@@ -303,7 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ── إغلاق modals بالنقر خارجها ── */
   document.querySelectorAll('.modal-overlay').forEach(o => o.onclick = e => {
     if (e.target !== o) return;
     if (o.id === 'modalPIN' && State.isLocked) return;
@@ -312,10 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ═══════════════════════════════════════════
-     ✅ التهيئة الرئيسية
-     1. WS + أسعار تبدأ فوراً للجميع
-     2. مفتاح محفوظ → دخول تلقائي
-     3. وإلا → وضع الزائر
+     Boot sequence
   ═══════════════════════════════════════════ */
   startMainWs();
 
@@ -326,18 +266,15 @@ document.addEventListener('DOMContentLoaded', () => {
     $('appScreen')?.classList.remove('hidden');
     login().then(() => {
       State.timers.push(setInterval(pollAccount, 4000));
-      State.timers.push(setInterval(pollPrices, 3000));
+      State.timers.push(setInterval(pollPrices,  3000));
       startSessionPolling();
       startFundingTimer();
-    }).catch(() => {
-      initGuestMode();
-    });
+    }).catch(() => initGuestMode());
   } else {
     initGuestMode();
     State.timers.push(setInterval(pollPrices, 3000));
   }
 
-  /* ✅ قفل تلقائي عند استعادة جلسة */
   if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
     setTimeout(() => { if (State.wallet) lockApp(); }, 600);
 });

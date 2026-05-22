@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  
   <meta charset="UTF-8">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -44,19 +43,10 @@
   <meta property="og:image" content="https://hl.kanba.pw/icon-192x192.png">
   <meta property="og:url" content="https://hl.kanba.pw/">
   <meta property="og:type" content="website">
-
-  <!-- Apply saved theme immediately before paint to avoid flash -->
-  <script>
-    (function(){
-      var saved = localStorage.getItem('hl_theme');
-      var sys   = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', saved || sys);
-    })();
-  </script>
 </head>
 <body>
 
-<!-- ══ التطبيق الرئيسي ══ -->
+<!-- ══ التطبيق الرئيسي — يظهر دائماً (حتى بدون محفظة) ══ -->
 <div class="screen" id="appScreen">
 
   <!-- NAV -->
@@ -66,8 +56,9 @@
         <span class="nav-logo-icon">💧</span>
         <span class="nav-logo-text">سيولة</span>
       </button>
-      <!-- ✅ زر تبديل المظهر بدلاً من زر "مباشر" -->
-      <button class="nav-theme-btn" id="btnTheme" title="تبديل المظهر">🌙</button>
+      <a href="https://shop.kanba.pw/" target="_blank" rel="noopener" class="nav-status">
+        <span class="status-dot"></span>مباشر
+      </a>
     </div>
     <div class="nav-right">
       <button id="btnLock" title="قفل التطبيق">🔒</button>
@@ -191,13 +182,14 @@
     </div>
   </main>
 
-  <!-- Footer -->
+  <!-- ✅ Footer — زر الاتصال الكروي في المنتصف مستقل -->
   <footer class="footer">
     <button class="footer-main-btn" id="btnChart">
       <span class="fmb-icon">📈</span>
       <span class="fmb-lbl">رسم بياني</span>
     </button>
 
+    <!-- ✅ زر الاتصال — ws-connecting أصفر حتى يتصل Hyperliquid -->
     <button class="footer-connect-btn ws-connecting" id="btnConnect" title="الاتصال بـ Hyperliquid">
       <span class="cb-dot"></span>
       <span class="cb-lbl">اتصال</span>
@@ -210,7 +202,7 @@
   </footer>
 </div>
 
-<!-- شاشة الدخول القديمة — مخفية -->
+<!-- شاشة الدخول القديمة — مخفية (نستخدم modal بدلاً) -->
 <div class="screen hidden" id="loginScreen">
   <div class="login-brand">
     <div class="login-icon">💧</div>
@@ -231,12 +223,12 @@
   </div>
 </div>
 
-<!-- شاشة الرسم البياني -->
+<!-- شاشة الرسم -->
 <div id="chartScreen" class="chart-screen hidden"></div>
 
 <!-- ══ MODALS ══ -->
 
-<!-- modal تسجيل الدخول -->
+<!-- modal تسجيل الدخول (يُفتح من زر اتصال) -->
 <div class="modal-overlay" id="modalLogin">
   <div class="modal" style="max-width:440px;">
     <div class="modal-handle"></div>
@@ -388,7 +380,7 @@
   </div>
 </div>
 
-<!-- الإيداع -->
+<!-- الإيداع — حد أدنى $5 -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -466,7 +458,7 @@
         <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p></div></div>
         <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد، لتأمين الأرباح دون مراقبة مستمرة.</p></div></div>
         <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>أمر وقائي يُغلق الصفقة تلقائياً عند حد خسارة تحدده، للحد من المخاطر.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش. يظهر كخط برتقالي في الرسم.</p></div></div>
       </div>
     </div>
     <div class="modal-buttons modal-buttons-center">
@@ -560,20 +552,16 @@
 <div id="toast"></div>
 <div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
 
-<!-- Preload critical scripts -->
+<!-- Preload scripts -->
 <link rel="preload" as="script" href="/js/config.js">
 <link rel="preload" as="script" href="/js/state.js">
 <link rel="preload" as="script" href="/js/utils.js">
 <link rel="preload" as="script" href="/js/ws.js">
- 
-<!-- External: ethers only -->
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
- 
-<!-- TradingView Advanced Charts — local, no CDN -->
-<script src="/charting_library/charting_library.standalone.js"></script>
- 
-<!-- App modules -->
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/utils.js"></script>

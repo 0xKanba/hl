@@ -1,12 +1,6 @@
-/* ═══════════════════════════════════════
-   account.js
-   ✅ guard 20 ثانية بعد أي إغلاق
-   ✅ يتطلب 2 استجابات فارغة متتالية
-   ✅ pollAccount كل 4 ثواني
-   ✅ رصيد بسيط 3 حقول
-═══════════════════════════════════════ */
 'use strict';
 
+/* ════ Error helpers ════ */
 function _depositErr(msg) {
   const m = (msg || '').toLowerCase();
   if (m.includes('insufficient') || m.includes('balance')) return 'رصيد USDC غير كافٍ في محفظة Arbitrum';
@@ -28,11 +22,15 @@ function _withdrawErr(msg) {
   return 'فشل السحب — حاول مجدداً';
 }
 
-/* ════ pollAccount ════ */
+/* ════════════════════════════════════════════════
+   pollAccount
+   Balance = Spot USDC only (single source of truth)
+   margin used = xyz marginSummary.totalMarginUsed
+   unrealizedPnl = separate, never added to balance
+════════════════════════════════════════════════ */
 async function pollAccount() {
   if (!State.wallet) return;
 
-  /* ✅ guard 20 ثانية بعد أي إغلاق optimistic */
   const inGuard = (Date.now() - (State._lastOptimisticClose || 0)) < 20000;
 
   try {
@@ -44,31 +42,45 @@ async function pollAccount() {
 
     State.openOrders = Array.isArray(openOrders) ? openOrders : [];
 
-    /* رصيد */
+    /* ── Spot USDC balance — the ONLY source for "available balance" ── */
     let spotUSDC = 0;
-    for (const b of spot?.balances || [])
-      if (b.coin === 'USDC' || b.coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
+    for (const b of spot?.balances || []) {
+      const coin = (b.coin || '').toUpperCase();
+      if (coin === 'USDC' || coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
+    }
 
-    const xyzVal   = parseFloat(xyz?.marginSummary?.accountValue || 0);
-    const margin   = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
-    const rawPos   = (xyz?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
-    const floatPnl = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
+    /* ── Perp account values — kept separate, never merged into spotUSDC ── */
+    const margin    = parseFloat(xyz?.marginSummary?.totalMarginUsed  || 0);
+    const rawPos    = (xyz?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
+    const floatPnl  = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
 
-    State.balance = { total: xyzVal + spotUSDC, margin, floatPnl };
+    /*
+      State.balance:
+        total     = Spot USDC (real withdrawable cash — NOT equity)
+        margin    = margin locked in open perp positions
+        floatPnl  = unrealized PnL (display only, never added to total)
+        available = total - margin  (what can be used to open new trades)
 
-    /* ✅ منطق استقرار الصفقات */
+      intentional: xyzVal (accountValue) is NOT added here.
+      xyzVal already includes unrealizedPnl + margin — adding spotUSDC on top = double counting.
+    */
+    State.balance = {
+      total:     spotUSDC,
+      margin,
+      floatPnl,
+      available: Math.max(0, spotUSDC - margin)
+    };
+
+    /* ── Position update with guard ── */
     if (inGuard) {
-      /* داخل guard: فقط حدّث إذا API أعادت صفقات حقيقية */
       if (rawPos.length > 0) {
         State._emptyPosCount = 0;
         _applyPositions(rawPos);
       }
-      /* API فارغة في guard window → لا تفعل شيئاً */
     } else {
       if (State.positions.length > 0 && rawPos.length === 0) {
-        /* ✅ انتظر تأكيداً ثانياً قبل الحذف */
         State._emptyPosCount = (State._emptyPosCount || 0) + 1;
-        if (State._emptyPosCount < 2) return; /* تجاهل أول استجابة فارغة */
+        if (State._emptyPosCount < 2) return;
         State._emptyPosCount = 0;
       } else {
         State._emptyPosCount = 0;
@@ -91,7 +103,7 @@ function _applyPositions(rawPos) {
   renderPositions();
 }
 
-/* ════ عرض الرصيد ════ */
+/* ════ Balance Modal ════ */
 async function showBalance() {
   openModal('modalBalance');
   await _renderBalance();
@@ -110,22 +122,28 @@ async function _renderBalance() {
       hlInfo({ type: 'spotClearinghouseState', user: State.wallet.address }).catch(() => ({})),
       hlInfo({ type: 'clearinghouseState',     user: State.wallet.address, dex: 'xyz' }).catch(() => ({}))
     ]);
-    let spotUSDC = 0;
-    for (const b of spot?.balances || [])
-      if (b.coin === 'USDC' || b.coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
 
-    const xyzVal   = parseFloat(xyz?.marginSummary?.accountValue || 0);
+    let spotUSDC = 0;
+    for (const b of spot?.balances || []) {
+      const coin = (b.coin || '').toUpperCase();
+      if (coin === 'USDC' || coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
+    }
+
     const margin   = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
     const floatPnl = (xyz?.assetPositions || [])
       .reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
-    const total  = xyzVal + spotUSDC;
-    const pCls   = floatPnl >= 0 ? 'green' : 'red';
+    const available = Math.max(0, spotUSDC - margin);
+    const pCls = floatPnl >= 0 ? 'green' : 'red';
 
     el.innerHTML = `
       <div class="balance-grid">
         <div class="balance-item">
-          <span class="balance-label">💰 الرصيد الكلي</span>
-          <span class="balance-value blue">$${fmt(total, 2)}</span>
+          <span class="balance-label">💰 رصيد Spot USDC</span>
+          <span class="balance-value blue">$${fmt(spotUSDC, 2)}</span>
+        </div>
+        <div class="balance-item">
+          <span class="balance-label">✅ المتاح للتداول</span>
+          <span class="balance-value green">$${fmt(available, 2)}</span>
         </div>
         <div class="balance-item">
           <span class="balance-label">🔒 الهامش المستخدم</span>
@@ -138,11 +156,11 @@ async function _renderBalance() {
       </div>
       <div class="balance-auto-note">↻ تحديث تلقائي كل 3 ثواني</div>`;
   } catch {
-    el.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب الرصيد</div>`;
+    el.innerHTML = `<div class="balance-loading" style="color:var(--hc-dn)">⚠️ تعذّر جلب الرصيد</div>`;
   }
 }
 
-/* ════ تاريخ الصفقات ════ */
+/* ════ Trade History ════ */
 async function showHistory() {
   if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
   openModal('modalHistory');
@@ -155,8 +173,7 @@ async function showHistory() {
                startTime: Date.now() - 90 * 24 * 3600 * 1000 }).catch(() => [])
     ]);
 
-    const fills = (Array.isArray(fillsXyz) ? fillsXyz : [])
-      .sort((a, b) => b.time - a.time);
+    const fills = (Array.isArray(fillsXyz) ? fillsXyz : []).sort((a, b) => b.time - a.time);
 
     if (!fills.length) {
       if (sub) sub.textContent = 'لا يوجد سجل تداول حتى الآن';
@@ -199,7 +216,7 @@ async function showHistory() {
       const fundUsd  = getFundingForFill(sym, f.time);
       const totalPnl = pnl + fundUsd;
       const d        = new Date(f.time);
-      const dateStr  = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+      const dateStr  = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
       const timeStr  = d.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
       const pCls     = pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : 'zero';
       const tCls     = totalPnl > 0 ? 'pos' : totalPnl < 0 ? 'neg' : 'zero';
@@ -214,31 +231,30 @@ async function showHistory() {
       return `<div class="history-item">
         <div class="hist-top">
           <div class="hist-asset">${assetImg} ${a.name}</div>
-          <div class="hist-badge"><span class="hist-type ${isBuy ? 'buy' : 'sell'}">${isBuy ? '▲ شراء' : '▼ بيع'}</span></div>
-          <div class="hist-pnl ${pCls}">${pnl !== 0 ? (pnl > 0 ? '+' : '') + '$' + fmt(pnl, 2) : '—'}</div>
+          <div class="hist-badge"><span class="hist-type ${isBuy?'buy':'sell'}">${isBuy?'▲ شراء':'▼ بيع'}</span></div>
+          <div class="hist-pnl ${pCls}">${pnl!==0?(pnl>0?'+':'')+'$'+fmt(pnl,2):'—'}</div>
         </div>
         <div class="hist-grid">
-          <div class="hist-cell"><span class="hist-lbl">الحجم</span><span class="hist-val">${szDisp.toFixed(isGram ? 2 : a.szDp)} ${a.unit}</span></div>
-          <div class="hist-cell"><span class="hist-lbl">السعر</span><span class="hist-val">$${fmt(pxDisp, a.pxDp)}</span></div>
-          <div class="hist-cell"><span class="hist-lbl">رسوم التداول</span><span class="hist-val" style="color:var(--hc-warn)">-$${fmt(fee, 4)}</span></div>
+          <div class="hist-cell"><span class="hist-lbl">الحجم</span><span class="hist-val">${szDisp.toFixed(isGram?2:a.szDp)} ${a.unit}</span></div>
+          <div class="hist-cell"><span class="hist-lbl">السعر</span><span class="hist-val">$${fmt(pxDisp,a.pxDp)}</span></div>
+          <div class="hist-cell"><span class="hist-lbl">رسوم التداول</span><span class="hist-val" style="color:var(--hc-warn)">-$${fmt(fee,4)}</span></div>
           <div class="hist-cell"><span class="hist-lbl">رسوم التمويل</span><span class="hist-val ${fundCls}">${fundSign}$${Math.abs(fundUsd).toFixed(4)}</span></div>
-          <div class="hist-cell"><span class="hist-lbl">🏁 الإجمالي</span><span class="hist-val ${tCls}">${totalPnl >= 0 ? '+' : ''}$${fmt(totalPnl, 2)}</span></div>
+          <div class="hist-cell"><span class="hist-lbl">🏁 الإجمالي</span><span class="hist-val ${tCls}">${totalPnl>=0?'+':''}$${fmt(totalPnl,2)}</span></div>
           <div class="hist-cell"><span class="hist-lbl">التوقيت</span><span class="hist-val">${dateStr} — ${timeStr}</span></div>
         </div>
       </div>`;
     }).join('');
   } catch {
     if (sub) sub.textContent = '';
-    list.innerHTML = `<div class="balance-loading" style="color:var(--dn)">⚠️ تعذّر جلب السجل</div>`;
+    list.innerHTML = `<div class="balance-loading" style="color:var(--hc-dn)">⚠️ تعذّر جلب السجل</div>`;
   }
 }
 
-/* ════ إيداع USDC — حد أدنى $5 ════ */
+/* ════ Deposit ════ */
 async function doDeposit() {
   const amt = parseFloat($('depositAmount').value || 0);
   if (!amt || amt < 5) return toast('الحد الأدنى للإيداع $5', 'err');
   if (!State.wallet)   return toast('يجب تسجيل الدخول أولاً', 'err');
-
   setBtnLoading('depositExecute', '⏳');
   showLoader('جارٍ التحقق من رصيد USDC...');
   try {
@@ -252,12 +268,10 @@ async function doDeposit() {
     const raw    = ethers.parseUnits(amt.toString(), 6);
     const bal    = await usdc.balanceOf(w.address);
     if (bal < raw) throw new Error('رصيد USDC غير كافٍ على Arbitrum');
-
     showLoader('انتظر موافقة المحفظة...');
     await (await usdc.approve(BRDG_CA, raw)).wait();
     showLoader('جارٍ إرسال USDC...');
     await (await bridge.deposit(w.address, raw)).wait();
-
     closeModal('modalDeposit');
     toast(`✅ تم إرسال $${amt} — يصل خلال 1-3 دقائق`, 'ok', 6000);
     setTimeout(pollAccount, 6000);
@@ -266,7 +280,7 @@ async function doDeposit() {
   } finally { resetBtn('depositExecute'); hideLoader(); }
 }
 
-/* ════ سحب USDC ════ */
+/* ════ Withdraw ════ */
 async function doWithdraw() {
   const amt  = parseFloat($('withdrawAmount').value || 0);
   const dest = $('withdrawAddress').value.trim();
@@ -274,7 +288,6 @@ async function doWithdraw() {
   if (amt < 2)           return toast('الحد الأدنى $2 (بعد رسوم $1)', 'err');
   if (!/^0x[0-9a-fA-F]{40}$/.test(dest)) return toast('عنوان المحفظة غير صحيح', 'err');
   if (!State.wallet)     return toast('يجب تسجيل الدخول أولاً', 'err');
-
   setBtnLoading('withdrawExecute', '⏳');
   showLoader('انتظر توقيع طلب السحب...');
   try {
@@ -304,7 +317,6 @@ async function doWithdraw() {
     });
     const d = await res.json();
     if (d.status !== 'ok') throw new Error(JSON.stringify(d));
-
     closeModal('modalWithdraw');
     toast(`✅ طلب السحب مقبول — سيصلك $${(amt - 1).toFixed(2)} USDC`, 'ok', 6000);
     setTimeout(pollAccount, 5000);

@@ -1,12 +1,6 @@
-/* ═══════════════════════════════════════
-   trading.js
-   ✅ انزلاق 5% (بدل 2-3%)
-   ✅ إغلاق فوري + guard 20 ثانية
-   ✅ multiPoll يبدأ بعد 5 ثواني
-═══════════════════════════════════════ */
 'use strict';
 
-/* ════ فتح صفقة ════ */
+/* ════ Open trade confirm ════ */
 function askTrade(isBuy) {
   if (State.isGuest) return _promptConnect();
   const qty = parseFloat($('qtyInput').value || State.qty || 0);
@@ -23,15 +17,14 @@ function askTrade(isBuy) {
   const fr       = feeRate(State.asset);
   const feeOpen  = (tradeMid * ozQty * fr).toFixed(4);
   const feeTot   = (tradeMid * ozQty * fr * 2).toFixed(4);
-
-  const sziForLiq = isBuy ? ozQty : -ozQty;
-  const liqInfo   = liqPriceDisplay(State.asset, tradeMid, sziForLiq, State.balance?.total || 0);
+  const sziLiq   = isBuy ? ozQty : -ozQty;
+  const liqInfo  = liqPriceDisplay(State.asset, tradeMid, sziLiq, State.balance?.total || 0);
 
   setTxt('confirmTitle',    `${a.icon} ${isBuy ? 'شراء ↑' : 'بيع ↓'} — ${a.name}`);
   setTxt('confirmSubtitle', `رافعة ${a.lev}x · تنفيذ فوري`);
   $('confirmDetails').innerHTML = `
     <div class="confirm-row"><span class="confirm-key">الكمية</span><span class="confirm-val">${dispQty}</span></div>
-    <div class="confirm-row"><span class="confirm-key">سعر ${isGram ? 'الغرام' : 'الوحدة'}</span><span class="confirm-val">${fmt(p.mid, a.pxDp)} $</span></div>
+    <div class="confirm-row"><span class="confirm-key">سعر ${isGram?'الغرام':'الوحدة'}</span><span class="confirm-val">${fmt(p.mid,a.pxDp)} $</span></div>
     <div class="confirm-row"><span class="confirm-key">القيمة الكلية</span><span class="confirm-val">≈ $${usd}</span></div>
     <div class="confirm-row"><span class="confirm-key">الهامش المطلوب</span><span class="confirm-val warn">≈ $${mgn}</span></div>
     <div class="confirm-row"><span class="confirm-key">التصفية التقريبية</span><span class="confirm-val" style="color:var(--warn)">${liqInfo.text}</span></div>
@@ -48,18 +41,20 @@ function askTrade(isBuy) {
 async function execTrade() {
   if (!State.pendingTrade) { closeModal('modalConfirm'); return; }
   const { isBuy, qty, sym } = State.pendingTrade;
-  const a       = ASSETS[sym], p = State.prices[sym];
-  const execQty = a.gram ? +(qty / TROY).toFixed(4) : qty;
-  const execMid = a.gram ? p.mid * TROY : p.mid;
+  const a        = ASSETS[sym], p = State.prices[sym];
+  const execQty  = a.gram ? +(qty / TROY).toFixed(4) : qty;
+  const execMid  = a.gram ? p.mid * TROY : p.mid;
   const execSzDp = a.gram ? 4 : a.szDp;
   if (!p?.mid) { toast('لا يوجد سعر', 'err'); closeModal('modalConfirm'); return; }
 
-  setBtnLoading('confirmExecute', '⏳');
-  showLoader(`${a.icon} ${isBuy ? 'شراء' : 'بيع'} ${qty} ${a.unit}...`);
+  /* Instant UI close — no blocking spinner */
+  closeModal('modalConfirm');
+  State.pendingTrade = null;
+  toast(`⏳ ${a.icon} ${isBuy ? 'شراء' : 'بيع'} ${qty} ${a.unit}...`, 'info', 3000);
+
   try {
     try { await hlExchange({ type: 'updateLeverage', asset: a.idx, isCross: a.cross, leverage: a.lev }); } catch {}
 
-    /* ✅ انزلاق 5% لضمان التنفيذ */
     const slip = 0.05;
     const res  = await hlExchange({
       type: 'order',
@@ -75,34 +70,31 @@ async function execTrade() {
     if (status?.error) throw new Error(status.error);
 
     if (status?.filled) {
-      const f = status.filled;
-      closeModal('modalConfirm');
+      const f      = status.filled;
       const dispSz = a.gram ? (+f.totalSz * TROY).toFixed(2) : f.totalSz;
       const dispPx = (parseFloat(f.avgPx) / (a.gram ? TROY : 1)).toFixed(a.pxDp);
       toast(`✅ مُنفَّذ — ${a.icon} ${dispSz} ${a.unit} @ $${dispPx}`, 'ok', 5000);
     } else if (status?.resting) {
-      closeModal('modalConfirm');
       toast(`⏳ أمر معلق — ${a.icon} ${qty} ${a.unit}`, 'info', 4000);
     } else {
-      closeModal('modalConfirm');
       toast('⚠️ لم يُنفَّذ — حاول مجدداً', 'err', 4000);
     }
 
     autoSetReferrer();
-    State.pendingTrade = null;
     _multiPoll();
-  } catch (e) { toast(tradeErr(e.message), 'err', 6000); }
-  finally { resetBtn('confirmExecute'); hideLoader(); }
+  } catch (e) {
+    toast(tradeErr(e.message), 'err', 6000);
+  }
 }
 
-/* ════ استعلام متعدد — يبدأ بعد 5 ثواني ════ */
+/* ════ Background poll after trade ════ */
 function _multiPoll() {
-  setTimeout(() => pollAccount().catch(() => {}), 5000);
-  setTimeout(() => pollAccount().catch(() => {}), 9000);
-  setTimeout(() => pollAccount().catch(() => {}), 15000);
+  setTimeout(() => pollAccount().catch(() => {}), 3000);
+  setTimeout(() => pollAccount().catch(() => {}), 7000);
+  setTimeout(() => pollAccount().catch(() => {}), 13000);
 }
 
-/* ════ إغلاق صفقة ════ */
+/* ════ Close position ════ */
 window.askClose = function (i) {
   if (State.isGuest) return _promptConnect();
   const p = State.positions[i]; if (!p) return;
@@ -123,30 +115,12 @@ window.askClose = function (i) {
 
   setTxt('closeTitle', `${a.icon} إغلاق — ${a.name}`);
   $('closeDetails').innerHTML = `
-    <div class="confirm-row">
-      <span class="confirm-key">الاتجاه</span>
-      <span class="confirm-val ${isLong ? 'buy' : 'sell'}">${isLong ? '▲ شراء' : '▼ بيع'}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-key">الكمية</span>
-      <span class="confirm-val">${sziDisp.toFixed(dp)} ${a.unit}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-key">سعر الدخول</span>
-      <span class="confirm-val">$${fmt(entryDisp, a.pxDp)}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-key">السعر الحالي</span>
-      <span class="confirm-val">${curPx ? '$' + fmt(curPx, a.pxDp) : '—'}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-key">الربح / الخسارة</span>
-      <span class="confirm-val ${pnl >= 0 ? 'buy' : 'sell'}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-key">رسوم الإغلاق</span>
-      <span class="confirm-val fee">$${closeFee} (${feeRatePct(sym)})</span>
-    </div>`;
+    <div class="confirm-row"><span class="confirm-key">الاتجاه</span><span class="confirm-val ${isLong?'buy':'sell'}">${isLong?'▲ شراء':'▼ بيع'}</span></div>
+    <div class="confirm-row"><span class="confirm-key">الكمية</span><span class="confirm-val">${sziDisp.toFixed(dp)} ${a.unit}</span></div>
+    <div class="confirm-row"><span class="confirm-key">سعر الدخول</span><span class="confirm-val">$${fmt(entryDisp,a.pxDp)}</span></div>
+    <div class="confirm-row"><span class="confirm-key">السعر الحالي</span><span class="confirm-val">${curPx?'$'+fmt(curPx,a.pxDp):'—'}</span></div>
+    <div class="confirm-row"><span class="confirm-key">الربح / الخسارة</span><span class="confirm-val ${pnl>=0?'buy':'sell'}">${pnl>=0?'+':''}$${fmt(pnl,2)}</span></div>
+    <div class="confirm-row"><span class="confirm-key">رسوم الإغلاق</span><span class="confirm-val fee">$${closeFee} (${feeRatePct(sym)})</span></div>`;
 
   State.pendingClose = i;
   openModal('modalClose');
@@ -171,13 +145,20 @@ async function execClose() {
     : State.prices[sym]?.mid;
   if (!midOz || midOz <= 0) { toast('سعر غير متاح، انتظر لحظة', 'err'); return; }
 
-  const aDisp = ASSETS[sym] || aApi;
+  /* ✅ Optimistic: remove from UI instantly */
+  closeModal('modalClose');
+  State._lastOptimisticClose = Date.now();
+  State._emptyPosCount       = 0;
+  State.positions.splice(idx, 1);
+  resetPosFingerprint();
+  renderPositions();
+  State.pendingClose = null;
 
-  setBtnLoading('closeExecute', '⏳');
-  showLoader(`إغلاق ${aDisp.icon || ''} ${aDisp.name || ''}...`);
+  const aDisp = ASSETS[sym] || aApi;
+  toast(`⏳ إغلاق ${aDisp.icon||''} ${aDisp.name||''}...`, 'info', 2500);
+
   try {
     const isBuy = sziOz < 0;
-    /* ✅ انزلاق 5% لضمان الإغلاق */
     await hlExchange({
       type: 'order',
       orders: [{ a: aApi.idx, b: isBuy,
@@ -187,25 +168,16 @@ async function execClose() {
       }],
       grouping: 'na'
     });
-
-    closeModal('modalClose');
-
-    /* ✅ إغلاق فوري من UI + guard 20 ثانية */
-    State._lastOptimisticClose = Date.now();
-    State._emptyPosCount       = 0;
-    State.positions.splice(idx, 1);
-    resetPosFingerprint();
-    renderPositions();
-
-    toast(`✅ أُغلقت — ${aDisp.icon || ''} ${aDisp.name || ''}`, 'ok', 4000);
-    State.pendingClose = null;
+    toast(`✅ أُغلقت — ${aDisp.icon||''} ${aDisp.name||''}`, 'ok', 4000);
     _multiPoll();
-
-  } catch (e) { toast(tradeErr(e.message), 'err', 6000); }
-  finally { resetBtn('closeExecute'); hideLoader(); }
+  } catch (e) {
+    toast(tradeErr(e.message), 'err', 6000);
+    /* Revert optimistic — re-poll will restore position */
+    _multiPoll();
+  }
 }
 
-/* ════ إغلاق جميع الصفقات ════ */
+/* ════ Close All ════ */
 function askCloseAll() {
   if (State.isGuest) return _promptConnect();
   if (!State.positions.length) return toast('لا توجد صفقات', 'info');
@@ -215,7 +187,7 @@ function askCloseAll() {
     const a   = ASSETS[sym] || { name: sym, pxDp: 2, icon: '📊' };
     return `<div class="confirm-row">
       <span class="confirm-key">${a.icon} ${a.name}</span>
-      <span class="confirm-val ${pnl >= 0 ? 'buy' : 'sell'}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 2)}</span>
+      <span class="confirm-val ${pnl>=0?'buy':'sell'}">${pnl>=0?'+':''}$${fmt(pnl,2)}</span>
     </div>`;
   }).join('');
   openModal('modalCloseAll');
@@ -224,8 +196,16 @@ function askCloseAll() {
 async function execCloseAll() {
   const positions = [...State.positions];
   if (!positions.length) { closeModal('modalCloseAll'); return; }
-  setBtnLoading('closeAllExecute', '⏳');
-  showLoader('إغلاق جميع الصفقات...');
+
+  /* Optimistic: clear all immediately */
+  closeModal('modalCloseAll');
+  State._lastOptimisticClose = Date.now();
+  State._emptyPosCount       = 0;
+  State.positions = [];
+  resetPosFingerprint();
+  renderPositions();
+  toast('⏳ إغلاق جميع الصفقات...', 'info', 3000);
+
   let ok = 0, fail = 0;
   try {
     for (const p of positions) {
@@ -250,18 +230,12 @@ async function execCloseAll() {
         ok++;
       } catch (e) { fail++; console.warn('[closeAll]', sym, e.message); }
     }
-    State._lastOptimisticClose = Date.now();
-    State._emptyPosCount       = 0;
-    State.positions = [];
-    resetPosFingerprint();
-    renderPositions();
-    closeModal('modalCloseAll');
     toast(`✅ أُغلق ${ok} مركز${fail ? ` · فشل ${fail}` : ''}`, 'ok', 5000);
     _multiPoll();
-  } finally { resetBtn('closeAllExecute'); hideLoader(); }
+  } catch { _multiPoll(); }
 }
 
-/* ════ طلب الاتصال عند محاولة إجراء من زائر ════ */
+/* ════ Prompt connect for guests ════ */
 function _promptConnect() {
   toast('اربط محفظتك أولاً — انقر على زر الاتصال', 'info', 4000);
   const btn = $('btnConnect');
