@@ -43,10 +43,17 @@
   <meta property="og:image" content="https://hl.kanba.pw/icon-192x192.png">
   <meta property="og:url" content="https://hl.kanba.pw/">
   <meta property="og:type" content="website">
+
+  <!-- Apply theme before paint — prevents flash of wrong theme -->
+  <script>
+    (function(){
+      var t=localStorage.getItem('hl_theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+      document.documentElement.setAttribute('data-theme',t);
+    })();
+  </script>
 </head>
 <body>
 
-<!-- ══ التطبيق الرئيسي — يظهر دائماً (حتى بدون محفظة) ══ -->
 <div class="screen" id="appScreen">
 
   <!-- NAV -->
@@ -56,9 +63,8 @@
         <span class="nav-logo-icon">💧</span>
         <span class="nav-logo-text">سيولة</span>
       </button>
-      <a href="https://shop.kanba.pw/" target="_blank" rel="noopener" class="nav-status">
-        <span class="status-dot"></span>مباشر
-      </a>
+      <!-- ✅ Theme toggle — replaces old "مباشر" link -->
+      <button class="nav-theme-btn" id="btnTheme" title="تبديل المظهر">🌙</button>
     </div>
     <div class="nav-right">
       <button id="btnLock" title="قفل التطبيق">🔒</button>
@@ -182,19 +188,15 @@
     </div>
   </main>
 
-  <!-- ✅ Footer — زر الاتصال الكروي في المنتصف مستقل -->
   <footer class="footer">
     <button class="footer-main-btn" id="btnChart">
       <span class="fmb-icon">📈</span>
       <span class="fmb-lbl">رسم بياني</span>
     </button>
-
-    <!-- ✅ زر الاتصال — ws-connecting أصفر حتى يتصل Hyperliquid -->
     <button class="footer-connect-btn ws-connecting" id="btnConnect" title="الاتصال بـ Hyperliquid">
       <span class="cb-dot"></span>
       <span class="cb-lbl">اتصال</span>
     </button>
-
     <button class="footer-main-btn footer-opts-btn" id="btnOptions">
       <span class="fmb-icon">⚙️</span>
       <span class="fmb-lbl">الخيارات</span>
@@ -202,7 +204,6 @@
   </footer>
 </div>
 
-<!-- شاشة الدخول القديمة — مخفية (نستخدم modal بدلاً) -->
 <div class="screen hidden" id="loginScreen">
   <div class="login-brand">
     <div class="login-icon">💧</div>
@@ -210,7 +211,6 @@
   </div>
 </div>
 
-<!-- Options -->
 <div class="opts-overlay hidden" id="optsOverlay">
   <div class="opts-menu">
     <button class="opts-item" id="optBalance">💰 الرصيد</button>
@@ -223,12 +223,11 @@
   </div>
 </div>
 
-<!-- شاشة الرسم -->
+<!-- chart screen — built by js/chart.js dynamically -->
 <div id="chartScreen" class="chart-screen hidden"></div>
 
 <!-- ══ MODALS ══ -->
 
-<!-- modal تسجيل الدخول (يُفتح من زر اتصال) -->
 <div class="modal-overlay" id="modalLogin">
   <div class="modal" style="max-width:440px;">
     <div class="modal-handle"></div>
@@ -248,23 +247,18 @@
         <button class="key-toggle" id="toggleKey" type="button">👁</button>
       </div>
     </div>
-    <button class="login-btn" id="loginBtn" style="margin-bottom:10px;">
-      دخول وبدء التداول ←
-    </button>
+    <button class="login-btn" id="loginBtn" style="margin-bottom:10px;">دخول وبدء التداول ←</button>
     <div class="login-note" style="margin-bottom:10px;">
       <strong>🔒 المفتاح يُحفظ في متصفحك فقط</strong><br>
       لا خوادم · لا وسيط · توقيعاتك تتم محلياً
     </div>
-    <button class="create-wallet-btn" id="createWalletBtn">
-      إنشاء محفظة جديدة مجاناً ←
-    </button>
+    <button class="create-wallet-btn" id="createWalletBtn">إنشاء محفظة جديدة مجاناً ←</button>
     <div class="modal-buttons modal-buttons-center" style="margin-top:14px;">
       <button class="btn-modal btn-cancel" id="loginClose">إغلاق</button>
     </div>
   </div>
 </div>
 
-<!-- تأكيد فتح صفقة -->
 <div class="modal-overlay overlay-fs" id="modalConfirm">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -278,7 +272,6 @@
   </div>
 </div>
 
-<!-- إغلاق صفقة -->
 <div class="modal-overlay overlay-fs" id="modalClose">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -292,7 +285,6 @@
   </div>
 </div>
 
-<!-- إغلاق الكل -->
 <div class="modal-overlay overlay-fs" id="modalCloseAll">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -306,7 +298,6 @@
   </div>
 </div>
 
-<!-- جني الربح TP -->
 <div class="modal-overlay overlay-fs" id="modalTP">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -329,7 +320,6 @@
   </div>
 </div>
 
-<!-- وقف الخسارة SL -->
 <div class="modal-overlay overlay-fs" id="modalSL">
   <div class="modal modal-fs">
     <div class="modal-handle"></div>
@@ -352,7 +342,6 @@
   </div>
 </div>
 
-<!-- الرصيد -->
 <div class="modal-overlay" id="modalBalance">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -366,7 +355,6 @@
   </div>
 </div>
 
-<!-- سجل الصفقات -->
 <div class="modal-overlay" id="modalHistory">
   <div class="modal" style="display:flex;flex-direction:column;">
     <h3 class="modal-title">📜 سجل الصفقات</h3>
@@ -380,7 +368,6 @@
   </div>
 </div>
 
-<!-- الإيداع — حد أدنى $5 -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -397,7 +384,6 @@
   </div>
 </div>
 
-<!-- السحب -->
 <div class="modal-overlay" id="modalWithdraw">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -426,7 +412,6 @@
   </div>
 </div>
 
-<!-- تسجيل الخروج -->
 <div class="modal-overlay" id="modalLogout">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -443,7 +428,6 @@
   </div>
 </div>
 
-<!-- شرح التطبيق -->
 <div class="modal-overlay" id="modalAbout">
   <div class="modal" style="max-width:600px;">
     <div class="modal-handle"></div>
@@ -453,12 +437,12 @@
         <p>منصة تداول مباشر على بروتوكول Hyperliquid اللامركزي، تعمل بالكامل داخل متصفحك دون أي خوادم وسيطة. الأسعار تعمل للجميع — ربط المحفظة يُتيح التداول.</p>
       </div>
       <div class="about-section">
-        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>هو بيانات اعتماد محفظتك الوحيدة. يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة. احتفظ بنسخة احتياطية دائماً.</p></div></div>
-        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر متاح في السوق.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر. استخدمها بحذر.</p></div></div>
-        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد، لتأمين الأرباح دون مراقبة مستمرة.</p></div></div>
-        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>أمر وقائي يُغلق الصفقة تلقائياً عند حد خسارة تحدده، للحد من المخاطر.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة تلقائياً إذا تجاوزت الخسارة الهامش. يظهر كخط برتقالي في الرسم.</p></div></div>
+        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة. احتفظ بنسخة احتياطية دائماً.</p></div></div>
+        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر.</p></div></div>
+        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد لتأمين الأرباح.</p></div></div>
+        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>يُغلق الصفقة تلقائياً عند حد خسارة تحدده للحد من المخاطر.</p></div></div>
+        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة إذا تجاوزت الخسارة الهامش.</p></div></div>
       </div>
     </div>
     <div class="modal-buttons modal-buttons-center">
@@ -467,7 +451,6 @@
   </div>
 </div>
 
-<!-- PIN — إدخال -->
 <div class="modal-overlay" id="modalPIN">
   <div class="lock-screen">
     <div class="lock-header">
@@ -500,14 +483,13 @@
   </div>
 </div>
 
-<!-- PIN — نسيان -->
 <div class="modal-overlay" id="modalForgotPIN" style="z-index:9999;">
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="logout-content">
       <div class="logout-icon">⚠️</div>
       <h3 class="modal-title">نسيان رمز PIN</h3>
-      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية بما فيها المفتاح الخاص.<br><strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
+      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية.<br><strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"             id="forgotCancel">إلغاء</button>
@@ -517,7 +499,6 @@
   </div>
 </div>
 
-<!-- PIN — تعيين -->
 <div class="modal-overlay" id="modalSetPIN">
   <div class="lock-screen">
     <div class="lock-header">
@@ -552,16 +533,19 @@
 <div id="toast"></div>
 <div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
 
-<!-- Preload scripts -->
 <link rel="preload" as="script" href="/js/config.js">
 <link rel="preload" as="script" href="/js/state.js">
 <link rel="preload" as="script" href="/js/utils.js">
 <link rel="preload" as="script" href="/js/ws.js">
 
+<!-- ethers only — lightweight-charts REMOVED -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 
+<!-- ✅ TradingView Advanced Charts — local, MUST load before js/chart.js -->
+<script src="/charting_library/charting_library.standalone.js"></script>
+
+<!-- App modules in /js/ -->
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/utils.js"></script>
@@ -583,7 +567,7 @@
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(() => {}).catch(() => {});
+    navigator.serviceWorker.register('/sw.js').then(()=>{}).catch(()=>{});
   });
 }
 </script>
