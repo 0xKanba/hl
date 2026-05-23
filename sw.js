@@ -1,23 +1,15 @@
-/* ═══════════════════════════════════════
-   sw.js — Service Worker v3.1
-   ✅ 3 استراتيجيات تخزين واضحة
-   ✅ يعمل بدون إنترنت كاملاً
-   ✅ hl2.css مضاف (كان مفقوداً — v3.0 bug)
-═══════════════════════════════════════ */
 'use strict';
 
-const CACHE_APP    = 'hltrade-app-v320';   /* JS/CSS/HTML */
-const CACHE_IMGS   = 'hltrade-img-v320';   /* صور */
-const CACHE_FONTS  = 'hltrade-fnt-v320';   /* خطوط */
+const CACHE_APP   = 'hltrade-app-v400';
+const CACHE_IMGS  = 'hltrade-img-v400';
+const CACHE_FONTS = 'hltrade-fnt-v400';
 
-/* ══ الملفات الأساسية — تُحمَّل عند التثبيت ══ */
 const APP_SHELL = [
   '/',
   '/index.html',
   '/hl.css',
-  '/hl2.css',          /* ✅ مضاف — كان مفقوداً في v3.0 */
+  '/hl2.css',
   '/manifest.json',
-  /* JS core */
   '/js/config.js',
   '/js/state.js',
   '/js/utils.js',
@@ -35,19 +27,15 @@ const APP_SHELL = [
   '/js/chart.js',
   '/js/c.js',
   '/js/app.js',
-  /* صور */
   '/images/oil.svg',
   '/images/gold.svg',
   '/images/silver.svg',
   '/images/100.png',
   '/images/btc21.png',
-
-  /* أيقونات */
   '/icon-192x192.png',
   '/icon-512x512.png'
 ];
 
-/* ══ تثبيت — pre-cache كل الـ App Shell ══ */
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_APP)
@@ -56,7 +44,6 @@ self.addEventListener('install', e => {
   );
 });
 
-/* ══ تنشيط — حذف كل كاش قديم ══ */
 self.addEventListener('activate', e => {
   const CURRENT = [CACHE_APP, CACHE_IMGS, CACHE_FONTS];
   e.waitUntil(
@@ -68,43 +55,28 @@ self.addEventListener('activate', e => {
   );
 });
 
-/* ══ جلب الموارد ══ */
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-
   const url = new URL(e.request.url);
 
-  /* 1. API Hyperliquid — Network First, fallback Cache */
   if (url.hostname === 'api.hyperliquid.xyz' || url.hostname === 'arb1.arbitrum.io') {
     e.respondWith(networkFirst(e.request, CACHE_APP));
     return;
   }
-
-  /* 2. خطوط Google — Cache First (لا تتغير أبداً) */
   if (url.hostname.includes('fonts.g') || url.hostname.includes('fonts.googleapis')) {
     e.respondWith(cacheFirst(e.request, CACHE_FONTS));
     return;
   }
-
-  /* 3. CDN مكتبات (ethers, lightweight-charts) — Cache First */
   if (url.hostname === 'cdnjs.cloudflare.com' || url.hostname === 'unpkg.com') {
     e.respondWith(cacheFirst(e.request, CACHE_FONTS));
     return;
   }
-
-  /* 4. صور — Cache First */
   if (/\.(png|jpg|jpeg|gif|svg|webp|ico)(\?.*)?$/.test(url.pathname)) {
     e.respondWith(cacheFirst(e.request, CACHE_IMGS));
     return;
   }
-
-  /* 5. App Shell (JS/CSS/HTML) — Cache First + Background Update */
   e.respondWith(staleWhileRevalidate(e.request, CACHE_APP));
 });
-
-/* ══════════════════════════════
-   استراتيجيات التخزين
-══════════════════════════════ */
 
 async function networkFirst(req, cacheName) {
   try {
@@ -117,8 +89,7 @@ async function networkFirst(req, cacheName) {
   } catch {
     const cached = await caches.match(req);
     return cached || new Response(JSON.stringify({ error: 'offline' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' }
+      status: 503, headers: { 'Content-Type': 'application/json' }
     });
   }
 }
@@ -140,16 +111,13 @@ async function cacheFirst(req, cacheName) {
 
 async function staleWhileRevalidate(req, cacheName) {
   const cached = await caches.match(req);
-
   const fetchPromise = fetch(req).then(res => {
     if (res && res.ok) {
       caches.open(cacheName).then(c => c.put(req, res.clone())).catch(() => {});
     }
     return res;
   }).catch(() => null);
-
   if (cached) return cached;
-
   const res = await fetchPromise;
   return res || caches.match('/index.html') || new Response('Offline', { status: 503 });
 }
