@@ -84,6 +84,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 repo tree
@@ -1456,7 +1457,6 @@
 │   ├── prices.js
 │   ├── session.js
 │   ├── state.js
-│   ├── sw.js
 │   ├── tpsl.js
 │   ├── trading.js
 │   ├── utils.js
@@ -1473,6 +1473,6 @@
 ├── x2.png
 └── x3.png
 
-11 directories, 1372 files
+11 directories, 1371 files
 ```
 <!-- TREE END -->
