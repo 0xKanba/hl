@@ -51,6 +51,23 @@
       document.documentElement.setAttribute('data-theme',t);
     })();
   </script>
+
+  <!-- Prevent iOS font-size zoom on input focus (font-size must be >= 16px) -->
+  <style>
+    input, select, textarea {
+      font-size: max(16px, 1em) !important;
+    }
+    /* qty input override — keep large mono style but still >= 16px */
+    .qty-input {
+      font-size: clamp(16px, 4.5vw, 22px) !important;
+    }
+    .form-input {
+      font-size: max(16px, 1.1em) !important;
+    }
+    ._cqi {
+      font-size: max(16px, 1.1em) !important;
+    }
+  </style>
 </head>
 <body>
 
@@ -63,7 +80,6 @@
         <span class="nav-logo-icon">💧</span>
         <span class="nav-logo-text">سيولة</span>
       </button>
-      <!-- ✅ Theme toggle — replaces old "مباشر" link -->
       <button class="nav-theme-btn" id="btnTheme" title="تبديل المظهر">🌙</button>
     </div>
     <div class="nav-right">
@@ -155,8 +171,14 @@
       <!-- لوحة التداول -->
       <div class="trade-panel">
         <div class="qty-input-row">
+          <!--
+            value="1" — قيمة افتراضية منطقية لنفط (1 برميل)
+            inputmode="decimal" — لوحة أرقام عشرية على موبايل
+            لا readonly — لوحة المفاتيح تظهر فقط عند النقر
+          -->
           <input type="number" class="qty-input" id="qtyInput"
-                 placeholder="0.00" min="0" step="any" inputmode="decimal">
+                 value="1" min="0" step="any" inputmode="decimal"
+                 autocomplete="off" autocorrect="off" spellcheck="false">
           <button class="qty-100" id="qty100">100%</button>
           <span class="qty-unit" id="qtyUnit">برميل</span>
         </div>
@@ -243,7 +265,7 @@
       <div class="key-wrapper">
         <input class="key-input form-input" id="privateKey" type="password"
                placeholder="0x4a3b..." autocomplete="off"
-               style="font-size:14px;padding:12px 44px 12px 12px;">
+               style="padding:12px 44px 12px 12px;">
         <button class="key-toggle" id="toggleKey" type="button">👁</button>
       </div>
     </div>
@@ -307,7 +329,8 @@
     <div class="form-group">
       <label>الربح المستهدف بالدولار ($)</label>
       <input type="number" class="form-input" id="tpAmount"
-             placeholder="مثال: 10" min="0.1" step="any" inputmode="decimal">
+             placeholder="10" min="0.1" step="any" inputmode="decimal"
+             autocomplete="off">
       <div class="calc-preview" id="tpPreview">سعر التفعيل: —</div>
     </div>
     <div class="modal-buttons">
@@ -329,7 +352,8 @@
     <div class="form-group">
       <label>الخسارة المسموح بها بالدولار ($)</label>
       <input type="number" class="form-input" id="slAmount"
-             placeholder="مثال: 5" min="0.1" step="any" inputmode="decimal">
+             placeholder="5" min="0.1" step="any" inputmode="decimal"
+             autocomplete="off">
       <div class="calc-preview" id="slPreview">سعر الوقف: —</div>
     </div>
     <div class="modal-buttons">
@@ -374,7 +398,8 @@
     <h3 class="modal-title">💵 إيداع USDC</h3>
     <div class="form-group">
       <label>المبلغ (USDC)</label>
-      <input type="number" class="form-input" id="depositAmount" placeholder="10" min="5" inputmode="decimal">
+      <input type="number" class="form-input" id="depositAmount"
+             placeholder="10" min="5" inputmode="decimal" autocomplete="off">
     </div>
     <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال 1–3 دقائق.</p>
     <div class="modal-buttons">
@@ -394,7 +419,8 @@
     </div>
     <div class="form-group">
       <label>المبلغ المُرسَل (USDC)</label>
-      <input type="number" class="form-input" id="withdrawAmount" placeholder="21" min="2" inputmode="decimal">
+      <input type="number" class="form-input" id="withdrawAmount"
+             placeholder="21" min="2" inputmode="decimal" autocomplete="off">
     </div>
     <div class="withdraw-preview hidden" id="withdrawPreview">
       <div class="wp-row"><span>📤 المبلغ المُرسَل</span><span class="wp-val" id="wpSend">—</span></div>
@@ -403,7 +429,8 @@
     </div>
     <div class="form-group">
       <label>عنوان المحفظة (Arbitrum)</label>
-      <input type="text" class="form-input" id="withdrawAddress" placeholder="0x..." dir="ltr">
+      <input type="text" class="form-input" id="withdrawAddress"
+             placeholder="0x..." dir="ltr" autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"              id="withdrawCancel">إلغاء</button>
@@ -538,14 +565,13 @@
 <link rel="preload" as="script" href="/js/utils.js">
 <link rel="preload" as="script" href="/js/ws.js">
 
-<!-- ethers only — lightweight-charts REMOVED -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- ✅ TradingView Advanced Charts — local, MUST load before js/chart.js -->
+<!-- TradingView Advanced Charts — local, must load before js/chart.js -->
 <script src="/charting_library/charting_library.standalone.js"></script>
 
-<!-- App modules in /js/ -->
+<!-- App modules -->
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/utils.js"></script>

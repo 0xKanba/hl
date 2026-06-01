@@ -62,6 +62,40 @@ function _toggleTheme() {
   _applyTheme(next, true);
 }
 
+/* ════ Qty input — sensible defaults ════ */
+function _initQtyInput() {
+  const input = $('qtyInput');
+  if (!input) return;
+
+  /* Set initial default based on current asset */
+  const a = ASSETS[State.asset];
+  const defaultVal = a?.presets?.[0] ?? 1;
+  if (!input.value || +input.value <= 0) {
+    input.value = defaultVal;
+    State.qty   = defaultVal;
+  }
+
+  /* Mobile: only show keyboard when user explicitly taps the field */
+  input.addEventListener('focus', () => {
+    /* Select all text on focus for easy replacement */
+    input.select?.();
+  });
+
+  input.addEventListener('blur', () => {
+    /* Restore default if user cleared field */
+    if (!input.value || +input.value <= 0) {
+      const asset = ASSETS[State.asset];
+      const def   = asset?.presets?.[0] ?? 1;
+      input.value = def;
+      State.qty   = def;
+    }
+  });
+
+  input.oninput = function () {
+    State.qty = parseFloat(this.value) || 0;
+  };
+}
+
 /* ════ Options menu ════ */
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
@@ -96,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
   _startDatetimeClock();
   _initMonthsPanel();
   _initOptsBackdrop();
+  _initQtyInput();
 
   $('loginBtn').onclick     = login;
   $('privateKey').onkeydown = e => e.key === 'Enter' && login();
@@ -124,27 +159,27 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btnOptions').onclick = openOptions;
   $('optsClose').onclick  = closeOptions;
 
-  $('optBalance').onclick  = () => { if (State.isGuest) return _promptConnect(); showBalance(); };
-  $('optHistory').onclick  = () => { if (State.isGuest) return _promptConnect(); showHistory(); };
-  $('optCalendar').onclick = () => { if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
-  $('optDeposit').onclick  = () => { if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
-  $('optWithdraw').onclick = () => { if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
-  $('optLogout').onclick   = () => openModal('modalLogout');
+  $('optBalance').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showBalance(); };
+  $('optHistory').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showHistory(); };
+  $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
+  $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
+  $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
+  $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
   $('btnBuy').onclick  = () => askTrade(true);
   $('btnSell').onclick = () => askTrade(false);
 
-  $('qtyInput').oninput = function () { State.qty = parseFloat(this.value) || 0; };
-
+  /* 100% button */
   $('qty100').onclick = () => {
     if (State.isGuest) return _promptConnect();
     const a   = ASSETS[State.asset];
     const bal = State.balance?.available || State.balance?.total || 0;
     const px  = State.prices[State.asset]?.mid;
     if (!bal || !px) return toast('رصيد غير متاح', 'err');
-    State.qty = parseFloat(wire((bal * a.lev) / px, a.szDp));
-    $('qtyInput').value = State.qty;
-    toast(`✅ ${State.qty} ${a.unit}`, 'ok');
+    const qty100 = parseFloat(wire((bal * a.lev) / px, a.szDp));
+    State.qty = qty100;
+    $('qtyInput').value = qty100;
+    toast(`✅ ${qty100} ${a.unit}`, 'ok');
   };
 
   $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
@@ -254,9 +289,9 @@ document.addEventListener('DOMContentLoaded', () => {
     o.classList.remove('open');
   });
 
-  /* ═══════════════════════════════════════════
+  /* ═══════════════════════════════════════
      Boot sequence
-  ═══════════════════════════════════════════ */
+  ═══════════════════════════════════════ */
   startMainWs();
 
   const saved = localStorage.getItem(LS_KEY);

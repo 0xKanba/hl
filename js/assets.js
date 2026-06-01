@@ -2,6 +2,7 @@
    assets.js — تبديل الأصول
    ✅ لا وميض عند تبديل الأصل
    ✅ الأصل الافتراضي النفط (CL)
+   ✅ قيمة افتراضية منطقية في حقل الكمية
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -23,10 +24,17 @@ function switchAsset(sym) {
   const img = $('priceAssetImg');
   if (img && ASSET_IMAGES[sym]) { img.src = ASSET_IMAGES[sym]; img.alt = sym; }
 
-  /* الكمية الافتراضية */
-  State.qty = a.presets?.[0] || 1;
+  /* ── الكمية الافتراضية ──
+     نضع القيمة الأولى من presets كقيمة افتراضية.
+     إذا عدّل المستخدم الحقل يدوياً نحافظ على قيمته.
+  */
   const qtyEl = $('qtyInput');
-  if (qtyEl) qtyEl.value = State.qty;
+  const preset = a.presets?.[0] ?? 1;
+  State.qty = preset;
+  if (qtyEl) {
+    qtyEl.value = preset;
+    qtyEl._userEdited = false; /* reset flag on asset switch */
+  }
 
   /* إعادة تعيين prevMid بدون وميض */
   State.prevMid[sym] = State.prices[sym]?.mid || 0;
