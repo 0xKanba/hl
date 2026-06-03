@@ -1,33 +1,33 @@
-export class Agent {
-    constructor() {
-        this.config = null;
-    }
+(function () {
 
-    loadFromURL() {
+    function decodeLink() {
         const params = new URLSearchParams(window.location.search);
         const link = params.get("link");
 
         if (!link) return null;
 
         try {
-            const decoded = JSON.parse(atob(link));
-
-            // لا يوجد مفاتيح هنا
-            this.config = {
-                main: decoded.main,
-                agent_id: decoded.agent_id
-            };
-
-            console.log("Agent loaded:", this.config);
-            return this.config;
-
+            const jsonStr = atob(link);
+            return JSON.parse(jsonStr);
         } catch (e) {
-            console.error("Invalid link");
+            console.error("Invalid link format");
             return null;
         }
     }
 
-    getConfig() {
-        return this.config;
+    const config = decodeLink();
+
+    if (!config) {
+        console.warn("No agent config found in URL");
+        return;
     }
-}
+
+    // تخزين محلي (اختياري)
+    localStorage.setItem("hl_agent_config", JSON.stringify(config));
+
+    // جعلها متاحة عالميًا لباقي المشروع
+    window.HL_AGENT = config;
+
+    console.log("Agent loaded:", config);
+
+})();
