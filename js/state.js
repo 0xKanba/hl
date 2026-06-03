@@ -8,7 +8,7 @@ const State = {
   wallet: null,
   asset:  'CL',
   qty:    0.1,
-  isGuest: true,          /* ✅ وضع الزائر — يتحول false بعد login */
+  isGuest: true,
 
   /* أسعار الأصول */
   prices: {
@@ -55,11 +55,15 @@ const State = {
   sessionStats: { XAU:null, NQ:null, GOLD:null, SILVER:null, CL:null },
 
   /* ✅ حماية الصفقات من الاختفاء
-     _lastOptimisticClose : وقت آخر إغلاق — guard 20 ثانية
+     _lastOptimisticClose : timestamp آخر إغلاق — guard 20 ثانية
      _emptyPosCount       : عداد استجابات API فارغة (يتطلب 2 متتاليتين)
+     _closedCoins         : ✅ FIX — قائمة الـ coins التي أُغلقت optimistically
+                            تُفلتر من rawPos أثناء نافذة الحماية
+                            لمنع إعادة ظهور الصفقة كـ "ghost position"
   */
   _lastOptimisticClose: 0,
   _emptyPosCount:       0,
+  _closedCoins:         [],   /* coin strings e.g. ['xyz:CL', 'xyz:GOLD'] */
 
   /* اتصال Hyperliquid */
   wsConnected: false

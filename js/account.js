@@ -54,16 +54,6 @@ async function pollAccount() {
     const rawPos    = (xyz?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
     const floatPnl  = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
 
-    /*
-      State.balance:
-        total     = Spot USDC (real withdrawable cash — NOT equity)
-        margin    = margin locked in open perp positions
-        floatPnl  = unrealized PnL (display only, never added to total)
-        available = total - margin  (what can be used to open new trades)
-
-      intentional: xyzVal (accountValue) is NOT added here.
-      xyzVal already includes unrealizedPnl + margin — adding spotUSDC on top = double counting.
-    */
     State.balance = {
       total:     spotUSDC,
       margin,
@@ -73,11 +63,37 @@ async function pollAccount() {
 
     /* ── Position update with guard ── */
     if (inGuard) {
-      if (rawPos.length > 0) {
+      /*
+       * ✅ FIX for ghost-position bug (Issue 2).
+       *
+       * ROOT CAUSE: During the 20-second guard window, when rawPos.length > 0
+       * (API still shows the position because the IOC close hasn't settled yet),
+       * the original code called _applyPositions(rawPos) unconditionally — which
+       * RE-ADDED the already-optimistically-removed position to State.positions,
+       * causing it to reappear in the UI as a "ghost".
+       *
+       * FIX: Filter rawPos through State._closedCoins.
+       * State._closedCoins contains the coin strings of positions that were
+       * optimistically closed (set by execClose / execCloseAll in trading.js).
+       * Any rawPos entry whose coin is in _closedCoins is excluded from the
+       * update, preventing the ghost from reappearing.
+       * Entries self-expire from _closedCoins after 25 seconds (trading.js).
+       *
+       * This allows other open positions to still be updated during the guard,
+       * while the just-closed position stays removed.
+       */
+      const closedCoins = State._closedCoins || [];
+
+      if (rawPos.length > 0 || State.positions.length > 0) {
+        const filtered = closedCoins.length > 0
+          ? rawPos.filter(p => !closedCoins.includes(p.position.coin))
+          : rawPos;
+
         State._emptyPosCount = 0;
-        _applyPositions(rawPos);
+        _applyPositions(filtered);
       }
     } else {
+      /* Guard expired — normal sync with double-confirmation for clean UX */
       if (State.positions.length > 0 && rawPos.length === 0) {
         State._emptyPosCount = (State._emptyPosCount || 0) + 1;
         if (State._emptyPosCount < 2) return;
