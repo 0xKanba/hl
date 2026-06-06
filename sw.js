@@ -43,8 +43,8 @@ const APP_SHELL = [
   '/images/btc21.png',
 
   /* أيقونات */
-  '/icon-192x192.png',
-  '/icon-512x512.png'
+  '/images/icon-192x192.png',
+  '/images/icon-512x512.png'
 ];
 
 /* ══ تثبيت — pre-cache كل الـ App Shell ══ */
