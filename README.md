@@ -12,6 +12,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 repo tree
@@ -29,7 +30,8 @@
 │   ├── icon-512x512.png
 │   ├── oil.svg
 │   ├── silver.svg
-│   └── x1.png
+│   ├── x1.png
+│   └── x2.png
 ├── index.html
 ├── js
 │   ├── account.js
@@ -56,7 +58,6 @@
 ├── md.html
 ├── sw.js
 ├── tree.txt
-├── x2.png
 └── x3.png
 
 4 directories, 37 files
