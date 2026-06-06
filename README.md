@@ -11,6 +11,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 repo tree
@@ -27,7 +28,8 @@
 │   ├── icon-192x192.png
 │   ├── icon-512x512.png
 │   ├── oil.svg
-│   └── silver.svg
+│   ├── silver.svg
+│   └── x1.png
 ├── index.html
 ├── js
 │   ├── account.js
@@ -54,7 +56,6 @@
 ├── md.html
 ├── sw.js
 ├── tree.txt
-├── x1.png
 ├── x2.png
 └── x3.png
 
