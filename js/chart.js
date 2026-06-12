@@ -16,9 +16,8 @@ const ChartModule = (function () {
   let _rtCoin    = null;
   let _rtIv      = null;
   let _built     = false;
-  /* FIX-1: added for layout-wait poll + resize handling */
-  let _ro        = null;   // ResizeObserver
-  let _layoutTmr = null;   // setTimeout handle for _waitLayout
+  let _ro        = null;   // ResizeObserver — keeps widget synced to container
+  let _layoutTmr = null;   // poll handle for _waitLayout
 
   const RES = {
     '1':'1m','3':'3m','5':'5m','15':'15m','30':'30m',
@@ -33,7 +32,7 @@ const ChartModule = (function () {
   /* ── CSS (injected once) ── */
   (function(){
     if (document.getElementById('_cCSS')) return;
-    const st=document.createElement('style'); st.id='_cCSS';
+    const st=document.createElement('style');st.id='_cCSS';
     st.textContent=`
 .chart-screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:var(--bg-app,#000);}
 .chart-screen.hidden{display:none!important;}
@@ -55,13 +54,13 @@ const ChartModule = (function () {
 ._cmd{flex:1.1;display:flex;flex-direction:column;align-items:center;gap:4px;}
 ._cql{font-size:9px;color:var(--text-muted,#555);font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
 ._cqr{display:flex;align-items:center;gap:5px;}
-._cqi{width:80px;font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:800;text-align:center;direction:ltr;background:var(--bg-input,#1e1e1e);border:2px solid var(--border-strong,#3d3d3d);border-radius:10px;padding:5px 4px;color:var(--text-primary,#f5f5f5);outline:none;}
+._cqi{width:80px;font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:800;text-align:center;direction:ltr;background:var(--bg-input,#1e1e1e);border:2px solid var(--border-strong,#3d3d3d);border-radius:10px;padding:5px 4px;color:var(--text-primary,#f5f5f5);outline:none;font-size:max(16px,1em);}
 ._cqi:focus{border-color:var(--hc-ac,#ff8c42);box-shadow:0 0 0 3px rgba(255,140,66,.18);}
 ._cqu{font-size:10px;color:var(--text-secondary,#a0a0a0);font-weight:800;white-space:nowrap;}
 ._ctw{flex:1;min-height:0;position:relative;overflow:hidden;background:#040404;direction:ltr;}
 #_tvC{position:absolute;top:0;left:0;overflow:hidden;direction:ltr;}
-#_tvC iframe{border:none!important;display:block;}
-._cfo{position:absolute;inset:0;z-index:90;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.60);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);direction:rtl;}
+#_tvC iframe{border:none!important;display:block;direction:ltr;}
+._cfo{position:absolute;inset:0;z-index:90;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);direction:rtl;}
 ._cfc{background:var(--bg-card,#0d0d0d);border-top:2px solid var(--border-strong,#3d3d3d);border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:13px 15px 30px;animation:_cfSU .22s cubic-bezier(.4,0,.2,1);}
 @keyframes _cfSU{from{transform:translateY(100%)}to{transform:none}}
 ._cfh{width:30px;height:4px;background:var(--border-strong,#3d3d3d);border-radius:999px;margin:0 auto 11px;}
@@ -74,7 +73,7 @@ const ChartModule = (function () {
 ._cfv.g{color:#00e676;}._cfv.r{color:#ff3d3d;}._cfv.w{color:#ffd600;}
 ._cfb{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 ._cfca{padding:13px;border-radius:999px;border:1.5px solid var(--border-strong,#3d3d3d);background:var(--bg-elev,#161616);color:var(--text-secondary,#a0a0a0);font-size:14px;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif;}
-._cfex{padding:13px;border-radius:999px;border:none;color:#fff;font-size:14px;font-weight:900;cursor:pointer;font-family:'Cairo',sans-serif;display:flex;align-items:center;justify-content:center;gap:7px;}
+._cfex{padding:13px;border-radius:999px;border:none;color:#fff;font-size:14px;font-weight:900;cursor:pointer;font-family:'Cairo',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;}
 ._cfex.g{background:linear-gradient(135deg,#00e676,#007c3a);}
 ._cfex.r{background:linear-gradient(135deg,#ff3d3d,#a00000);}
 ._cfex:active{filter:brightness(.85);}
@@ -85,7 +84,7 @@ const ChartModule = (function () {
     document.head.appendChild(st);
   })();
 
-  /* ── Build screen HTML (once) ── */
+  /* ── Build screen HTML once ── */
   function _build() {
     if (_built) return;
     const sc=document.getElementById('chartScreen');
@@ -112,8 +111,7 @@ const ChartModule = (function () {
   <div class="_cmd">
     <span class="_cql">الكمية</span>
     <div class="_cqr">
-      <input class="_cqi" id="_cQty" type="number" value="1"
-             min="0" step="any" inputmode="decimal">
+      <input class="_cqi" id="_cQty" type="number" value="1" min="0" step="any" inputmode="decimal">
       <span class="_cqu" id="_cQun">—</span>
     </div>
   </div>
@@ -133,8 +131,8 @@ const ChartModule = (function () {
 
   function _hdr(sym) {
     const a=_asset(sym);
-    const ic=document.getElementById('_cIco'), nm=document.getElementById('_cNam');
-    const qu=document.getElementById('_cQun'), qi=document.getElementById('_cQty');
+    const ic=document.getElementById('_cIco'),nm=document.getElementById('_cNam');
+    const qu=document.getElementById('_cQun'),qi=document.getElementById('_cQty');
     if(ic)ic.textContent=a.icon||'📊';
     if(nm)nm.textContent=a.name||sym;
     if(qu)qu.textContent=a.unit||'';
@@ -143,23 +141,26 @@ const ChartModule = (function () {
   }
 
   function _btnPx() {
-    const p=_px(_sym), a=_asset(_sym);
-    const b=document.getElementById('_cBpx'), s=document.getElementById('_cSpx');
-    if(!p) return;
+    const p=_px(_sym),a=_asset(_sym);
+    const b=document.getElementById('_cBpx'),s=document.getElementById('_cSpx');
+    if(!p)return;
     if(b)b.textContent='$'+(p*1.0005).toFixed(a.pxDp);
     if(s)s.textContent='$'+(p*0.9995).toFixed(a.pxDp);
   }
 
-  /* ════════════════════════════════════════
-     DATAFEED  — custom Hyperliquid implementation
-     Fetches candleSnapshot from api.hyperliquid.xyz
-     Streams live bars via WebSocket candle channel
-  ════════════════════════════════════════ */
+  /* ════════════════════════════════════════════════════════
+     DATAFEED — implements the 6 methods TradingView requires:
+     onReady, searchSymbols, resolveSymbol, getBars,
+     subscribeBars, unsubscribeBars
+     Source of truth: api.hyperliquid.xyz (REST + WS)
+  ════════════════════════════════════════════════════════ */
   const Datafeed={
+
     onReady(cb){
+      console.log('[Chart] datafeed.onReady');
       setTimeout(()=>cb({
         supported_resolutions:['1','3','5','15','30','60','120','240','D'],
-        exchanges:[{value:'HL',name:'Hyperliquid',desc:''}],
+        exchanges:[{value:'HL',name:'Hyperliquid',desc:'Hyperliquid Perps'}],
         symbols_types:[{name:'crypto',value:'crypto'}],
         supports_marks:false,
         supports_timescale_marks:false,
@@ -176,8 +177,14 @@ const ChartModule = (function () {
       })).filter(x=>x.symbol.toLowerCase().includes(ql)||x.description.toLowerCase().includes(ql)));
     },
 
-    resolveSymbol(name,ok){
-      const a=_asset(name),dp=a.pxDp||2;
+    resolveSymbol(name,ok,err){
+      const a=_asset(name);
+      if(!a||!ASSETS[name]){
+        err && err('unknown_symbol: '+name);
+        return;
+      }
+      const dp=a.pxDp||2;
+      console.log('[Chart] resolveSymbol →', name, '(coin:', _coin(name)+')');
       setTimeout(()=>ok({
         name,ticker:name,description:a.name||name,
         type:'crypto',session:'24x7',
@@ -193,29 +200,32 @@ const ChartModule = (function () {
 
     async getBars(si,res,pp,ok,err){
       try{
-        const iv=RES[res]||'1h', sym=si.ticker, gram=_gram(sym);
+        const iv=RES[res]||'1h',sym=si.ticker,gram=_gram(sym);
         const r=await fetch(HL_API+'/info',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
+          method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({type:'candleSnapshot',req:{
-            coin:_coin(sym),
-            interval:iv,
-            startTime:pp.from*1000,
-            endTime:pp.to*1000,
+            coin:_coin(sym),interval:iv,
+            startTime:pp.from*1000,endTime:pp.to*1000
           }})
         });
-        if(!r.ok) throw new Error('HTTP '+r.status);
+        if(!r.ok)throw new Error('HTTP '+r.status);
         const raw=await r.json();
-        if(!Array.isArray(raw)||!raw.length){ok([],{noData:true});return;}
-        ok(raw.map(c=>({
+        if(!Array.isArray(raw)||!raw.length){
+          console.log('[Chart] getBars', sym, iv, '→ noData');
+          ok([],{noData:true});return;
+        }
+        const bars=raw.map(c=>({
           time:Math.floor(c.t/1000),
-          open:gram?+c.o/TL:+c.o,
-          high:gram?+c.h/TL:+c.h,
-          low: gram?+c.l/TL:+c.l,
-          close:gram?+c.c/TL:+c.c,
+          open:gram?+c.o/TL:+c.o,high:gram?+c.h/TL:+c.h,
+          low:gram?+c.l/TL:+c.l,close:gram?+c.c/TL:+c.c,
           volume:+c.v||0,
-        })).sort((a,b)=>a.time-b.time),{noData:false});
-      }catch(e){err(e.message);}
+        })).sort((a,b)=>a.time-b.time);
+        console.log('[Chart] getBars', sym, iv, '→', bars.length, 'bars');
+        ok(bars,{noData:false});
+      }catch(e){
+        console.error('[Chart] getBars error:', e.message);
+        err(e.message);
+      }
     },
 
     subscribeBars(si,res,cb,uid){
@@ -229,29 +239,27 @@ const ChartModule = (function () {
     },
   };
 
-  /* ── Realtime WebSocket (Hyperliquid candle channel) ── */
+  /* ── Realtime candle WebSocket ── */
   function _rtConn(sym,res){
-    const coin=_coin(sym), iv=RES[res]||'1h';
+    const coin=_coin(sym),iv=RES[res]||'1h';
     if(_rtWs&&_rtWs.readyState<=1&&_rtCoin===coin&&_rtIv===iv)return;
-    _rtDis(); _rtCoin=coin; _rtIv=iv;
+    _rtDis();_rtCoin=coin;_rtIv=iv;
     try{
       _rtWs=new WebSocket(HL_WS);
       _rtWs.onopen=()=>{
         if(!_rtWs)return;
+        console.log('[Chart] WS subscribe', coin, iv);
         _rtWs.send(JSON.stringify({method:'subscribe',subscription:{type:'candle',coin,interval:iv}}));
       };
       _rtWs.onmessage=e=>{
         try{
           const msg=JSON.parse(e.data);
           if(msg.channel!=='candle'||!msg.data)return;
-          const c=msg.data, gram=_gram(_sym);
+          const c=msg.data,gram=_gram(_sym);
           const bar={
             time:Math.floor(c.t/1000),
-            open:gram?+c.o/TL:+c.o,
-            high:gram?+c.h/TL:+c.h,
-            low: gram?+c.l/TL:+c.l,
-            close:gram?+c.c/TL:+c.c,
-            volume:+c.v||0,
+            open:gram?+c.o/TL:+c.o,high:gram?+c.h/TL:+c.h,
+            low:gram?+c.l/TL:+c.l,close:gram?+c.c/TL:+c.c,volume:+c.v||0,
           };
           Object.values(_subs).forEach(s=>{try{s.cb(bar);}catch{}});
         }catch{}
@@ -260,19 +268,20 @@ const ChartModule = (function () {
         if(_visible&&Object.keys(_subs).length)
           _rtTimer=setTimeout(()=>_rtConn(_sym,_res),4000);
       };
-      _rtWs.onerror=()=>{};
-    }catch(e){console.warn('[Chart RT]',e.message);}
+      _rtWs.onerror=()=>{
+        console.warn('[Chart] WS error for', coin);
+      };
+    }catch(e){console.warn('[Chart] WS connect error:',e.message);}
   }
 
   function _rtDis(){
     clearTimeout(_rtTimer);
     if(_rtWs){try{_rtWs.close();}catch{}_rtWs=null;}
-    _rtCoin=null; _rtIv=null;
+    _rtCoin=null;_rtIv=null;
   }
 
   /* ── Destroy: full cleanup before re-init ── */
   function _destroy(){
-    /* FIX-1: clear layout timer and ResizeObserver */
     clearTimeout(_layoutTmr); _layoutTmr=null;
     if(_ro){_ro.disconnect();_ro=null;}
     if(_widget){try{_widget.remove();}catch{}_widget=null;}
@@ -281,33 +290,43 @@ const ChartModule = (function () {
     if(c){c.innerHTML=''; c.style.width=''; c.style.height='';}
   }
 
-  /* ════════════════════════════════════════
-     FIX-2: _waitLayout
-     Replace the original double-requestAnimationFrame (lines 272-276).
-     Root cause confirmed: two RAFs fire before the browser completes
-     the flex layout pass on ._ctw, so getBoundingClientRect()
-     returns height=0 and the if(h>0) guard silently skips setting
-     any dimension on #_tvC → TradingView gets a 0px container.
-     Fix: poll every 16ms until width AND height are both > 10px,
-     then call the callback with confirmed real pixel dimensions.
-     Maximum wait: 100 × 16ms = 1.6 seconds, then hard fallback.
-  ════════════════════════════════════════ */
+  /* ════════════════════════════════════════════════════════
+     _waitLayout — ROOT-CAUSE FIX
+
+     The original code used two nested requestAnimationFrame
+     calls before measuring #_cWrap. That is not sufficient:
+     after `chartScreen.classList.remove('hidden')` (display:
+     none → flex), the browser may need MULTIPLE frames to
+     finish the flex layout pass — especially on first open
+     and on mobile. When getBoundingClientRect() returned
+     height === 0, the old `if (h > 0)` guard silently did
+     NOTHING, leaving #_tvC at its CSS height:100% of a
+     still-zero ancestor. TradingView's `autosize:true` then
+     measured a 0×0 container AT CONSTRUCTION TIME → internal
+     canvas = 0×0 → nothing ever paints → loading screen never
+     clears, even though onChartReady may still fire.
+
+     Fix: poll every 16ms (one frame) until BOTH width and
+     height are > 10px, then proceed. Hard timeout at ~1.6s
+     falls back to a computed size derived from the screen,
+     so the widget is NEVER constructed with a zero container.
+  ════════════════════════════════════════════════════════ */
   function _waitLayout(cb, n){
     clearTimeout(_layoutTmr);
     n = n || 0;
     const wrap = document.getElementById('_cWrap');
-    if(wrap && _visible){
+    if (wrap && _visible) {
       const r = wrap.getBoundingClientRect();
-      if(r.width > 10 && r.height > 10){
+      if (r.width > 10 && r.height > 10) {
         cb(Math.floor(r.width), Math.floor(r.height));
         return;
       }
     }
-    if(!_visible) return;
-    if(n < 100){
-      _layoutTmr = setTimeout(()=>_waitLayout(cb, n+1), 16);
+    if (!_visible) return; // closed while waiting
+    if (n < 100) {
+      _layoutTmr = setTimeout(() => _waitLayout(cb, n + 1), 16);
     } else {
-      /* Hard fallback — always non-zero */
+      console.warn('[Chart] layout wait timed out — using fallback size');
       const sc = document.getElementById('chartScreen');
       const w  = sc ? sc.clientWidth  : window.innerWidth;
       const h  = Math.max(200, (sc ? sc.clientHeight : window.innerHeight) - 120);
@@ -315,90 +334,89 @@ const ChartModule = (function () {
     }
   }
 
-  /* ════════════════════════════════════════
-     FIX-3: _setupResize
-     ResizeObserver keeps widget dimensions in sync after init.
-     Replaces the broken autosize:true which also read container
-     at init time and got 0px.
-  ════════════════════════════════════════ */
+  /* ════════════════════════════════════════════════════════
+     _setupResize — replaces autosize:true.
+
+     autosize relies on TradingView's internal ResizeObserver,
+     which measures the container at the moment it's attached.
+     If that first measurement was 0×0 (see above), later size
+     changes are not guaranteed to trigger a correct repaint in
+     all library versions. We instead own the ResizeObserver,
+     keep #_tvC's inline pixel size in sync with #_cWrap, and
+     call widget.resize(w,h) explicitly — guaranteed to work for
+     orientation change, keyboard open/close, split-screen, etc.
+  ════════════════════════════════════════════════════════ */
   function _setupResize(){
-    if(_ro){_ro.disconnect(); _ro=null;}
-    const wrap = document.getElementById('_cWrap');
-    if(!wrap || !window.ResizeObserver) return;
-    _ro = new ResizeObserver(entries=>{
-      if(!_widget || !_visible) return;
-      const {width, height} = entries[0].contentRect;
-      if(width < 10 || height < 10) return;
-      const c = document.getElementById('_tvC');
-      if(c){
-        c.style.width  = Math.floor(width)+'px';
-        c.style.height = Math.floor(height)+'px';
-      }
-      try{_widget.resize(Math.floor(width), Math.floor(height));}catch{}
+    if(_ro){_ro.disconnect();_ro=null;}
+    const wrap=document.getElementById('_cWrap');
+    if(!wrap||!window.ResizeObserver)return;
+    _ro=new ResizeObserver(entries=>{
+      if(!_widget||!_visible)return;
+      const {width,height}=entries[0].contentRect;
+      if(width<10||height<10)return;
+      const c=document.getElementById('_tvC');
+      if(c){c.style.width=Math.floor(width)+'px';c.style.height=Math.floor(height)+'px';}
+      try{_widget.resize(Math.floor(width),Math.floor(height));}catch{}
     });
     _ro.observe(wrap);
   }
 
-  /* ── _initWidget: FIX-2 applied here ── */
+  /* ════ WIDGET INIT ════ */
   function _initWidget(sym){
     _destroy();
 
     if(typeof TradingView==='undefined'||typeof TradingView.widget!=='function'){
-      console.error('[Chart] TradingView not loaded — check /charting_library/charting_library.standalone.js');
+      console.error('[Chart] TradingView.widget is undefined.');
+      console.error('[Chart] Check that /charting_library/charting_library.standalone.js');
+      console.error('[Chart] exists and loads BEFORE /js/chart.js in index.html.');
       const w=document.getElementById('_cWrap');
       if(w)w.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ff8c42;font-size:14px;font-weight:700;font-family:Cairo,sans-serif;text-align:center;padding:20px;direction:rtl">⚠️ تعذر تحميل مكتبة الرسم البياني<br><small style="opacity:.6;font-size:11px;margin-top:8px;display:block">تأكد من وجود /charting_library/charting_library.standalone.js</small></div>';
       return;
     }
 
-    /* FIX-2: replaced double-RAF with polling layout wait */
-    _waitLayout((w, h) => _doInit(sym, w, h));
+    _waitLayout((w,h)=>_doInit(sym,w,h));
   }
 
-  /* ── _doInit: FIX-2 + FIX-3 applied here ── */
-  function _doInit(sym, w, h){
-    if(!_visible) return;
-
+  function _doInit(sym,w,h){
+    if(!_visible)return;
     const cont=document.getElementById('_tvC');
-    if(!cont) return;
+    if(!cont){console.error('[Chart] #_tvC missing — _build() did not run');return;}
 
-    /* FIX-2: set EXPLICIT pixel dimensions — remove dependency on CSS flex timing.
-       Original code: if(h>0){ cont.style.height=h+'px'; }
-       Bug: when h===0 (flex not settled), the if-guard silently skipped,
-       leaving #_tvC with no height → TradingView rendered into 0px canvas. */
-    cont.style.position = 'absolute';
-    cont.style.top      = '0';
-    cont.style.left     = '0';
-    cont.style.width    = w+'px';
-    cont.style.height   = h+'px';
-    cont.style.overflow = 'hidden';
+    /* Explicit pixel dimensions — guaranteed non-zero (see _waitLayout) */
+    cont.style.position='absolute';
+    cont.style.top='0';
+    cont.style.left='0';
+    cont.style.width=w+'px';
+    cont.style.height=h+'px';
 
     const dark=document.documentElement.getAttribute('data-theme')!=='light';
     const bg=dark?'#040404':'#ffffff';
-    _res='60';
+    _res='60'; // default 1H
+
+    console.log('[Chart] creating widget', sym, w+'x'+h, dark?'dark':'light');
 
     try{
       _widget=new TradingView.widget({
-        /* FIX-2 + FIX-3: explicit width/height instead of autosize:true.
-           autosize:true reads the container at widget construction time — same
-           race condition as getBoundingClientRect().  With explicit values
-           TradingView gets guaranteed non-zero dimensions.
-           Resizing is handled by _setupResize() → ResizeObserver → widget.resize(). */
+        /* Explicit width/height — NOT autosize.
+           autosize measures the container at construction time;
+           if that measurement is 0×0 the canvas never recovers.
+           Resizing after init is handled by _setupResize(). */
         width:  w,
         height: h,
 
-        symbol:   sym,
-        interval: '60',
+        symbol:sym,
+        interval:'60',
         container:'_tvC',
-        datafeed: Datafeed,
+        datafeed:Datafeed,
         library_path:'/charting_library/',
-        locale:  'en',
+        locale:'en',
         timezone:'Asia/Baghdad',
-        theme:   dark?'Dark':'Light',
-        style:   '1',
-        debug:   false,
-        enable_publishing:   false,
-        allow_symbol_change: false,
-        save_image:          false,
+        theme:dark?'Dark':'Light',
+        style:'1',
+        debug:false,
+        enable_publishing:false,
+        allow_symbol_change:false,
+        save_image:false,
         loading_screen:{backgroundColor:bg,foregroundColor:'#ff8c42'},
         disabled_features:[
           'header_symbol_search','header_resolutions','header_chart_type',
@@ -412,36 +430,42 @@ const ChartModule = (function () {
           'countdown_timer','show_logo_on_all_charts',
         ],
         enabled_features:[
-          'move_logo_to_main_pane',
-          'hide_left_toolbar_by_default',
+          'move_logo_to_main_pane','hide_left_toolbar_by_default',
         ],
         overrides:{
-          'mainSeriesProperties.candleStyle.upColor':         '#00e676',
-          'mainSeriesProperties.candleStyle.downColor':       '#ff3d3d',
-          'mainSeriesProperties.candleStyle.borderUpColor':   '#00e676',
-          'mainSeriesProperties.candleStyle.borderDownColor': '#ff3d3d',
-          'mainSeriesProperties.candleStyle.wickUpColor':     '#00e676',
-          'mainSeriesProperties.candleStyle.wickDownColor':   '#ff3d3d',
-          'paneProperties.background':     bg,
+          'mainSeriesProperties.candleStyle.upColor':'#00e676',
+          'mainSeriesProperties.candleStyle.downColor':'#ff3d3d',
+          'mainSeriesProperties.candleStyle.borderUpColor':'#00e676',
+          'mainSeriesProperties.candleStyle.borderDownColor':'#ff3d3d',
+          'mainSeriesProperties.candleStyle.wickUpColor':'#00e676',
+          'mainSeriesProperties.candleStyle.wickDownColor':'#ff3d3d',
+          'paneProperties.background':bg,
           'paneProperties.backgroundType':'solid',
           'paneProperties.vertGridProperties.color':dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)',
           'paneProperties.horzGridProperties.color':dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)',
-          'scalesProperties.textColor':    dark?'#a0a0a0':'#333',
-          'scalesProperties.fontSize':     11,
+          'scalesProperties.textColor':dark?'#a0a0a0':'#333',
+          'scalesProperties.fontSize':11,
           'scalesProperties.backgroundColor':dark?'#0a0a0a':'#f5f5f5',
         },
       });
 
       _widget.onChartReady(()=>{
-        /* FIX-3: attach ResizeObserver now that widget canvas is initialised */
+        console.log('[Chart] ✅ onChartReady —', sym);
         _setupResize();
         _btnPx();
         try{
-          _widget.activeChart().onIntervalChanged().subscribe(null,iv=>{_res=iv;});
+          _widget.activeChart().onIntervalChanged().subscribe(null,iv=>{
+            console.log('[Chart] interval →', iv);
+            _res=iv;
+          });
         }catch{}
       });
 
-    }catch(e){console.error('[Chart] widget error:',e);}
+    }catch(e){
+      console.error('[Chart] widget constructor threw:', e);
+      const w2=document.getElementById('_cWrap');
+      if(w2)w2.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ff3d3d;font-size:13px;font-weight:700;font-family:Cairo,sans-serif;text-align:center;padding:20px;direction:rtl">❌ خطأ في إنشاء الرسم البياني<br><small style="opacity:.7;font-size:11px;margin-top:6px;display:block;font-family:monospace;direction:ltr">'+(e.message||e)+'</small></div>';
+    }
   }
 
   /* ── Confirm sheet ── */
@@ -455,8 +479,8 @@ const ChartModule = (function () {
     if(!qty||qty<=0){typeof toast!=='undefined'&&toast('أدخل الكمية','err');return;}
     const a=_asset(_sym),gram=_gram(_sym),mid=_px(_sym);
     if(!mid){typeof toast!=='undefined'&&toast('لا يوجد سعر','err');return;}
-    const midOz=gram?mid*TL:mid, qtyOz=gram?qty/TL:qty;
-    const usd=(midOz*qtyOz).toFixed(2), mgn=(midOz*qtyOz/a.lev).toFixed(2);
+    const midOz=gram?mid*TL:mid,qtyOz=gram?qty/TL:qty;
+    const usd=(midOz*qtyOz).toFixed(2),mgn=(midOz*qtyOz/a.lev).toFixed(2);
     const liqOz=buy?midOz*(1-1/a.lev+0.5/a.lev):midOz*(1+1/a.lev-0.5/a.lev);
     const liqD=gram?(liqOz/TL).toFixed(a.pxDp):liqOz.toFixed(a.pxDp);
     _hideCf();
@@ -489,7 +513,7 @@ const ChartModule = (function () {
     if(btn){btn.disabled=true;btn.innerHTML='<span class="_cfspin"></span>';}
     const gram=_gram(_sym);
     const aApi=gram?(typeof ASSETS!=='undefined'?ASSETS['GOLD']:_asset(_sym)):_asset(_sym);
-    const mid=_px(_sym), midOz=gram?mid*TL:mid;
+    const mid=_px(_sym),midOz=gram?mid*TL:mid;
     if(!midOz){_hideCf();return;}
     const qtyOz=gram?qty/TL:qty;
     try{
@@ -540,9 +564,13 @@ const ChartModule = (function () {
 
   function switchAssetChart(sym){
     if(!_visible||sym===_sym)return;
-    _sym=sym; _hdr(sym); _initWidget(sym);
+    _sym=sym;_hdr(sym);_initWidget(sym);
   }
 
+  /* No-op kept for API compatibility — positions.js calls this
+     after every position update. Not part of the required
+     integration surface (onReady/searchSymbols/resolveSymbol/
+     getBars/subscribeBars/unsubscribeBars); safe to leave empty. */
   function refreshLines(){}
 
   return{open,close,switchInterval,switchAssetChart,refreshLines};
