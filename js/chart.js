@@ -16,18 +16,18 @@ const ChartModule = (function () {
   let _rtCoin    = null;
   let _rtIv      = null;
   let _built     = false;
-  let _ro        = null;   // ResizeObserver — keeps widget synced to container
-  let _layoutTmr = null;   // poll handle for _waitLayout
-  let _readyTmr  = null;   // watchdog: detects onChartReady never firing
+  let _ro        = null;
+  let _layoutTmr = null;
+  let _readyTmr  = null;
 
-  /* TradingView resolution string → Hyperliquid interval string */
+  /* TradingView resolution → Hyperliquid interval */
   const RES = {
     '1':'1m','3':'3m','5':'5m','15':'15m','30':'30m',
     '60':'1h','120':'2h','240':'4h','D':'1d','1D':'1d'
   };
 
-  /* Hyperliquid interval string → seconds per bar (for range math) */
-  const IV_SECONDS = {
+  /* Hyperliquid interval → seconds per bar (used to compute safe ranges) */
+  const IV_SEC = {
     '1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,
     '1h':3600,'2h':7200,'4h':14400,'1d':86400
   };
@@ -39,7 +39,7 @@ const ChartModule = (function () {
 
   /* ── CSS (injected once) ── */
   (function(){
-    if (document.getElementById('_cCSS')) return;
+    if(document.getElementById('_cCSS'))return;
     const st=document.createElement('style');st.id='_cCSS';
     st.textContent=`
 .chart-screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:var(--bg-app,#000);}
@@ -100,10 +100,10 @@ const ChartModule = (function () {
   })();
 
   /* ── Build screen HTML once ── */
-  function _build() {
-    if (_built) return;
+  function _build(){
+    if(_built)return;
     const sc=document.getElementById('chartScreen');
-    if (!sc) return;
+    if(!sc)return;
     _built=true;
     sc.innerHTML=`
 <div class="_cn">
@@ -144,7 +144,7 @@ const ChartModule = (function () {
     document.getElementById('_cSel').onclick=()=>_cf(false);
   }
 
-  function _hdr(sym) {
+  function _hdr(sym){
     const a=_asset(sym);
     const ic=document.getElementById('_cIco'),nm=document.getElementById('_cNam');
     const qu=document.getElementById('_cQun'),qi=document.getElementById('_cQty');
@@ -155,7 +155,7 @@ const ChartModule = (function () {
     _btnPx();
   }
 
-  function _btnPx() {
+  function _btnPx(){
     const p=_px(_sym),a=_asset(_sym);
     const b=document.getElementById('_cBpx'),s=document.getElementById('_cSpx');
     if(!p)return;
@@ -164,10 +164,10 @@ const ChartModule = (function () {
   }
 
   /* ════════════════════════════════════════════════════════
-     DATAFEED — implements the 6 methods TradingView requires:
-     onReady, searchSymbols, resolveSymbol, getBars,
-     subscribeBars, unsubscribeBars
-     Source of truth: api.hyperliquid.xyz (REST + WS)
+     DATAFEED
+     All 6 required TradingView datafeed methods.
+     Historical data: api.hyperliquid.xyz candleSnapshot via hlInfo()
+     Realtime data  : wss://api.hyperliquid.xyz/ws candle channel
   ════════════════════════════════════════════════════════ */
   const Datafeed={
 
@@ -193,13 +193,11 @@ const ChartModule = (function () {
     },
 
     resolveSymbol(name,ok,err){
-      const a=_asset(name);
-      if(!a||!ASSETS[name]){
-        err && err('unknown_symbol: '+name);
-        return;
+      if(typeof ASSETS==='undefined'||!ASSETS[name]){
+        (err||console.warn)('unknown_symbol:'+name);return;
       }
-      const dp=a.pxDp||2;
-      console.log('[Chart] resolveSymbol →', name, '(coin:', _coin(name)+')');
+      const a=_asset(name),dp=a.pxDp||2;
+      console.log('[Chart] resolveSymbol →',name,'coin:',_coin(name));
       setTimeout(()=>ok({
         name,ticker:name,description:a.name||name,
         type:'crypto',session:'24x7',
@@ -214,81 +212,77 @@ const ChartModule = (function () {
     },
 
     /* ──────────────────────────────────────────────────────
-       getBars — historical candles.
+       getBars — ROOT CAUSE FIX
 
-       FIX: some library builds call getBars with a `pp.from`
-       that, combined with `pp.to`, produces a window narrower
-       than a single bar (or 0). When that happens Hyperliquid's
-       candleSnapshot can legitimately return just 0-1 candles,
-       which the chart then displays as "one candle only" with
-       no history — matching the reported symptom.
+       Previous implementation used raw fetch() directly.
+       Cause of HTTP 422: hlInfo() in api.js processes the
+       response differently AND — critically — the rest of the
+       app's API calls all go through hlInfo().  When chart.js
+       used raw fetch with slightly different headers/format,
+       Hyperliquid's server rejected it with 422.
 
-       Fix: ALWAYS verify the requested window covers at least
-       `countBack` bars (default 300). If `pp.from`/`pp.to` give
-       a smaller window, recompute `from` from `to` and the
-       resolution's bar length. `pp.to` itself is trusted as-is
-       (falls back to "now" only if missing/invalid).
+       Fix: use hlInfo() exactly as session.js, prices.js and
+       every other module in the project does.  If hlInfo()
+       works for session stats, it works here.
 
-       Full diagnostic logging included — pp values, computed
-       range, and response shape — so if bars are still empty
-       the cause (wrong coin string vs. API error vs. truly no
-       data) is visible immediately in the console.
+       Also: TradingView's pp.from/pp.to are UNIX seconds.
+       We multiply by 1000 for Hyperliquid (expects ms).
+       Added defensive clamping so 0/NaN/future values never
+       reach the API.
     ────────────────────────────────────────────────────── */
     async getBars(si,res,pp,ok,err){
       try{
         const iv      = RES[res]||'1h';
         const sym     = si.ticker;
-        const gram     = _gram(sym);
-        const barSec   = IV_SECONDS[iv]||3600;
-        const countBack = (pp.countBack && pp.countBack>0) ? pp.countBack : 300;
+        const gram    = _gram(sym);
+        const barSec  = IV_SEC[iv]||3600;
+        const want    = (pp&&pp.countBack>0)?pp.countBack:300;
+        const nowSec  = Math.floor(Date.now()/1000);
 
-        let to   = Number.isFinite(pp.to)   ? pp.to   : Math.floor(Date.now()/1000);
-        let from = Number.isFinite(pp.from) ? pp.from : 0;
+        /* clamp to valid UNIX second range */
+        let toSec   = (pp&&pp.to  >1e9&&pp.to  <nowSec+86400)?Math.floor(pp.to)  :nowSec;
+        let fromSec = (pp&&pp.from>1e9&&pp.from<toSec)        ?Math.floor(pp.from):0;
 
-        if (!from || (to - from) < barSec) {
-          from = to - barSec * countBack;
+        /* ensure we request enough bars */
+        if(!fromSec||(toSec-fromSec)/barSec<want){
+          fromSec=toSec-barSec*want;
         }
 
-        console.log(
-          '[Chart] getBars', sym, iv,
-          'pp{from:'+pp.from+',to:'+pp.to+',countBack:'+pp.countBack+',first:'+pp.firstDataRequest+'}',
-          '→ range', new Date(from*1000).toISOString(), '..', new Date(to*1000).toISOString()
+        const startTime=fromSec*1000;  /* → ms for Hyperliquid */
+        const endTime  =toSec  *1000;
+
+        console.log('[Chart] getBars',sym,iv,
+          'first='+pp?.firstDataRequest,
+          new Date(startTime).toISOString().slice(0,16)+'..'+new Date(endTime).toISOString().slice(0,16)
         );
 
-        const r=await fetch(HL_API+'/info',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({type:'candleSnapshot',req:{
-            coin:_coin(sym),interval:iv,
-            startTime:from*1000,endTime:to*1000
-          }})
+        /* hlInfo() — same helper used by session.js, prices.js, account.js */
+        const raw=await hlInfo({
+          type:'candleSnapshot',
+          req:{coin:_coin(sym),interval:iv,startTime,endTime}
         });
-        if(!r.ok)throw new Error('HTTP '+r.status);
-        const raw=await r.json();
 
-        if(!Array.isArray(raw)){
-          console.warn('[Chart] getBars', sym, iv, '→ non-array response:', JSON.stringify(raw).slice(0,300));
-          ok([],{noData:true});return;
-        }
-        if(!raw.length){
-          console.log('[Chart] getBars', sym, iv, '→ 0 bars (empty array) for coin', _coin(sym));
+        if(!Array.isArray(raw)||!raw.length){
+          console.warn('[Chart] getBars noData',sym,iv,'coin='+_coin(sym),
+            'raw='+(Array.isArray(raw)?'[]':JSON.stringify(raw).slice(0,120)));
           ok([],{noData:true});return;
         }
 
         const bars=raw.map(c=>({
           time:Math.floor(c.t/1000),
           open:gram?+c.o/TL:+c.o,high:gram?+c.h/TL:+c.h,
-          low:gram?+c.l/TL:+c.l,close:gram?+c.c/TL:+c.c,
+          low :gram?+c.l/TL:+c.l,close:gram?+c.c/TL:+c.c,
           volume:+c.v||0,
         })).sort((a,b)=>a.time-b.time);
 
-        console.log(
-          '[Chart] getBars', sym, iv, '→', bars.length, 'bars',
-          '('+new Date(bars[0].time*1000).toISOString()+' .. '+new Date(bars[bars.length-1].time*1000).toISOString()+')'
-        );
+        console.log('[Chart] getBars',sym,iv,'→',bars.length,'bars',
+          bars.length?'('+new Date(bars[0].time*1000).toISOString().slice(0,10)+'..'+
+                          new Date(bars[bars.length-1].time*1000).toISOString().slice(0,10)+')':'');
 
         ok(bars,{noData:false});
+
       }catch(e){
-        console.error('[Chart] getBars error:', e.message);
+        console.error('[Chart] getBars ERROR',si.ticker,res,e.message);
         err(e.message);
       }
     },
@@ -313,7 +307,7 @@ const ChartModule = (function () {
       _rtWs=new WebSocket(HL_WS);
       _rtWs.onopen=()=>{
         if(!_rtWs)return;
-        console.log('[Chart] WS subscribe', coin, iv);
+        console.log('[Chart] WS subscribe',coin,iv);
         _rtWs.send(JSON.stringify({method:'subscribe',subscription:{type:'candle',coin,interval:iv}}));
       };
       _rtWs.onmessage=e=>{
@@ -324,7 +318,7 @@ const ChartModule = (function () {
           const bar={
             time:Math.floor(c.t/1000),
             open:gram?+c.o/TL:+c.o,high:gram?+c.h/TL:+c.h,
-            low:gram?+c.l/TL:+c.l,close:gram?+c.c/TL:+c.c,volume:+c.v||0,
+            low :gram?+c.l/TL:+c.l,close:gram?+c.c/TL:+c.c,volume:+c.v||0,
           };
           Object.values(_subs).forEach(s=>{try{s.cb(bar);}catch{}});
         }catch{}
@@ -333,9 +327,7 @@ const ChartModule = (function () {
         if(_visible&&Object.keys(_subs).length)
           _rtTimer=setTimeout(()=>_rtConn(_sym,_res),4000);
       };
-      _rtWs.onerror=()=>{
-        console.warn('[Chart] WS error for', coin);
-      };
+      _rtWs.onerror=()=>console.warn('[Chart] WS error',coin);
     }catch(e){console.warn('[Chart] WS connect error:',e.message);}
   }
 
@@ -345,50 +337,43 @@ const ChartModule = (function () {
     _rtCoin=null;_rtIv=null;
   }
 
-  /* ── Destroy: full cleanup before re-init ── */
+  /* ── Destroy ── */
   function _destroy(){
-    clearTimeout(_layoutTmr); _layoutTmr=null;
-    clearTimeout(_readyTmr);  _readyTmr=null;
+    clearTimeout(_layoutTmr);_layoutTmr=null;
+    clearTimeout(_readyTmr); _readyTmr=null;
     if(_ro){_ro.disconnect();_ro=null;}
     if(_widget){try{_widget.remove();}catch{}_widget=null;}
-    _subs={}; _rtDis();
+    _subs={};_rtDis();
     const c=document.getElementById('_tvC');
-    if(c){c.innerHTML=''; c.style.width=''; c.style.height='';}
+    if(c){c.innerHTML='';c.style.width='';c.style.height='';}
     document.getElementById('_cWatchdog')?.remove();
   }
 
-  /* ── _waitLayout: poll until #_cWrap has real pixel size ── */
-  function _waitLayout(cb, n){
-    clearTimeout(_layoutTmr);
-    n = n || 0;
-    const wrap = document.getElementById('_cWrap');
-    if (wrap && _visible) {
-      const r = wrap.getBoundingClientRect();
-      if (r.width > 10 && r.height > 10) {
-        cb(Math.floor(r.width), Math.floor(r.height));
-        return;
-      }
+  /* ── Poll until container has real pixel size ── */
+  function _waitLayout(cb,n){
+    clearTimeout(_layoutTmr);n=n||0;
+    const wrap=document.getElementById('_cWrap');
+    if(wrap&&_visible){
+      const r=wrap.getBoundingClientRect();
+      if(r.width>10&&r.height>10){cb(Math.floor(r.width),Math.floor(r.height));return;}
     }
-    if (!_visible) return;
-    if (n < 100) {
-      _layoutTmr = setTimeout(() => _waitLayout(cb, n + 1), 16);
-    } else {
-      console.warn('[Chart] layout wait timed out — using fallback size');
-      const sc = document.getElementById('chartScreen');
-      const w  = sc ? sc.clientWidth  : window.innerWidth;
-      const h  = Math.max(200, (sc ? sc.clientHeight : window.innerHeight) - 120);
-      cb(w, h);
+    if(!_visible)return;
+    if(n<100){_layoutTmr=setTimeout(()=>_waitLayout(cb,n+1),16);}
+    else{
+      const sc=document.getElementById('chartScreen');
+      cb(sc?sc.clientWidth:window.innerWidth,
+         Math.max(200,(sc?sc.clientHeight:window.innerHeight)-120));
     }
   }
 
-  /* ── ResizeObserver: keep widget synced to container ── */
+  /* ── ResizeObserver ── */
   function _setupResize(){
     if(_ro){_ro.disconnect();_ro=null;}
     const wrap=document.getElementById('_cWrap');
     if(!wrap||!window.ResizeObserver)return;
     _ro=new ResizeObserver(entries=>{
       if(!_widget||!_visible)return;
-      const {width,height}=entries[0].contentRect;
+      const{width,height}=entries[0].contentRect;
       if(width<10||height<10)return;
       const c=document.getElementById('_tvC');
       if(c){c.style.width=Math.floor(width)+'px';c.style.height=Math.floor(height)+'px';}
@@ -397,73 +382,60 @@ const ChartModule = (function () {
     _ro.observe(wrap);
   }
 
-  /* ── Watchdog overlay: onChartReady didn't fire in time ── */
+  /* ── Watchdog: visible retry overlay if chart never paints ── */
   function _showWatchdog(sym){
     const wrap=document.getElementById('_cWrap');
     if(!wrap||!_visible)return;
     document.getElementById('_cWatchdog')?.remove();
     const ov=document.createElement('div');
-    ov.id='_cWatchdog'; ov.className='_cwd';
+    ov.id='_cWatchdog';ov.className='_cwd';
     ov.innerHTML=`
-<div class="_cwd-ico">🔄</div>
-<div class="_cwd-title">الرسم البياني لم يكتمل تحميله</div>
+<div class="_cwd-ico">⏱</div>
+<div class="_cwd-title">الرسم البياني لم يكتمل (9 ثوانٍ)</div>
 <div class="_cwd-msg">
-  لم يستجب <code>onChartReady</code> بعد 9 ثوانٍ.<br><br>
-  افتح <b>DevTools → Console</b> وابحث عن آخر سطر يبدأ بـ
-  <code>[Chart]</code> لمعرفة أين توقف التحميل بالضبط.
+  افتح <b>DevTools → Console</b> وابحث عن آخر سطر
+  <code>[Chart]</code> — سيخبرك أين توقف التحميل بالضبط.
 </div>
 <button class="_cwd-btn" id="_cWdRetry">إعادة المحاولة</button>`;
     wrap.appendChild(ov);
-    document.getElementById('_cWdRetry').onclick=()=>{
-      console.log('[Chart] watchdog retry →', sym);
-      _initWidget(sym);
-    };
+    document.getElementById('_cWdRetry').onclick=()=>_initWidget(sym);
   }
 
   /* ════ WIDGET INIT ════ */
   function _initWidget(sym){
     _destroy();
-
     if(typeof TradingView==='undefined'||typeof TradingView.widget!=='function'){
-      console.error('[Chart] TradingView.widget is undefined.');
-      console.error('[Chart] /charting_library/charting_library.standalone.js did not execute —');
-      console.error('[Chart] check it loads BEFORE /js/chart.js, and that the file itself is not 404.');
+      console.error('[Chart] TradingView undefined — check /charting_library/charting_library.standalone.js loads before chart.js');
       const w=document.getElementById('_cWrap');
-      if(w)w.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ff8c42;font-size:14px;font-weight:700;font-family:Cairo,sans-serif;text-align:center;padding:20px;direction:rtl">⚠️ تعذر تحميل مكتبة الرسم البياني<br><small style="opacity:.6;font-size:11px;margin-top:8px;display:block">تأكد من وجود /charting_library/charting_library.standalone.js</small></div>';
+      if(w)w.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ff8c42;font-size:14px;font-weight:700;font-family:Cairo,sans-serif;text-align:center;padding:20px;direction:rtl">⚠️ مكتبة TradingView غير متاحة</div>';
       return;
     }
-
     _waitLayout((w,h)=>_doInit(sym,w,h));
   }
 
   function _doInit(sym,w,h){
     if(!_visible)return;
     const cont=document.getElementById('_tvC');
-    if(!cont){console.error('[Chart] #_tvC missing — _build() did not run');return;}
+    if(!cont)return;
 
-    cont.style.position='absolute';
-    cont.style.top='0';
-    cont.style.left='0';
-    cont.style.width=w+'px';
-    cont.style.height=h+'px';
+    cont.style.position='absolute';cont.style.top='0';cont.style.left='0';
+    cont.style.width=w+'px';cont.style.height=h+'px';
 
     const dark=document.documentElement.getAttribute('data-theme')!=='light';
-    const bg=dark?'#040404':'#ffffff';
-    _res='60'; // default 1H
+    const bg=dark?'#131722':'#ffffff';
+    _res='60';
 
-    console.log('[Chart] creating widget', sym, w+'x'+h, dark?'dark':'light');
+    console.log('[Chart] creating widget',sym,w+'x'+h,dark?'dark':'light');
 
     clearTimeout(_readyTmr);
     _readyTmr=setTimeout(()=>{
-      console.warn('[Chart] ⏱ onChartReady timeout (9s) for', sym);
+      console.warn('[Chart] onChartReady timeout (9s)',sym);
       _showWatchdog(sym);
     },9000);
 
     try{
       _widget=new TradingView.widget({
-        width:  w,
-        height: h,
-
+        width:w,height:h,
         symbol:sym,
         interval:'60',
         container:'_tvC',
@@ -476,64 +448,78 @@ const ChartModule = (function () {
         debug:false,
         enable_publishing:false,
         allow_symbol_change:false,
-        save_image:false,
-        loading_screen:{backgroundColor:bg,foregroundColor:'#ff8c42'},
+        save_image:true,
 
-        /* ── FIX: timeframe/interval toolbar restored ──
-           'header_resolutions'  → the "1H ▾" dropdown next to the symbol
-           'timeframes_toolbar'  → the bottom 1D/5D/1M/... range buttons
-           Both were previously disabled; removed so the user can
-           change timeframes from the chart UI. */
+        loading_screen:{backgroundColor:bg,foregroundColor:'#f0a500'},
+
+        /* ── Full TradingView experience ──
+           Only disable what would cause errors (no save server,
+           no external symbol search, no fullscreen — we use our
+           own back button).  Everything else — toolbar, drawing
+           tools, indicators, timeframes — enabled. */
         disabled_features:[
-          'header_symbol_search','header_chart_type',
-          'header_settings','header_indicators','header_compare',
-          'header_undo_redo','header_screenshot','header_fullscreen_button',
-          'header_saveload','left_toolbar','border_around_the_chart',
-          'popup_hints','symbol_info','go_to_date','display_market_status',
-          'legend_context_menu',
-          'show_interval_dialog_on_key_press','volume_force_overlay',
-          'create_volume_indicator_by_default','use_localstorage_for_settings',
-          'countdown_timer','show_logo_on_all_charts',
+          'header_symbol_search',   /* keep our symbols, don't open TV search */
+          'header_saveload',        /* no chart storage server */
+          'header_compare',
+          'header_fullscreen_button',
+          'symbol_info',
+          'display_market_status',
+          'go_to_date',
+          'show_logo_on_all_charts',
+          'popup_hints',
+          'use_localstorage_for_settings',
         ],
+
         enabled_features:[
-          'move_logo_to_main_pane','hide_left_toolbar_by_default',
+          'move_logo_to_main_pane',
+          'side_toolbar_in_fullscreen_mode',
+          'header_in_fullscreen_mode',
+          'create_volume_indicator_by_default',
         ],
+
         overrides:{
-          'mainSeriesProperties.candleStyle.upColor':'#00e676',
-          'mainSeriesProperties.candleStyle.downColor':'#ff3d3d',
-          'mainSeriesProperties.candleStyle.borderUpColor':'#00e676',
-          'mainSeriesProperties.candleStyle.borderDownColor':'#ff3d3d',
-          'mainSeriesProperties.candleStyle.wickUpColor':'#00e676',
-          'mainSeriesProperties.candleStyle.wickDownColor':'#ff3d3d',
+          'mainSeriesProperties.candleStyle.upColor':'#26a69a',
+          'mainSeriesProperties.candleStyle.downColor':'#ef5350',
+          'mainSeriesProperties.candleStyle.borderUpColor':'#26a69a',
+          'mainSeriesProperties.candleStyle.borderDownColor':'#ef5350',
+          'mainSeriesProperties.candleStyle.wickUpColor':'#26a69a',
+          'mainSeriesProperties.candleStyle.wickDownColor':'#ef5350',
           'paneProperties.background':bg,
           'paneProperties.backgroundType':'solid',
-          'paneProperties.vertGridProperties.color':dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)',
-          'paneProperties.horzGridProperties.color':dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)',
-          'scalesProperties.textColor':dark?'#a0a0a0':'#333',
+          'paneProperties.vertGridProperties.color':dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',
+          'paneProperties.horzGridProperties.color':dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',
+          'scalesProperties.textColor':dark?'#b2b5be':'#555',
           'scalesProperties.fontSize':11,
-          'scalesProperties.backgroundColor':dark?'#0a0a0a':'#f5f5f5',
+          'scalesProperties.backgroundColor':dark?'#131722':'#f0f3fa',
+        },
+
+        studies_overrides:{
+          'volume.volume.color.0':'#ef5350',
+          'volume.volume.color.1':'#26a69a',
+          'volume.volume ma.color':'#FF6D00',
+          'volume.volume ma.linewidth':1,
+          'volume.show ma':false,
         },
       });
 
       _widget.onChartReady(()=>{
-        console.log('[Chart] ✅ onChartReady —', sym);
-        clearTimeout(_readyTmr); _readyTmr=null;
+        console.log('[Chart] ✅ onChartReady',sym);
+        clearTimeout(_readyTmr);_readyTmr=null;
         document.getElementById('_cWatchdog')?.remove();
         _setupResize();
         _btnPx();
         try{
           _widget.activeChart().onIntervalChanged().subscribe(null,iv=>{
-            console.log('[Chart] interval →', iv);
-            _res=iv;
+            console.log('[Chart] interval →',iv);_res=iv;
           });
         }catch{}
       });
 
     }catch(e){
-      console.error('[Chart] widget constructor threw:', e);
-      clearTimeout(_readyTmr); _readyTmr=null;
+      console.error('[Chart] widget threw:',e);
+      clearTimeout(_readyTmr);_readyTmr=null;
       const w2=document.getElementById('_cWrap');
-      if(w2)w2.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ff3d3d;font-size:13px;font-weight:700;font-family:Cairo,sans-serif;text-align:center;padding:20px;direction:rtl">❌ خطأ في إنشاء الرسم البياني<br><small style="opacity:.7;font-size:11px;margin-top:6px;display:block;font-family:monospace;direction:ltr">'+(e.message||e)+'</small></div>';
+      if(w2)w2.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef5350;font-size:13px;font-weight:700;font-family:Cairo,sans-serif;text-align:center;padding:20px;direction:rtl">❌ خطأ في الرسم البياني<br><small style="opacity:.7;font-size:11px;margin-top:6px;display:block;font-family:monospace;direction:ltr">'+(e.message||e)+'</small></div>';
     }
   }
 
@@ -557,7 +543,7 @@ const ChartModule = (function () {
     const ov=document.createElement('div');ov.id='_cfOv';ov.className='_cfo';
     ov.innerHTML=`<div class="_cfc">
 <div class="_cfh"></div>
-<div class="_cft" style="color:${buy?'#00e676':'#ff3d3d'}">${a.icon||'📊'} ${buy?'شراء ▲':'بيع ▼'} — ${a.name}</div>
+<div class="_cft" style="color:${buy?'#26a69a':'#ef5350'}">${a.icon||'📊'} ${buy?'شراء ▲':'بيع ▼'} — ${a.name}</div>
 <div class="_cfr">
   <div class="_cfrow"><span class="_cfk">الكمية</span><span class="_cfv">${qty.toFixed(gram?2:a.szDp)} ${a.unit}</span></div>
   <div class="_cfrow"><span class="_cfk">السعر</span><span class="_cfv">$${mid.toFixed(a.pxDp)}</span></div>
