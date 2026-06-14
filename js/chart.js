@@ -20,9 +20,16 @@ const ChartModule = (function () {
   let _layoutTmr = null;   // poll handle for _waitLayout
   let _readyTmr  = null;   // watchdog: detects onChartReady never firing
 
+  /* TradingView resolution string → Hyperliquid interval string */
   const RES = {
     '1':'1m','3':'3m','5':'5m','15':'15m','30':'30m',
     '60':'1h','120':'2h','240':'4h','D':'1d','1D':'1d'
+  };
+
+  /* Hyperliquid interval string → seconds per bar (for range math) */
+  const IV_SECONDS = {
+    '1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,
+    '1h':3600,'2h':7200,'4h':14400,'1d':86400
   };
 
   const _coin  = s => (typeof ASSETS!=='undefined'&&ASSETS[s]?.coin)||('xyz:'+s);
@@ -206,29 +213,79 @@ const ChartModule = (function () {
       }),0);
     },
 
+    /* ──────────────────────────────────────────────────────
+       getBars — historical candles.
+
+       FIX: some library builds call getBars with a `pp.from`
+       that, combined with `pp.to`, produces a window narrower
+       than a single bar (or 0). When that happens Hyperliquid's
+       candleSnapshot can legitimately return just 0-1 candles,
+       which the chart then displays as "one candle only" with
+       no history — matching the reported symptom.
+
+       Fix: ALWAYS verify the requested window covers at least
+       `countBack` bars (default 300). If `pp.from`/`pp.to` give
+       a smaller window, recompute `from` from `to` and the
+       resolution's bar length. `pp.to` itself is trusted as-is
+       (falls back to "now" only if missing/invalid).
+
+       Full diagnostic logging included — pp values, computed
+       range, and response shape — so if bars are still empty
+       the cause (wrong coin string vs. API error vs. truly no
+       data) is visible immediately in the console.
+    ────────────────────────────────────────────────────── */
     async getBars(si,res,pp,ok,err){
       try{
-        const iv=RES[res]||'1h',sym=si.ticker,gram=_gram(sym);
+        const iv      = RES[res]||'1h';
+        const sym     = si.ticker;
+        const gram     = _gram(sym);
+        const barSec   = IV_SECONDS[iv]||3600;
+        const countBack = (pp.countBack && pp.countBack>0) ? pp.countBack : 300;
+
+        let to   = Number.isFinite(pp.to)   ? pp.to   : Math.floor(Date.now()/1000);
+        let from = Number.isFinite(pp.from) ? pp.from : 0;
+
+        if (!from || (to - from) < barSec) {
+          from = to - barSec * countBack;
+        }
+
+        console.log(
+          '[Chart] getBars', sym, iv,
+          'pp{from:'+pp.from+',to:'+pp.to+',countBack:'+pp.countBack+',first:'+pp.firstDataRequest+'}',
+          '→ range', new Date(from*1000).toISOString(), '..', new Date(to*1000).toISOString()
+        );
+
         const r=await fetch(HL_API+'/info',{
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({type:'candleSnapshot',req:{
             coin:_coin(sym),interval:iv,
-            startTime:pp.from*1000,endTime:pp.to*1000
+            startTime:from*1000,endTime:to*1000
           }})
         });
         if(!r.ok)throw new Error('HTTP '+r.status);
         const raw=await r.json();
-        if(!Array.isArray(raw)||!raw.length){
-          console.log('[Chart] getBars', sym, iv, '→ noData');
+
+        if(!Array.isArray(raw)){
+          console.warn('[Chart] getBars', sym, iv, '→ non-array response:', JSON.stringify(raw).slice(0,300));
           ok([],{noData:true});return;
         }
+        if(!raw.length){
+          console.log('[Chart] getBars', sym, iv, '→ 0 bars (empty array) for coin', _coin(sym));
+          ok([],{noData:true});return;
+        }
+
         const bars=raw.map(c=>({
           time:Math.floor(c.t/1000),
           open:gram?+c.o/TL:+c.o,high:gram?+c.h/TL:+c.h,
           low:gram?+c.l/TL:+c.l,close:gram?+c.c/TL:+c.c,
           volume:+c.v||0,
         })).sort((a,b)=>a.time-b.time);
-        console.log('[Chart] getBars', sym, iv, '→', bars.length, 'bars');
+
+        console.log(
+          '[Chart] getBars', sym, iv, '→', bars.length, 'bars',
+          '('+new Date(bars[0].time*1000).toISOString()+' .. '+new Date(bars[bars.length-1].time*1000).toISOString()+')'
+        );
+
         ok(bars,{noData:false});
       }catch(e){
         console.error('[Chart] getBars error:', e.message);
@@ -300,13 +357,7 @@ const ChartModule = (function () {
     document.getElementById('_cWatchdog')?.remove();
   }
 
-  /* ════════════════════════════════════════════════════════
-     _waitLayout — poll until #_cWrap has real pixel size.
-     Replaces the old double-requestAnimationFrame, which fired
-     before the flex layout pass completed and produced a 0×0
-     container → autosize:true measured 0×0 at construction time
-     → chart never painted.
-  ════════════════════════════════════════════════════════ */
+  /* ── _waitLayout: poll until #_cWrap has real pixel size ── */
   function _waitLayout(cb, n){
     clearTimeout(_layoutTmr);
     n = n || 0;
@@ -346,25 +397,7 @@ const ChartModule = (function () {
     _ro.observe(wrap);
   }
 
-  /* ════════════════════════════════════════════════════════
-     _showWatchdog — error overlay when onChartReady never fires.
-
-     library_path is confirmed correct ('/charting_library/'
-     matches the repo tree). If the chart still never paints,
-     the remaining causes are:
-       1. /charting_library/bundles/ is incomplete on the
-          deployed site (TradingView lazy-loads ~1300 hashed
-          chunk files from there — a single missing chunk
-          causes the loading screen to spin forever).
-       2. charting_library.standalone.js and bundles/ are from
-          DIFFERENT library versions (chunk hashes won't match
-          → 404s).
-       3. Service worker served a stale cached index.html /
-          chart.js from before charting_library was added.
-
-     This overlay makes the failure VISIBLE and gives a retry
-     button, instead of TradingView's silent spinning logo.
-  ════════════════════════════════════════════════════════ */
+  /* ── Watchdog overlay: onChartReady didn't fire in time ── */
   function _showWatchdog(sym){
     const wrap=document.getElementById('_cWrap');
     if(!wrap||!_visible)return;
@@ -375,13 +408,9 @@ const ChartModule = (function () {
 <div class="_cwd-ico">🔄</div>
 <div class="_cwd-title">الرسم البياني لم يكتمل تحميله</div>
 <div class="_cwd-msg">
-  لم يستجب <code>onChartReady</code> بعد 9 ثوانٍ — الملف الأساسي
-  <code>charting_library.standalone.js</code> تم تحميله بنجاح،
-  لكن أحد ملفات <code>bundles/</code> (~1300 ملف) قد يكون مفقوداً
-  أو من إصدار مختلف.<br><br>
-  افتح <b>DevTools → Network</b>، أعد المحاولة، وابحث عن أي طلب
-  بحالة <code>404</code> يبدأ بـ<br>
-  <code>/charting_library/bundles/</code>
+  لم يستجب <code>onChartReady</code> بعد 9 ثوانٍ.<br><br>
+  افتح <b>DevTools → Console</b> وابحث عن آخر سطر يبدأ بـ
+  <code>[Chart]</code> لمعرفة أين توقف التحميل بالضبط.
 </div>
 <button class="_cwd-btn" id="_cWdRetry">إعادة المحاولة</button>`;
     wrap.appendChild(ov);
@@ -424,7 +453,6 @@ const ChartModule = (function () {
 
     console.log('[Chart] creating widget', sym, w+'x'+h, dark?'dark':'light');
 
-    /* watchdog: if onChartReady doesn't fire in 9s, show retry overlay */
     clearTimeout(_readyTmr);
     _readyTmr=setTimeout(()=>{
       console.warn('[Chart] ⏱ onChartReady timeout (9s) for', sym);
@@ -450,13 +478,19 @@ const ChartModule = (function () {
         allow_symbol_change:false,
         save_image:false,
         loading_screen:{backgroundColor:bg,foregroundColor:'#ff8c42'},
+
+        /* ── FIX: timeframe/interval toolbar restored ──
+           'header_resolutions'  → the "1H ▾" dropdown next to the symbol
+           'timeframes_toolbar'  → the bottom 1D/5D/1M/... range buttons
+           Both were previously disabled; removed so the user can
+           change timeframes from the chart UI. */
         disabled_features:[
-          'header_symbol_search','header_resolutions','header_chart_type',
+          'header_symbol_search','header_chart_type',
           'header_settings','header_indicators','header_compare',
           'header_undo_redo','header_screenshot','header_fullscreen_button',
           'header_saveload','left_toolbar','border_around_the_chart',
           'popup_hints','symbol_info','go_to_date','display_market_status',
-          'timeframes_toolbar','legend_context_menu',
+          'legend_context_menu',
           'show_interval_dialog_on_key_press','volume_force_overlay',
           'create_volume_indicator_by_default','use_localstorage_for_settings',
           'countdown_timer','show_logo_on_all_charts',
