@@ -1,35 +1,37 @@
 /* ═══════════════════════════════════════════════════════════════
-   chart.js — TradingView Advanced Charts · سيولة v8
+   chart.js — TradingView Advanced Charts · سيولة v9
    ─────────────────────────────────────────────────────────────
-   ROOT CAUSES FIXED:
-   #1  1970 + 2 bars  → getBars never returns ([], {noData:false})
-                        Empty first fetch = noData:true so TV paginates back
-                        Pagination loop fetches [from..to] correctly
-   #2  XAU BBO tick   → tick price = display price (grams) not oz
-   #3  Timezone       → forced Asia/Baghdad on init + onChartReady
-   #4  Countdown      → countdown_timer in enabled_features
-   #5  Cache poison   → purge _hlcv2_ + validate time > MIN_SEC
-   #6  Fullscreen gap → fullscreenchange resize handler
-   ─────────────────────────────────────────────────────────────
-   DATAFEED CONTRACT (TradingView):
-   • getBars first call:  pp.firstDataRequest=true, pp.from/to=0 → use RANGES
-   • getBars paginate:    pp.firstDataRequest=false, pp.from/to in UNIX SECONDS
-   • Empty bars + noData:false → TV thinks stream is live, stops paginating → BUG
-   • Empty bars + noData:true  → TV paginates further back ✓
-   • bars.length > 0 + noData:false → TV renders ✓
+   ROOT BUG FOUND & KILLED:
+   resolveSymbol had timezone:'Asia/Baghdad' — TV uses this to
+   interpret bar timestamps. Since our bars are UTC epoch seconds,
+   setting a non-UTC timezone in symbol info causes TV to shift
+   all bar times by +3h, rendering them in the wrong slots →
+   only 1 visible candle + 1970 label at the leftmost bar.
+
+   FIX: resolveSymbol always returns timezone:'Etc/UTC'.
+        Widget init sets timezone:'Asia/Baghdad' for DISPLAY only.
+        setTimezone() in onChartReady confirms it.
+
+   HL candleSnapshot: c.t is MILLISECONDS from REST.
+   WS candle:        c.t is also MILLISECONDS.
+   toMs() normalizes both safely.
+
+   webData2/webData3: noted — BBO prices come from main app WS,
+   no direct subscription here (app ws.js handles it).
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
 const ChartModule = (function () {
 
-  /* ── Constants ── */
   const HL_API  = 'https://api.hyperliquid.xyz';
   const HL_WS   = 'wss://api.hyperliquid.xyz/ws';
   const TL      = 31.1035;
-  const MIN_SEC = 1577836800;   // 2020-01-01 00:00:00 UTC
+
+  /* 2020-01-01 in both units */
+  const MIN_SEC = 1577836800;
   const MIN_MS  = MIN_SEC * 1000;
 
-  /* Look-back in ms for first getBars fetch */
+  /* First-request look-back per interval (ms) */
   const RANGES = {
     '1m' :   6 * 3600e3,
     '3m' :  12 * 3600e3,
@@ -37,12 +39,12 @@ const ChartModule = (function () {
     '15m':   5 * 86400e3,
     '30m':  10 * 86400e3,
     '1h' :  60 * 86400e3,
-    '2h' :  90 * 86400e3,
-    '4h' : 180 * 86400e3,
+    '2h' : 120 * 86400e3,
+    '4h' : 240 * 86400e3,
     '1d' : 365 * 86400e3,
   };
 
-  /* TV resolution string ↔ HL interval string */
+  /* HL interval string ↔ TV resolution string */
   const IV_TO_TV = {
     '1m':'1','3m':'3','5m':'5','15m':'15','30m':'30',
     '1h':'60','2h':'120','4h':'240','1d':'D',
@@ -52,20 +54,20 @@ const ChartModule = (function () {
     '60':'1h','120':'2h','240':'4h','D':'1d','1D':'1d',
   };
 
-  /* Seconds per interval (for candle-open calculation) */
+  /* Candle duration in seconds */
   const IV_DUR = {
     '1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,
     '1h':3600,'2h':7200,'4h':14400,'1d':86400,
   };
 
-  /* ── Module state ── */
+  /* ── state ── */
   let _widget       = null;
   let _chartReady   = false;
   let _visible      = false;
   let _sym          = 'CL';
   let _interval     = '1h';
-  let _lastClose    = 0;    // last known display-price (grams for XAU, raw otherwise)
-  let _lastBarTime  = 0;    // UNIX seconds of last delivered bar
+  let _lastClose    = 0;
+  let _lastBarTime  = 0;    // UNIX seconds of most-recent delivered bar
   let _subs         = {};
   let _chartWs      = null;
   let _wsTimer      = null;
@@ -81,48 +83,50 @@ const ChartModule = (function () {
   let _bboTimer     = null;
   let _gestInit     = false;
 
-  /* ── Tiny helpers ── */
   const coinStr = s => (typeof ASSETS !== 'undefined' && ASSETS[s]?.coin) || `xyz:${s}`;
   const assetOf = s => (typeof ASSETS !== 'undefined' && ASSETS[s]) ||
     { pxDp:2, szDp:2, name:s, icon:'📊', unit:'', lev:10, presets:[1], idx:0, cross:true };
   const isDark  = () => document.documentElement.getAttribute('data-theme') !== 'light';
   const $el     = id => document.getElementById(id);
-  const toast_  = (m, t, d) => typeof toast === 'function' && toast(m, t, d);
+  const toast_  = (m,t,d) => typeof toast === 'function' && toast(m,t,d);
   const isXAU   = () => _sym === 'XAU';
 
-  /* Persistent preferences */
   const PREF = {
-    get : k     => { try { return localStorage.getItem('_cp_' + k); } catch { return null; } },
-    set : (k,v) => { try { localStorage.setItem('_cp_' + k, v); } catch {} },
+    get : k     => { try { return localStorage.getItem('_cp_'+k); } catch { return null; } },
+    set : (k,v) => { try { localStorage.setItem('_cp_'+k, v); } catch {} },
   };
 
-  /* ─────────────────────────────────────────────────────────────
-     toSec — normalise any HL timestamp to UNIX seconds
-     HL REST returns seconds (≈1.75e9). If it's > 1e12 it's ms.
-  ───────────────────────────────────────────────────────────── */
-  function toSec(t) {
+  /*
+   * toMs — convert any HL timestamp to milliseconds
+   * HL REST candleSnapshot: c.t is ms  (e.g. 1750000000000)
+   * HL WS candle:           c.t is ms  (same)
+   * Guard: values < 1e10 treated as seconds and multiplied
+   */
+  function toMs(t) {
     const n = Math.floor(+t || 0);
-    return n > 1e12 ? Math.floor(n / 1000) : n;
+    if (n <= 0) return 0;
+    return n < 1e10 ? n * 1000 : n;  // < 1e10 = seconds range → convert
   }
 
-  /* Current candle open time (UNIX sec) for a given UNIX second */
+  function toSec(t) {
+    const ms = toMs(t);
+    return ms > 0 ? Math.floor(ms / 1000) : 0;
+  }
+
+  /* Floor to candle-open boundary */
   function candleOpenSec(nowSec, iv) {
     const dur = IV_DUR[iv] || 3600;
     return Math.floor(nowSec / dur) * dur;
   }
 
-  /* ─────────────────────────────────────────────────────────────
-     Price helpers — _lastClose is always in DISPLAY units
-     (grams for XAU, raw for everything else)
-  ───────────────────────────────────────────────────────────── */
-  function setPrice(displayPrice) {
-    if (!displayPrice || +displayPrice <= 0) return;
-    _lastClose = +displayPrice;
+  /* Price helpers — _lastClose always in display units */
+  function setPrice(p) {
+    if (!p || +p <= 0) return;
+    _lastClose = +p;
     const el = $el('_cPrice');
-    if (el) el.textContent = '$' + (+displayPrice).toFixed(assetOf(_sym).pxDp);
+    if (el) el.textContent = '$' + (+p).toFixed(assetOf(_sym).pxDp);
     _refreshBtnPx();
   }
-
   function _refreshBtnPx() {
     if (!_lastClose) return;
     const dp = assetOf(_sym).pxDp;
@@ -132,7 +136,7 @@ const ChartModule = (function () {
   }
 
   /* ════════════════════════════════════════════════════════════
-     CSS — one-time injection
+     CSS
   ════════════════════════════════════════════════════════════ */
   (function injectCSS() {
     if ($el('_chartCSS')) return;
@@ -257,10 +261,12 @@ const ChartModule = (function () {
 .cf-title{font-size:16px;font-weight:900;margin-bottom:3px;}
 .cf-sub{font-size:11px;color:var(--text-secondary,#a0a0a0);margin-bottom:10px;}
 .cf-rows{background:var(--bg-input,#1a1a1a);border-radius:12px;padding:8px 10px;margin-bottom:12px;}
-.cf-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border,#1f1f1f);}
+.cf-row{display:flex;justify-content:space-between;align-items:center;
+  padding:5px 0;border-bottom:1px solid var(--border,#1f1f1f);}
 .cf-row:last-child{border:none;}
 .cf-k{font-size:11px;color:var(--text-secondary,#a0a0a0);font-weight:700;}
-.cf-v{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text-primary,#f5f5f5);}
+.cf-v{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;
+  color:var(--text-primary,#f5f5f5);}
 .cf-v.g{color:#26a69a;}.cf-v.r{color:#ef5350;}.cf-v.w{color:var(--warn,#ffd600);}
 .cf-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .cf-can{padding:12px;border-radius:999px;border:1.5px solid var(--border-strong,#333);
@@ -281,28 +287,24 @@ const ChartModule = (function () {
   })();
 
   /* ════════════════════════════════════════════════════════════
-     Cache — v4 (strict validation, legacy purge)
+     Cache v4 — strict, purges legacy keys
   ════════════════════════════════════════════════════════════ */
   const CACHE = {
     TTL: {
-      '1m':120e3,'3m':240e3,'5m':480e3,'15m':1500e3,'30m':3000e3,
-      '1h':6000e3,'2h':6000e3,'4h':12000e3,'1d':36000e3,
+      '1m':90e3,'3m':180e3,'5m':360e3,'15m':1200e3,'30m':2400e3,
+      '1h':4800e3,'2h':4800e3,'4h':9600e3,'1d':28800e3,
     },
     key: (sym, iv) => `_hlcv4_${sym}_${iv}`,
-
     get(sym, iv) {
       try {
-        const raw = localStorage.getItem(this.key(sym, iv));
-        if (!raw) return null;
-        const d = JSON.parse(raw);
+        const d = JSON.parse(localStorage.getItem(this.key(sym, iv)) || 'null');
         if (!d?.b?.length) return null;
-        if (Date.now() - d.t > (this.TTL[iv] || 6000e3)) { this.del(sym, iv); return null; }
+        if (Date.now() - d.t > (this.TTL[iv] || 4800e3)) { this.del(sym, iv); return null; }
         const clean = d.b.filter(b => b.time > MIN_SEC && b.close > 0);
         if (clean.length < 2) { this.del(sym, iv); return null; }
         return clean;
       } catch { return null; }
     },
-
     set(sym, iv, bars) {
       try {
         const clean = bars.filter(b => b.time > MIN_SEC && b.close > 0).slice(-2000);
@@ -310,25 +312,19 @@ const ChartModule = (function () {
         localStorage.setItem(this.key(sym, iv), JSON.stringify({ b: clean, t: Date.now() }));
       } catch {}
     },
-
-    del(sym, iv) {
-      try { localStorage.removeItem(this.key(sym, iv)); } catch {}
-    },
-
+    del(sym, iv) { try { localStorage.removeItem(this.key(sym, iv)); } catch {} },
     purgeLegacy() {
       try {
-        const kill = ['_hlcv2_', '_hlcv3_', '_hlcv_'];
-        Object.keys(localStorage)
-          .filter(k => kill.some(p => k.startsWith(p)))
-          .forEach(k => localStorage.removeItem(k));
+        ['_hlcv2_','_hlcv3_','_hlcv_'].forEach(pfx =>
+          Object.keys(localStorage).filter(k => k.startsWith(pfx))
+            .forEach(k => localStorage.removeItem(k)));
       } catch {}
     },
   };
-
   CACHE.purgeLegacy();
 
   /* ════════════════════════════════════════════════════════════
-     REST candle fetcher
+     REST candle fetcher — raw fetch, never throws
   ════════════════════════════════════════════════════════════ */
   async function fetchCandles(sym, iv, isGr, startMs, endMs) {
     const sMs = Math.max(Math.floor(startMs), MIN_MS);
@@ -345,16 +341,20 @@ const ChartModule = (function () {
           req : { coin: coinStr(sym), interval: iv, startTime: sMs, endTime: eMs }
         })
       });
-    } catch { return []; }
+    } catch (e) { console.warn('[Chart] fetch err', e.message); return []; }
 
     if (!resp.ok) return [];
     let raw;
     try { raw = await resp.json(); } catch { return []; }
     if (!Array.isArray(raw) || !raw.length) return [];
 
-    const bars = raw
+    /*
+     * c.t from HL REST candleSnapshot = MILLISECONDS
+     * toSec(c.t) converts ms → sec correctly
+     */
+    return raw
       .map(c => ({
-        time  : toSec(c.t),
+        time  : toSec(c.t),                         // UTC seconds ← required by TV
         open  : isGr ? +c.o / TL : +c.o,
         high  : isGr ? +c.h / TL : +c.h,
         low   : isGr ? +c.l / TL : +c.l,
@@ -363,21 +363,20 @@ const ChartModule = (function () {
       }))
       .filter(b => b.time > MIN_SEC && b.close > 0)
       .sort((a, b) => a.time - b.time);
-
-    return bars;
   }
 
   /* ════════════════════════════════════════════════════════════
-     DATAFEED — production-grade TradingView interface
+     DATAFEED
 
-     KEY CONTRACT:
-     • ok(bars, {noData:false})  → TV: got data, may request more
-     • ok([],  {noData:true})    → TV: no more data going back
-     • ok([],  {noData:false})   → TV: thinks stream alive, STOPS paginating = BUG
-
-     So: empty bars on pagination → noData:true
-         non-empty bars            → noData:false
-         first request, no bars   → try a longer range, or noData:true
+     KEY RULES:
+     1. resolveSymbol → timezone MUST be 'Etc/UTC'
+        TV interprets bar timestamps according to this timezone.
+        If set to Asia/Baghdad, TV shifts all bars by +3h and the
+        axis labels show wrong dates (1970 = epoch shifted).
+     2. getBars first call: pp.firstDataRequest=true, pp.from/to may be 0
+     3. getBars paginate:   pp.from/to are UNIX SECONDS (not ms)
+     4. Empty response = noData:true ALWAYS (not false)
+        noData:false + [] = TV stops paginating silently = 1 candle bug
   ════════════════════════════════════════════════════════════ */
   const Datafeed = {
 
@@ -399,8 +398,7 @@ const ChartModule = (function () {
         description: ASSETS[s].name || s,
         exchange: 'Hyperliquid', type: 'crypto',
       })).filter(x =>
-        x.symbol.toLowerCase().includes(ql) ||
-        x.description.toLowerCase().includes(ql)
+        x.symbol.toLowerCase().includes(ql) || x.description.toLowerCase().includes(ql)
       ));
     },
 
@@ -413,7 +411,15 @@ const ChartModule = (function () {
         name: sym, ticker: sym, description: a.name || sym,
         type: 'crypto', session: '24x7',
         exchange: 'Hyperliquid', listed_exchange: 'Hyperliquid',
-        timezone: 'Asia/Baghdad',
+
+        /*
+         * ▼ CRITICAL FIX ▼
+         * Must be 'Etc/UTC' — bar timestamps from HL are UTC epoch seconds.
+         * Any other timezone causes TV to misinterpret bar positions → 1970 label.
+         * Display timezone (UTC+3) is set separately on the widget itself.
+         */
+        timezone: 'Etc/UTC',
+
         format: 'price',
         pricescale: Math.pow(10, a.pxDp || 2), minmov: 1,
         has_intraday: true, has_daily: true,
@@ -427,24 +433,22 @@ const ChartModule = (function () {
 
     async getBars(si, res, pp, onResult, onError) {
       try {
-        const iv     = TV_TO_IV[res] || '1h';
-        const sym    = si.ticker;
-        const isGr   = sym === 'XAU';
+        const iv      = TV_TO_IV[res] || '1h';
+        const sym     = si.ticker;
+        const isGr    = sym === 'XAU';
         const isFirst = !!(pp && pp.firstDataRequest);
-        const now    = Date.now();
-        const range  = RANGES[iv] || RANGES['1h'];
+        const now     = Date.now();
+        const range   = RANGES[iv] || RANGES['1h'];
 
         let startMs, endMs;
 
         if (isFirst) {
-          /* First request: fetch most recent RANGE of data */
           endMs   = now;
           startMs = now - range;
         } else {
           /*
-           * Pagination: pp.from and pp.to are UNIX SECONDS
-           * TradingView uses the earliest bar time from the previous
-           * response as pp.to for the next call. We fetch older data.
+           * pp.from and pp.to are UNIX SECONDS from TradingView.
+           * Convert to ms for HL API.
            */
           const toSec_   = pp.to   > 0 ? pp.to   : Math.floor(now / 1000);
           const fromSec_ = pp.from > 0 ? pp.from : toSec_ - Math.floor(range / 1000);
@@ -452,40 +456,31 @@ const ChartModule = (function () {
           startMs = fromSec_ * 1000;
         }
 
-        /* Hard floor */
         startMs = Math.max(startMs, MIN_MS);
-        if (startMs >= endMs) {
-          onResult([], { noData: true }); return;
-        }
+        if (startMs >= endMs) { onResult([], { noData: true }); return; }
 
-        /* Serve cache on first request */
+        /* Cache path (first request only) */
         if (isFirst) {
           const cached = CACHE.get(sym, iv);
           if (cached?.length >= 5) {
-            const last = cached[cached.length - 1];
-            /* Cache fresh enough? (last bar within 2× interval) */
-            const staleSec = Math.floor(now / 1000) - last.time;
-            if (staleSec < (IV_DUR[iv] || 3600) * 3) {
+            const last     = cached[cached.length - 1];
+            const ageSec   = Math.floor(now / 1000) - last.time;
+            const maxAge   = (IV_DUR[iv] || 3600) * 3;
+            if (ageSec < maxAge) {
               setPrice(last.close);
               _lastBarTime = last.time;
               onResult(cached, { noData: false });
-              /* Background refresh newer bars */
               _bgRefresh(sym, iv, isGr, last.time).catch(() => {});
               return;
-            } else {
-              CACHE.del(sym, iv);
             }
+            CACHE.del(sym, iv);
           }
         }
 
-        /* Fetch from API */
         const bars = await fetchCandles(sym, iv, isGr, startMs, endMs);
 
         if (!bars.length) {
-          /*
-           * CRITICAL: empty → noData:true (not false!)
-           * noData:false with [] tells TV stream is live → stops paginating
-           */
+          /* MUST be noData:true — never noData:false with empty array */
           onResult([], { noData: true });
           return;
         }
@@ -516,22 +511,20 @@ const ChartModule = (function () {
     },
   };
 
-  /* ── Background refresh ── */
+  /* Background refresh: fetch newer bars and push to TV */
   async function _bgRefresh(sym, iv, isGr, lastTimeSec) {
     if (!_visible) return;
-    const nowMs   = Date.now();
-    const gapMs   = nowMs - lastTimeSec * 1000;
+    const nowMs  = Date.now();
+    const gapMs  = nowMs - lastTimeSec * 1000;
     if (gapMs < 10000) return;
     try {
-      const fresh = await fetchCandles(sym, iv, isGr, lastTimeSec * 1000 - 5000, nowMs);
+      const fresh = await fetchCandles(sym, iv, isGr, lastTimeSec * 1000 - 2000, nowMs);
       if (!fresh.length) return;
       const cached = CACHE.get(sym, iv) || [];
-      /* Merge: replace existing time-slots, append new ones */
       const map = new Map(cached.map(b => [b.time, b]));
       fresh.forEach(b => map.set(b.time, b));
       const merged = [...map.values()].sort((a, b) => a.time - b.time);
       CACHE.set(sym, iv, merged);
-      /* Push only bars newer than last delivered */
       const newer = fresh.filter(b => b.time > lastTimeSec);
       if (!newer.length) return;
       const last = newer[newer.length - 1];
@@ -544,7 +537,7 @@ const ChartModule = (function () {
   }
 
   /* ════════════════════════════════════════════════════════════
-     WebSocket — live candle subscription
+     WebSocket — live candle feed
   ════════════════════════════════════════════════════════════ */
   function _wsConn(c, iv) {
     if (_chartWs && _chartWs.readyState <= 1 &&
@@ -565,7 +558,7 @@ const ChartModule = (function () {
           const msg = JSON.parse(e.data);
           if (msg.channel !== 'candle' || !msg.data) return;
           const cd = msg.data;
-          const t  = toSec(cd.t);
+          const t  = toSec(cd.t);   // cd.t is ms from WS
           if (t < MIN_SEC) return;
           const gr = isXAU();
           const bar = {
@@ -596,51 +589,33 @@ const ChartModule = (function () {
   }
 
   /* ════════════════════════════════════════════════════════════
-     BBO poller — 1-second sub-candle price animation
+     BBO poller — sub-candle 1-second tick animation
 
-     FIX: tick price must be in DISPLAY units (grams for XAU)
-     FIX: bar.time = current candle open (not Date.now())
-          TV rejects ticks whose time doesn't match an open candle
+     Reads display-unit prices from State (set by main app ws.js).
+     Tick bar.time = current candle open boundary (UTC seconds).
+     Tick price = display price (grams for XAU, raw otherwise).
   ════════════════════════════════════════════════════════════ */
   function _startBBO() {
     clearInterval(_bboTimer);
     _bboTimer = setInterval(() => {
       if (!_visible || typeof State === 'undefined') return;
-
-      /* Get display-unit price from State */
       const displayPx = isXAU()
         ? State.prices?.['XAU']?.mid
         : State.prices?.[_sym]?.mid;
       if (!displayPx || +displayPx <= 0) return;
 
       setPrice(displayPx);
-
       if (!Object.keys(_subs).length) return;
 
-      /*
-       * Candle open time for the current second
-       * Must match what TV expects for the current bar
-       */
       const nowSec  = Math.floor(Date.now() / 1000);
       const barTime = Math.max(_lastBarTime, candleOpenSec(nowSec, _interval));
+      const p       = +displayPx;
 
-      /*
-       * Bar price in chart units:
-       * XAU chart: grams (displayPx is already grams) ✓
-       * Others:    raw price (displayPx is raw) ✓
-       */
-      const p = +displayPx;
-
-      const tick = {
-        time  : barTime,
-        open  : p,
-        high  : p,
-        low   : p,
-        close : p,
-        volume: 0,
-      };
-
-      Object.values(_subs).forEach(s => { try { s.cb(tick); } catch {} });
+      Object.values(_subs).forEach(s => {
+        try {
+          s.cb({ time: barTime, open: p, high: p, low: p, close: p, volume: 0 });
+        } catch {}
+      });
     }, 1000);
   }
 
@@ -712,7 +687,7 @@ const ChartModule = (function () {
           } catch {}
         }
         if (typeof calcLiqPrice !== 'undefined' && typeof ASSETS !== 'undefined') {
-          const aL = ASSETS[pSym] || ASSETS['GOLD'] || { lev:20, cross:false };
+          const aL  = ASSETS[pSym] || ASSETS['GOLD'] || { lev:20, cross:false };
           const lOz = calcLiqPrice(eOz, szi, State.balance?.total || 0, aL.cross, aL.lev);
           if (lOz !== null && lOz > 0) {
             const lD = gr ? lOz / TL : lOz;
@@ -765,7 +740,7 @@ const ChartModule = (function () {
   function _showConfirm(isBuy) {
     if (typeof State === 'undefined' || !State.wallet)
       return toast_('سجّل الدخول أولاً', 'err');
-    const qty = parseFloat($el('_cQty')?.value || 0);
+    const qty  = parseFloat($el('_cQty')?.value || 0);
     if (!qty || qty <= 0) return toast_('أدخل الكمية', 'err');
     const a    = assetOf(_sym);
     const gr   = isXAU();
@@ -916,7 +891,7 @@ const ChartModule = (function () {
     $el('_cWdBtn').onclick = () => { ov.remove(); _waitLayout((pw,ph) => _doInit(_sym, pw, ph)); };
   }
 
-  /* ── Destroy widget ── */
+  /* ── Destroy ── */
   function _destroyWidget() {
     clearTimeout(_layoutTmr); _layoutTmr = null;
     clearTimeout(_readyTmr);  _readyTmr  = null;
@@ -956,25 +931,26 @@ const ChartModule = (function () {
     const bg    = dark ? '#131722' : '#ffffff';
     const tvRes = PREF.get('iv') || IV_TO_TV[_interval] || '60';
 
-    console.log(`[Chart] init ${sym} ${w}×${h} res=${tvRes} ${dark?'dark':'light'}`);
+    console.log(`[Chart] init ${sym} ${w}×${h} res=${tvRes}`);
 
     clearTimeout(_readyTmr);
-    _readyTmr = setTimeout(() => {
-      console.warn('[Chart] ⏱ 10s timeout', sym);
-      _showWatchdog();
-    }, 10000);
+    _readyTmr = setTimeout(() => { console.warn('[Chart] ⏱ 10s'); _showWatchdog(); }, 10000);
 
     try {
       _widget = new TradingView.widget({
         width : w,
         height: h,
-        symbol   : sym,
-        interval : tvRes,
-        container: '_tvC',
-        datafeed : Datafeed,
+        symbol  : sym,
+        interval: tvRes,
+        container  : '_tvC',
+        datafeed   : Datafeed,
         library_path: '/charting_library/',
 
-        /* UTC+3 = Asia/Baghdad */
+        /*
+         * timezone here = DISPLAY timezone for the time axis.
+         * Asia/Baghdad = UTC+3. Bar timestamps are still UTC internally.
+         * This is separate from symbol timezone (which must stay Etc/UTC).
+         */
         timezone: 'Asia/Baghdad',
         locale  : 'ar',
 
@@ -1007,13 +983,13 @@ const ChartModule = (function () {
         ],
 
         enabled_features: [
-          'countdown_timer',                          /* ← العد التنازلي */
+          'countdown_timer',
           'use_localstorage_for_settings',
           'save_chart_properties_to_local_storage',
           'move_logo_to_main_pane',
           'side_toolbar_in_fullscreen_mode',
           'header_in_fullscreen_mode',
-          'same_data_requery',                        /* re-request data on symbol change */
+          'same_data_requery',
         ],
 
         overrides: {
@@ -1030,8 +1006,6 @@ const ChartModule = (function () {
           'scalesProperties.textColor'      : dark ? '#b2b5be' : '#555',
           'scalesProperties.fontSize'       : 11,
           'scalesProperties.backgroundColor': dark ? '#131722' : '#f0f3fa',
-          /* Countdown timer color */
-          'countdown_timer.color': '#ff8c42',
         },
       });
 
@@ -1042,10 +1016,9 @@ const ChartModule = (function () {
         _chartReady = true;
         _setupResize();
 
-        /* Force timezone AFTER ready (some TV versions need this) */
+        /* Confirm timezone after ready */
         try { _widget.activeChart().setTimezone('Asia/Baghdad'); } catch {}
 
-        /* Anchor viewport to last 7 days */
         setTimeout(() => {
           try {
             const nowSec = Math.floor(Date.now() / 1000);
@@ -1055,14 +1028,13 @@ const ChartModule = (function () {
             );
           } catch {}
           drawLines();
-        }, 600);
+        }, 500);
 
-        /* Track interval changes */
         try {
           _widget.activeChart().onIntervalChanged().subscribe(null, newRes => {
             PREF.set('iv', newRes);
             _interval    = TV_TO_IV[newRes] || _interval;
-            _lastBarTime = 0; // reset so BBO re-snaps to new candle boundary
+            _lastBarTime = 0;
           });
         } catch {}
       });
@@ -1079,11 +1051,10 @@ const ChartModule = (function () {
     }
   }
 
-  /* ── Build screen HTML (once) ── */
+  /* ── Screen HTML (once) ── */
   function _ensureScreen() {
     const sc = $el('chartScreen');
     if (!sc || $el('_cTvWrap')) return;
-
     sc.innerHTML = `
 <div class="c-nav">
   <button class="c-back" id="_cBack">← رجوع</button>
@@ -1113,7 +1084,6 @@ const ChartModule = (function () {
     };
     $el('_cLock').onclick = () => typeof lockApp === 'function' && lockApp(true);
     $el('_cFs').onclick   = _toggleFs;
-
     document.addEventListener('fullscreenchange',       _onFsChange);
     document.addEventListener('webkitfullscreenchange', _onFsChange);
 
@@ -1152,7 +1122,6 @@ const ChartModule = (function () {
     if (wrap) buildTradeBar(wrap);
     _startBBO();
 
-    /* Immediate price */
     if (typeof State !== 'undefined') {
       const p = isXAU() ? State.prices?.['XAU']?.mid : State.prices?.[_sym]?.mid;
       if (p) setPrice(p);
@@ -1165,11 +1134,8 @@ const ChartModule = (function () {
           setTimeout(() => {
             drawLines();
             try {
-              const nowSec = Math.floor(Date.now() / 1000);
-              _widget.activeChart().setVisibleRange(
-                { from: nowSec - 7*86400, to: nowSec + 3600 },
-                { percentRightMargin: 5 }
-              );
+              const n = Math.floor(Date.now() / 1000);
+              _widget.activeChart().setVisibleRange({ from: n - 7*86400, to: n + 3600 }, { percentRightMargin: 5 });
             } catch {}
           }, 600);
         });
@@ -1194,14 +1160,13 @@ const ChartModule = (function () {
     if (iv === _interval) return;
     _interval    = iv;
     _lastBarTime = 0;
-    const tvRes  = IV_TO_TV[iv] || '60';
-    PREF.set('iv', tvRes);
+    PREF.set('iv', IV_TO_TV[iv] || '60');
     if (_widget && _chartReady) {
       try {
-        _widget.activeChart().setResolution(tvRes, () => {
+        _widget.activeChart().setResolution(IV_TO_TV[iv] || '60', () => {
           try {
-            const nowSec = Math.floor(Date.now() / 1000);
-            _widget.activeChart().setVisibleRange({ from: nowSec - 7*86400, to: nowSec + 3600 });
+            const n = Math.floor(Date.now() / 1000);
+            _widget.activeChart().setVisibleRange({ from: n - 7*86400, to: n + 3600 });
           } catch {}
         });
       } catch (e) { console.warn('[Chart] setResolution:', e.message); }
@@ -1210,9 +1175,7 @@ const ChartModule = (function () {
 
   function switchAssetChart(sym) {
     if (!_visible || sym === _sym) return;
-    _sym         = sym;
-    _lastBarTime = 0;
-    _lastClose   = 0;
+    _sym = sym; _lastBarTime = 0; _lastClose = 0;
     _setHeader(sym);
     const wrap = $el('_cWrap');
     if (wrap) buildTradeBar(wrap);
@@ -1227,11 +1190,8 @@ const ChartModule = (function () {
           setTimeout(() => {
             drawLines();
             try {
-              const nowSec = Math.floor(Date.now() / 1000);
-              _widget.activeChart().setVisibleRange(
-                { from: nowSec - 7*86400, to: nowSec + 3600 },
-                { percentRightMargin: 5 }
-              );
+              const n = Math.floor(Date.now() / 1000);
+              _widget.activeChart().setVisibleRange({ from: n - 7*86400, to: n + 3600 }, { percentRightMargin: 5 });
             } catch {}
           }, 600);
         });
