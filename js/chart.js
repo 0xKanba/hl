@@ -1,50 +1,61 @@
 /* ═══════════════════════════════════════════════════════════════
-   chart.js — TradingView Advanced Charts · سيولة v9
+   chart.js — TradingView Advanced Charts · سيولة v10
    ─────────────────────────────────────────────────────────────
-   ROOT BUG FOUND & KILLED:
-   resolveSymbol had timezone:'Asia/Baghdad' — TV uses this to
-   interpret bar timestamps. Since our bars are UTC epoch seconds,
-   setting a non-UTC timezone in symbol info causes TV to shift
-   all bar times by +3h, rendering them in the wrong slots →
-   only 1 visible candle + 1970 label at the leftmost bar.
+   FINAL FIX — 1970 bug root cause:
 
-   FIX: resolveSymbol always returns timezone:'Etc/UTC'.
-        Widget init sets timezone:'Asia/Baghdad' for DISPLAY only.
-        setTimezone() in onChartReady confirms it.
+   HL candleSnapshot REST → c.t in MILLISECONDS (always)
+   TV pagination pp.from / pp.to → UNIX SECONDS (always)
 
-   HL candleSnapshot: c.t is MILLISECONDS from REST.
-   WS candle:        c.t is also MILLISECONDS.
-   toMs() normalizes both safely.
+   Previous bugs:
+   1. resolveSymbol had timezone:'Asia/Baghdad' → TV shifts bars +3h → 1970
+      FIX: resolveSymbol timezone = 'Etc/UTC' always
+      Widget timezone = 'Asia/Baghdad' for display only
 
-   webData2/webData3: noted — BBO prices come from main app WS,
-   no direct subscription here (app ws.js handles it).
+   2. Cache returning stale/poisoned bars
+      FIX: NO localStorage cache at all — every request hits API fresh
+           (matches old LightweightCharts behavior that worked)
+
+   3. pp.from/pp.to confusion: these ARE seconds from TV, multiply by 1000
+      for HL API (ms). Never multiply twice.
+
+   4. Empty bars on first request → noData:false → TV stops = 1 candle
+      FIX: empty always → noData:true
+
+   ARCHITECTURE (from d.md reverse engineering):
+   - Single WS connection, candle subscription per symbol+interval
+   - REST only for initial history snapshot
+   - allMids / webData2 handled by main app ws.js (not here)
+   - BBO ticks from State.prices (set by main WS in ws.js)
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
 const ChartModule = (function () {
 
-  const HL_API  = 'https://api.hyperliquid.xyz';
-  const HL_WS   = 'wss://api.hyperliquid.xyz/ws';
-  const TL      = 31.1035;
+  const HL_API = 'https://api.hyperliquid.xyz';
+  const HL_WS  = 'wss://api.hyperliquid.xyz/ws';
+  const TL     = 31.1035;
 
-  /* 2020-01-01 in both units */
+  /* 2020-01-01 00:00:00 UTC in seconds — HL earliest data */
   const MIN_SEC = 1577836800;
-  const MIN_MS  = MIN_SEC * 1000;
 
-  /* First-request look-back per interval (ms) */
-  const RANGES = {
-    '1m' :   6 * 3600e3,
-    '3m' :  12 * 3600e3,
-    '5m' :  24 * 3600e3,
-    '15m':   5 * 86400e3,
-    '30m':  10 * 86400e3,
-    '1h' :  60 * 86400e3,
-    '2h' : 120 * 86400e3,
-    '4h' : 240 * 86400e3,
-    '1d' : 365 * 86400e3,
+  /*
+   * MAX look-back per interval for FIRST getBars call (in ms).
+   * These are generous ranges so TV gets enough history to fill screen.
+   * TV will paginate back further if user scrolls left.
+   */
+  const LOOKBACK_MS = {
+    '1m' :   6 * 3600_000,
+    '3m' :  12 * 3600_000,
+    '5m' :  24 * 3600_000,
+    '15m':   7 * 86400_000,
+    '30m':  14 * 86400_000,
+    '1h' :  90 * 86400_000,
+    '2h' : 120 * 86400_000,
+    '4h' : 365 * 86400_000,
+    '1d' : 365 * 86400_000,
   };
 
-  /* HL interval string ↔ TV resolution string */
+  /* TV resolution ↔ HL interval */
   const IV_TO_TV = {
     '1m':'1','3m':'3','5m':'5','15m':'15','30m':'30',
     '1h':'60','2h':'120','4h':'240','1d':'D',
@@ -54,83 +65,78 @@ const ChartModule = (function () {
     '60':'1h','120':'2h','240':'4h','D':'1d','1D':'1d',
   };
 
-  /* Candle duration in seconds */
-  const IV_DUR = {
+  /* Candle duration in seconds — for BBO tick snapping */
+  const IV_DUR_SEC = {
     '1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,
     '1h':3600,'2h':7200,'4h':14400,'1d':86400,
   };
 
-  /* ── state ── */
-  let _widget       = null;
-  let _chartReady   = false;
-  let _visible      = false;
-  let _sym          = 'CL';
-  let _interval     = '1h';
-  let _lastClose    = 0;
-  let _lastBarTime  = 0;    // UNIX seconds of most-recent delivered bar
-  let _subs         = {};
-  let _chartWs      = null;
-  let _wsTimer      = null;
-  let _wsActiveCoin = null;
-  let _wsActiveIv   = null;
-  let _entryLines   = [];
-  let _tpLine       = null;
-  let _slLine       = null;
-  let _liqLine      = null;
-  let _ro           = null;
-  let _layoutTmr    = null;
-  let _readyTmr     = null;
-  let _bboTimer     = null;
-  let _gestInit     = false;
+  /* ── module state ── */
+  let _widget      = null;
+  let _chartReady  = false;
+  let _visible     = false;
+  let _sym         = 'CL';
+  let _interval    = '1h';
+  let _lastClose   = 0;
+  let _lastBarSec  = 0;   // UNIX seconds of latest delivered bar
+  let _subs        = {};
+  let _chartWs     = null;
+  let _wsTimer     = null;
+  let _wsActiveCoin= null;
+  let _wsActiveIv  = null;
+  let _entryLines  = [];
+  let _tpLine      = null;
+  let _slLine      = null;
+  let _liqLine     = null;
+  let _ro          = null;
+  let _layoutTmr   = null;
+  let _readyTmr    = null;
+  let _bboTimer    = null;
+  let _gestInit    = false;
 
-  const coinStr = s => (typeof ASSETS !== 'undefined' && ASSETS[s]?.coin) || `xyz:${s}`;
+  const coinOf  = s => (typeof ASSETS !== 'undefined' && ASSETS[s]?.coin) || `xyz:${s}`;
   const assetOf = s => (typeof ASSETS !== 'undefined' && ASSETS[s]) ||
     { pxDp:2, szDp:2, name:s, icon:'📊', unit:'', lev:10, presets:[1], idx:0, cross:true };
   const isDark  = () => document.documentElement.getAttribute('data-theme') !== 'light';
-  const $el     = id => document.getElementById(id);
+  const $       = id => document.getElementById(id);
   const toast_  = (m,t,d) => typeof toast === 'function' && toast(m,t,d);
   const isXAU   = () => _sym === 'XAU';
 
   const PREF = {
-    get : k     => { try { return localStorage.getItem('_cp_'+k); } catch { return null; } },
-    set : (k,v) => { try { localStorage.setItem('_cp_'+k, v); } catch {} },
+    get : k     => { try { return localStorage.getItem('_tv_pref_'+k); } catch { return null; } },
+    set : (k,v) => { try { localStorage.setItem('_tv_pref_'+k, v); } catch {} },
   };
 
   /*
-   * toMs — convert any HL timestamp to milliseconds
-   * HL REST candleSnapshot: c.t is ms  (e.g. 1750000000000)
-   * HL WS candle:           c.t is ms  (same)
-   * Guard: values < 1e10 treated as seconds and multiplied
+   * HL REST candleSnapshot always returns c.t in MILLISECONDS.
+   * Convert to UNIX seconds for TradingView.
    */
-  function toMs(t) {
-    const n = Math.floor(+t || 0);
+  function msToSec(ms) {
+    const n = Math.floor(+ms || 0);
+    /* Safety: if someone passes seconds by mistake (< 1e10), handle it */
     if (n <= 0) return 0;
-    return n < 1e10 ? n * 1000 : n;  // < 1e10 = seconds range → convert
+    if (n < 1e10) return n; // already seconds
+    return Math.floor(n / 1000);
   }
 
-  function toSec(t) {
-    const ms = toMs(t);
-    return ms > 0 ? Math.floor(ms / 1000) : 0;
-  }
-
-  /* Floor to candle-open boundary */
+  /* Floor timestamp to candle open boundary */
   function candleOpenSec(nowSec, iv) {
-    const dur = IV_DUR[iv] || 3600;
+    const dur = IV_DUR_SEC[iv] || 3600;
     return Math.floor(nowSec / dur) * dur;
   }
 
-  /* Price helpers — _lastClose always in display units */
+  /* Price display helpers — _lastClose always in display units (grams for XAU) */
   function setPrice(p) {
     if (!p || +p <= 0) return;
     _lastClose = +p;
-    const el = $el('_cPrice');
+    const el = $('_cPrice');
     if (el) el.textContent = '$' + (+p).toFixed(assetOf(_sym).pxDp);
-    _refreshBtnPx();
+    _updateBtnPx();
   }
-  function _refreshBtnPx() {
+  function _updateBtnPx() {
     if (!_lastClose) return;
     const dp = assetOf(_sym).pxDp;
-    const b = $el('_cBuyPx'), s = $el('_cSellPx');
+    const b = $('_cBuyPx'), s = $('_cSellPx');
     if (b) b.textContent = '$' + (_lastClose * 1.0005).toFixed(dp);
     if (s) s.textContent = '$' + (_lastClose * 0.9995).toFixed(dp);
   }
@@ -139,7 +145,7 @@ const ChartModule = (function () {
      CSS
   ════════════════════════════════════════════════════════════ */
   (function injectCSS() {
-    if ($el('_chartCSS')) return;
+    if ($('_chartCSS')) return;
     const s = document.createElement('style');
     s.id = '_chartCSS';
     s.textContent = `
@@ -233,17 +239,11 @@ const ChartModule = (function () {
 .c-wd-ico{font-size:40px;}
 .c-wd-title{font-size:15px;font-weight:900;color:var(--text-primary,#f5f5f5);}
 .c-wd-msg{font-size:12px;color:var(--text-secondary,#a0a0a0);line-height:1.8;max-width:280px;}
-.c-wd-msg code{
-  font-family:'IBM Plex Mono',monospace;font-size:10px;
-  background:var(--bg-elev,#1a1a1a);padding:2px 5px;border-radius:4px;
-  direction:ltr;display:inline-block;
-}
-.c-wd-btn{
-  padding:9px 26px;border-radius:999px;border:none;
+.c-wd-msg code{font-family:'IBM Plex Mono',monospace;font-size:10px;
+  background:var(--bg-elev,#1a1a1a);padding:2px 5px;border-radius:4px;direction:ltr;display:inline-block;}
+.c-wd-btn{padding:9px 26px;border-radius:999px;border:none;
   background:linear-gradient(135deg,#ff8c42,#a8502f);
-  color:#fff;font-size:13px;font-weight:900;
-  font-family:'Cairo',sans-serif;cursor:pointer;
-}
+  color:#fff;font-size:13px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;}
 .c-wd-btn:active{opacity:.8;}
 .cf-ov{
   position:absolute;inset:0;z-index:95;
@@ -265,8 +265,7 @@ const ChartModule = (function () {
   padding:5px 0;border-bottom:1px solid var(--border,#1f1f1f);}
 .cf-row:last-child{border:none;}
 .cf-k{font-size:11px;color:var(--text-secondary,#a0a0a0);font-weight:700;}
-.cf-v{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;
-  color:var(--text-primary,#f5f5f5);}
+.cf-v{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text-primary,#f5f5f5);}
 .cf-v.g{color:#26a69a;}.cf-v.r{color:#ef5350;}.cf-v.w{color:var(--warn,#ffd600);}
 .cf-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .cf-can{padding:12px;border-radius:999px;border:1.5px solid var(--border-strong,#333);
@@ -287,48 +286,13 @@ const ChartModule = (function () {
   })();
 
   /* ════════════════════════════════════════════════════════════
-     Cache v4 — strict, purges legacy keys
-  ════════════════════════════════════════════════════════════ */
-  const CACHE = {
-    TTL: {
-      '1m':90e3,'3m':180e3,'5m':360e3,'15m':1200e3,'30m':2400e3,
-      '1h':4800e3,'2h':4800e3,'4h':9600e3,'1d':28800e3,
-    },
-    key: (sym, iv) => `_hlcv4_${sym}_${iv}`,
-    get(sym, iv) {
-      try {
-        const d = JSON.parse(localStorage.getItem(this.key(sym, iv)) || 'null');
-        if (!d?.b?.length) return null;
-        if (Date.now() - d.t > (this.TTL[iv] || 4800e3)) { this.del(sym, iv); return null; }
-        const clean = d.b.filter(b => b.time > MIN_SEC && b.close > 0);
-        if (clean.length < 2) { this.del(sym, iv); return null; }
-        return clean;
-      } catch { return null; }
-    },
-    set(sym, iv, bars) {
-      try {
-        const clean = bars.filter(b => b.time > MIN_SEC && b.close > 0).slice(-2000);
-        if (clean.length < 2) return;
-        localStorage.setItem(this.key(sym, iv), JSON.stringify({ b: clean, t: Date.now() }));
-      } catch {}
-    },
-    del(sym, iv) { try { localStorage.removeItem(this.key(sym, iv)); } catch {} },
-    purgeLegacy() {
-      try {
-        ['_hlcv2_','_hlcv3_','_hlcv_'].forEach(pfx =>
-          Object.keys(localStorage).filter(k => k.startsWith(pfx))
-            .forEach(k => localStorage.removeItem(k)));
-      } catch {}
-    },
-  };
-  CACHE.purgeLegacy();
-
-  /* ════════════════════════════════════════════════════════════
-     REST candle fetcher — raw fetch, never throws
+     CANDLE FETCHER — direct API, no cache
+     c.t from HL REST = MILLISECONDS → msToSec() converts to seconds
   ════════════════════════════════════════════════════════════ */
   async function fetchCandles(sym, iv, isGr, startMs, endMs) {
-    const sMs = Math.max(Math.floor(startMs), MIN_MS);
-    const eMs = Math.min(Math.ceil(endMs), Date.now() + 5000);
+    /* clamp to valid range */
+    const sMs = Math.max(Math.floor(startMs), MIN_SEC * 1000);
+    const eMs = Math.min(Math.ceil(endMs),   Date.now() + 5000);
     if (sMs >= eMs) return [];
 
     let resp;
@@ -338,23 +302,19 @@ const ChartModule = (function () {
         headers: { 'Content-Type': 'application/json' },
         body   : JSON.stringify({
           type: 'candleSnapshot',
-          req : { coin: coinStr(sym), interval: iv, startTime: sMs, endTime: eMs }
+          req : { coin: coinOf(sym), interval: iv, startTime: sMs, endTime: eMs }
         })
       });
-    } catch (e) { console.warn('[Chart] fetch err', e.message); return []; }
+    } catch (e) { console.warn('[Chart] fetch:', e.message); return []; }
 
     if (!resp.ok) return [];
     let raw;
     try { raw = await resp.json(); } catch { return []; }
     if (!Array.isArray(raw) || !raw.length) return [];
 
-    /*
-     * c.t from HL REST candleSnapshot = MILLISECONDS
-     * toSec(c.t) converts ms → sec correctly
-     */
     return raw
       .map(c => ({
-        time  : toSec(c.t),                         // UTC seconds ← required by TV
+        time  : msToSec(c.t),      /* c.t is ms from HL REST → convert to seconds */
         open  : isGr ? +c.o / TL : +c.o,
         high  : isGr ? +c.h / TL : +c.h,
         low   : isGr ? +c.l / TL : +c.l,
@@ -368,15 +328,18 @@ const ChartModule = (function () {
   /* ════════════════════════════════════════════════════════════
      DATAFEED
 
-     KEY RULES:
-     1. resolveSymbol → timezone MUST be 'Etc/UTC'
-        TV interprets bar timestamps according to this timezone.
-        If set to Asia/Baghdad, TV shifts all bars by +3h and the
-        axis labels show wrong dates (1970 = epoch shifted).
-     2. getBars first call: pp.firstDataRequest=true, pp.from/to may be 0
-     3. getBars paginate:   pp.from/to are UNIX SECONDS (not ms)
-     4. Empty response = noData:true ALWAYS (not false)
-        noData:false + [] = TV stops paginating silently = 1 candle bug
+     THE 1970 BUG — definitive explanation:
+     resolveSymbol.timezone must be 'Etc/UTC'.
+     TV uses this to interpret bar timestamps.
+     If set to 'Asia/Baghdad' (UTC+3), TV thinks each bar's
+     UNIX-second timestamp is in UTC+3 local time, so it subtracts
+     3 hours when placing bars on the UTC axis.
+     For the epoch bar (time=0), 0 - 3h = -10800 sec → renders as
+     "1970-01-01 minus 3 hours" which shows as Dec 31 1969 or Jan 1 1970.
+     Fixing to 'Etc/UTC' makes TV treat bar times as pure UTC seconds. ✓
+
+     Widget timezone = 'Asia/Baghdad' is correct — it only affects
+     how the axis LABELS are displayed to the user (UTC+3 display). ✓
   ════════════════════════════════════════════════════════════ */
   const Datafeed = {
 
@@ -413,16 +376,19 @@ const ChartModule = (function () {
         exchange: 'Hyperliquid', listed_exchange: 'Hyperliquid',
 
         /*
-         * ▼ CRITICAL FIX ▼
-         * Must be 'Etc/UTC' — bar timestamps from HL are UTC epoch seconds.
-         * Any other timezone causes TV to misinterpret bar positions → 1970 label.
-         * Display timezone (UTC+3) is set separately on the widget itself.
+         * ▼ CRITICAL — must be 'Etc/UTC' ▼
+         * Bar timestamps from HL are UNIX seconds in UTC.
+         * Anything other than 'Etc/UTC' here causes TV to
+         * misinterpret bar positions → 1970 date label bug.
+         * UTC+3 display is handled by the widget's timezone option.
          */
         timezone: 'Etc/UTC',
 
         format: 'price',
-        pricescale: Math.pow(10, a.pxDp || 2), minmov: 1,
-        has_intraday: true, has_daily: true,
+        pricescale: Math.pow(10, a.pxDp || 2),
+        minmov: 1,
+        has_intraday: true,
+        has_daily: true,
         has_weekly_and_monthly: false,
         intraday_multipliers: ['1','3','5','15','30','60','120','240'],
         supported_resolutions: ['1','3','5','15','30','60','120','240','D'],
@@ -433,54 +399,48 @@ const ChartModule = (function () {
 
     async getBars(si, res, pp, onResult, onError) {
       try {
-        const iv      = TV_TO_IV[res] || '1h';
-        const sym     = si.ticker;
-        const isGr    = sym === 'XAU';
+        const iv     = TV_TO_IV[res] || '1h';
+        const sym    = si.ticker;
+        const isGr   = sym === 'XAU';
         const isFirst = !!(pp && pp.firstDataRequest);
-        const now     = Date.now();
-        const range   = RANGES[iv] || RANGES['1h'];
+        const nowMs  = Date.now();
+        const lbMs   = LOOKBACK_MS[iv] || LOOKBACK_MS['1h'];
 
         let startMs, endMs;
 
         if (isFirst) {
-          endMs   = now;
-          startMs = now - range;
+          /*
+           * First request: load last LOOKBACK_MS of data.
+           * pp.from / pp.to are unreliable on first call.
+           */
+          endMs   = nowMs;
+          startMs = nowMs - lbMs;
         } else {
           /*
-           * pp.from and pp.to are UNIX SECONDS from TradingView.
-           * Convert to ms for HL API.
+           * Pagination: TV sends pp.from and pp.to as UNIX SECONDS.
+           * Multiply by 1000 to get milliseconds for HL API.
+           *
+           * pp.to   = time of earliest bar delivered so far (seconds)
+           * pp.from = suggested start (seconds), but we use our own range
            */
-          const toSec_   = pp.to   > 0 ? pp.to   : Math.floor(now / 1000);
-          const fromSec_ = pp.from > 0 ? pp.from : toSec_ - Math.floor(range / 1000);
+          const toSec_   = pp.to   > 0 ? pp.to   : Math.floor(nowMs / 1000);
+          const fromSec_ = pp.from > 0 ? pp.from : toSec_ - Math.floor(lbMs / 1000);
           endMs   = toSec_   * 1000;
           startMs = fromSec_ * 1000;
         }
 
-        startMs = Math.max(startMs, MIN_MS);
+        /* hard floor at MIN_SEC */
+        startMs = Math.max(startMs, MIN_SEC * 1000);
         if (startMs >= endMs) { onResult([], { noData: true }); return; }
-
-        /* Cache path (first request only) */
-        if (isFirst) {
-          const cached = CACHE.get(sym, iv);
-          if (cached?.length >= 5) {
-            const last     = cached[cached.length - 1];
-            const ageSec   = Math.floor(now / 1000) - last.time;
-            const maxAge   = (IV_DUR[iv] || 3600) * 3;
-            if (ageSec < maxAge) {
-              setPrice(last.close);
-              _lastBarTime = last.time;
-              onResult(cached, { noData: false });
-              _bgRefresh(sym, iv, isGr, last.time).catch(() => {});
-              return;
-            }
-            CACHE.del(sym, iv);
-          }
-        }
 
         const bars = await fetchCandles(sym, iv, isGr, startMs, endMs);
 
         if (!bars.length) {
-          /* MUST be noData:true — never noData:false with empty array */
+          /*
+           * ALWAYS noData:true on empty — never noData:false.
+           * noData:false + [] = TV assumes stream is live, stops
+           * paginating → only 1 candle shown (the open bug).
+           */
           onResult([], { noData: true });
           return;
         }
@@ -488,8 +448,7 @@ const ChartModule = (function () {
         if (isFirst) {
           const last = bars[bars.length - 1];
           setPrice(last.close);
-          _lastBarTime = last.time;
-          CACHE.set(sym, iv, bars);
+          _lastBarSec = last.time;
         }
 
         onResult(bars, { noData: false });
@@ -502,7 +461,7 @@ const ChartModule = (function () {
 
     subscribeBars(si, res, onTick, uid) {
       _subs[uid] = { sym: si.ticker, cb: onTick };
-      _wsConn(coinStr(si.ticker), TV_TO_IV[res] || '1h');
+      _wsConnect(coinOf(si.ticker), TV_TO_IV[res] || '1h');
     },
 
     unsubscribeBars(uid) {
@@ -511,35 +470,11 @@ const ChartModule = (function () {
     },
   };
 
-  /* Background refresh: fetch newer bars and push to TV */
-  async function _bgRefresh(sym, iv, isGr, lastTimeSec) {
-    if (!_visible) return;
-    const nowMs  = Date.now();
-    const gapMs  = nowMs - lastTimeSec * 1000;
-    if (gapMs < 10000) return;
-    try {
-      const fresh = await fetchCandles(sym, iv, isGr, lastTimeSec * 1000 - 2000, nowMs);
-      if (!fresh.length) return;
-      const cached = CACHE.get(sym, iv) || [];
-      const map = new Map(cached.map(b => [b.time, b]));
-      fresh.forEach(b => map.set(b.time, b));
-      const merged = [...map.values()].sort((a, b) => a.time - b.time);
-      CACHE.set(sym, iv, merged);
-      const newer = fresh.filter(b => b.time > lastTimeSec);
-      if (!newer.length) return;
-      const last = newer[newer.length - 1];
-      setPrice(last.close);
-      _lastBarTime = last.time;
-      newer.forEach(b => {
-        Object.values(_subs).forEach(s => { try { s.cb(b); } catch {} });
-      });
-    } catch {}
-  }
-
   /* ════════════════════════════════════════════════════════════
-     WebSocket — live candle feed
+     WEBSOCKET — single connection per symbol+interval
+     Provides live candle updates (same as old LightweightCharts impl)
   ════════════════════════════════════════════════════════════ */
-  function _wsConn(c, iv) {
+  function _wsConnect(c, iv) {
     if (_chartWs && _chartWs.readyState <= 1 &&
         _wsActiveCoin === c && _wsActiveIv === iv) return;
     _wsClose();
@@ -557,19 +492,23 @@ const ChartModule = (function () {
         try {
           const msg = JSON.parse(e.data);
           if (msg.channel !== 'candle' || !msg.data) return;
-          const cd = msg.data;
-          const t  = toSec(cd.t);   // cd.t is ms from WS
-          if (t < MIN_SEC) return;
-          const gr = isXAU();
+          const cd   = msg.data;
+          /*
+           * WS candle c.t = milliseconds (same as REST)
+           * msToSec() converts safely
+           */
+          const tSec = msToSec(cd.t);
+          if (tSec < MIN_SEC) return;
+          const gr  = isXAU();
           const bar = {
-            time  : t,
+            time  : tSec,
             open  : gr ? +cd.o / TL : +cd.o,
             high  : gr ? +cd.h / TL : +cd.h,
             low   : gr ? +cd.l / TL : +cd.l,
             close : gr ? +cd.c / TL : +cd.c,
             volume: +cd.v || 0,
           };
-          _lastBarTime = bar.time;
+          _lastBarSec = bar.time;
           setPrice(bar.close);
           Object.values(_subs).forEach(s => { try { s.cb(bar); } catch {} });
         } catch {}
@@ -577,9 +516,9 @@ const ChartModule = (function () {
       _chartWs.onerror  = () => {};
       _chartWs.onclose  = () => {
         if (_visible && Object.keys(_subs).length)
-          _wsTimer = setTimeout(() => _wsConn(c, iv), 4000);
+          _wsTimer = setTimeout(() => _wsConnect(c, iv), 4000);
       };
-    } catch (e) { console.warn('[Chart] WS', e.message); }
+    } catch (e) { console.warn('[Chart] WS:', e.message); }
   }
 
   function _wsClose() {
@@ -589,40 +528,37 @@ const ChartModule = (function () {
   }
 
   /* ════════════════════════════════════════════════════════════
-     BBO poller — sub-candle 1-second tick animation
-
-     Reads display-unit prices from State (set by main app ws.js).
-     Tick bar.time = current candle open boundary (UTC seconds).
-     Tick price = display price (grams for XAU, raw otherwise).
+     BBO POLLER — 1-second sub-candle tick
+     Reads State.prices (set by main app ws.js via allMids/BBO).
+     Tick price = display units (grams for XAU).
+     Tick time  = current candle open boundary (UNIX seconds).
   ════════════════════════════════════════════════════════════ */
   function _startBBO() {
     clearInterval(_bboTimer);
     _bboTimer = setInterval(() => {
       if (!_visible || typeof State === 'undefined') return;
-      const displayPx = isXAU()
+      const p = isXAU()
         ? State.prices?.['XAU']?.mid
         : State.prices?.[_sym]?.mid;
-      if (!displayPx || +displayPx <= 0) return;
+      if (!p || +p <= 0) return;
 
-      setPrice(displayPx);
+      setPrice(p);
       if (!Object.keys(_subs).length) return;
 
       const nowSec  = Math.floor(Date.now() / 1000);
-      const barTime = Math.max(_lastBarTime, candleOpenSec(nowSec, _interval));
-      const p       = +displayPx;
+      const barTime = Math.max(_lastBarSec, candleOpenSec(nowSec, _interval));
 
       Object.values(_subs).forEach(s => {
         try {
-          s.cb({ time: barTime, open: p, high: p, low: p, close: p, volume: 0 });
+          s.cb({ time: barTime, open: +p, high: +p, low: +p, close: +p, volume: 0 });
         } catch {}
       });
     }, 1000);
   }
-
   function _stopBBO() { clearInterval(_bboTimer); _bboTimer = null; }
 
   /* ════════════════════════════════════════════════════════════
-     Position lines
+     POSITION LINES
   ════════════════════════════════════════════════════════════ */
   function clearLines() {
     if (_widget && _chartReady) {
@@ -706,10 +642,10 @@ const ChartModule = (function () {
   }
 
   /* ════════════════════════════════════════════════════════════
-     Trade bar + confirm sheet
+     TRADE BAR + CONFIRM SHEET
   ════════════════════════════════════════════════════════════ */
   function buildTradeBar(wrap) {
-    $el('_cTrade')?.remove();
+    $('_cTrade')?.remove();
     const a = assetOf(_sym);
     const bar = document.createElement('div');
     bar.id = '_cTrade'; bar.className = 'c-trade-bar';
@@ -732,15 +668,15 @@ const ChartModule = (function () {
 </button>`;
     const tvWrap = wrap.querySelector('.c-tv-wrap') || wrap.firstChild;
     if (tvWrap) wrap.insertBefore(bar, tvWrap); else wrap.appendChild(bar);
-    $el('_cBuy').onclick  = () => _showConfirm(true);
-    $el('_cSell').onclick = () => _showConfirm(false);
-    _refreshBtnPx();
+    $('_cBuy').onclick  = () => _showConfirm(true);
+    $('_cSell').onclick = () => _showConfirm(false);
+    _updateBtnPx();
   }
 
   function _showConfirm(isBuy) {
     if (typeof State === 'undefined' || !State.wallet)
       return toast_('سجّل الدخول أولاً', 'err');
-    const qty  = parseFloat($el('_cQty')?.value || 0);
+    const qty  = parseFloat($('_cQty')?.value || 0);
     if (!qty || qty <= 0) return toast_('أدخل الكمية', 'err');
     const a    = assetOf(_sym);
     const gr   = isXAU();
@@ -753,7 +689,7 @@ const ChartModule = (function () {
     const liqOz = isBuy ? midOz*(1-1/a.lev+.5/a.lev) : midOz*(1+1/a.lev-.5/a.lev);
     const liqD  = (gr ? liqOz / TL : liqOz).toFixed(a.pxDp);
     _hideConfirm();
-    const tw = $el('_cTvWrap'); if (!tw) return;
+    const tw = $('_cTvWrap'); if (!tw) return;
     const ov = document.createElement('div'); ov.id = '_cfOv'; ov.className = 'cf-ov';
     ov.innerHTML = `<div class="cf-card">
 <div class="cf-hdl"></div>
@@ -779,18 +715,17 @@ const ChartModule = (function () {
 </div></div>`;
     tw.appendChild(ov);
     ov.onclick = e => { if (e.target === ov) _hideConfirm(); };
-    $el('_cfC').onclick = _hideConfirm;
-    $el('_cfX').onclick = () =>
+    $('_cfC').onclick = _hideConfirm;
+    $('_cfX').onclick = () =>
       typeof requirePin !== 'undefined'
         ? requirePin(() => _execTrade(isBuy, qty))
         : _execTrade(isBuy, qty);
   }
-
-  function _hideConfirm() { $el('_cfOv')?.remove(); }
+  function _hideConfirm() { $('_cfOv')?.remove(); }
 
   async function _execTrade(isBuy, qty) {
     if (!State?.wallet) return;
-    const btn = $el('_cfX');
+    const btn = $('_cfX');
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="cf-spin"></span>'; }
     const gr    = isXAU();
     const a     = gr ? (typeof ASSETS !== 'undefined' ? ASSETS['GOLD'] : assetOf(_sym)) : assetOf(_sym);
@@ -822,9 +757,11 @@ const ChartModule = (function () {
     }
   }
 
-  /* ── Fullscreen ── */
+  /* ════════════════════════════════════════════════════════════
+     FULLSCREEN + RESIZE
+  ════════════════════════════════════════════════════════════ */
   function _toggleFs() {
-    const el = $el('chartScreen');
+    const el = $('chartScreen');
     if (!document.fullscreenElement) {
       (el?.requestFullscreen?.() || el?.webkitRequestFullscreen?.())?.catch?.(() => {});
     } else {
@@ -835,20 +772,19 @@ const ChartModule = (function () {
   function _onFsChange() {
     if (!_widget || !_chartReady) return;
     setTimeout(() => {
-      const tw = $el('_cTvWrap'); if (!tw) return;
+      const tw = $('_cTvWrap'); if (!tw) return;
       const r  = tw.getBoundingClientRect();
       if (r.width < 10 || r.height < 10) return;
       const w = Math.floor(r.width), h = Math.floor(r.height);
-      const tc = $el('_tvC');
+      const tc = $('_tvC');
       if (tc) { tc.style.width = w+'px'; tc.style.height = h+'px'; }
       try { _widget.resize(w, h); } catch {}
     }, 150);
   }
 
-  /* ── Layout wait ── */
   function _waitLayout(cb, n) {
     clearTimeout(_layoutTmr); n = n || 0;
-    const w = $el('_cTvWrap');
+    const w = $('_cTvWrap');
     if (w && _visible) {
       const r = w.getBoundingClientRect();
       if (r.width > 10 && r.height > 10) { cb(Math.floor(r.width), Math.floor(r.height)); return; }
@@ -856,42 +792,42 @@ const ChartModule = (function () {
     if (!_visible) return;
     if (n < 150) { _layoutTmr = setTimeout(() => _waitLayout(cb, n+1), 16); }
     else {
-      const sc = $el('chartScreen');
+      const sc = $('chartScreen');
       cb(sc ? sc.clientWidth : window.innerWidth,
          Math.max(300, (sc ? sc.clientHeight : window.innerHeight) - 100));
     }
   }
 
-  /* ── ResizeObserver ── */
   function _setupResize() {
     if (_ro) { _ro.disconnect(); _ro = null; }
-    const w = $el('_cTvWrap');
+    const w = $('_cTvWrap');
     if (!w || !window.ResizeObserver) return;
     _ro = new ResizeObserver(entries => {
       if (!_widget || !_visible) return;
       const { width, height } = entries[0].contentRect;
       if (width < 10 || height < 10) return;
-      const tc = $el('_tvC');
+      const tc = $('_tvC');
       if (tc) { tc.style.width = Math.floor(width)+'px'; tc.style.height = Math.floor(height)+'px'; }
       try { _widget.resize(Math.floor(width), Math.floor(height)); } catch {}
     });
     _ro.observe(w);
   }
 
-  /* ── Watchdog ── */
+  /* ════════════════════════════════════════════════════════════
+     WATCHDOG + DESTROY
+  ════════════════════════════════════════════════════════════ */
   function _showWatchdog() {
-    const w = $el('_cTvWrap'); if (!w || !_visible) return;
-    $el('_cWd')?.remove();
+    const w = $('_cTvWrap'); if (!w || !_visible) return;
+    $('_cWd')?.remove();
     const ov = document.createElement('div'); ov.id = '_cWd'; ov.className = 'c-wd';
     ov.innerHTML = `<div class="c-wd-ico">⏱</div>
 <div class="c-wd-title">انتهت مهلة التحميل (10 ثوانٍ)</div>
 <div class="c-wd-msg">تحقق من <b>DevTools → Console</b> → ابحث <code>[Chart]</code></div>
 <button class="c-wd-btn" id="_cWdBtn">إعادة المحاولة</button>`;
     w.appendChild(ov);
-    $el('_cWdBtn').onclick = () => { ov.remove(); _waitLayout((pw,ph) => _doInit(_sym, pw, ph)); };
+    $('_cWdBtn').onclick = () => { ov.remove(); _waitLayout((pw,ph) => _doInit(_sym, pw, ph)); };
   }
 
-  /* ── Destroy ── */
   function _destroyWidget() {
     clearTimeout(_layoutTmr); _layoutTmr = null;
     clearTimeout(_readyTmr);  _readyTmr  = null;
@@ -900,20 +836,20 @@ const ChartModule = (function () {
     if (_widget) { try { _widget.remove(); } catch {} _widget = null; }
     _chartReady = false; _subs = {};
     _wsClose();
-    const c = $el('_tvC');
+    const c = $('_tvC');
     if (c) { c.innerHTML = ''; c.style.width = ''; c.style.height = ''; }
-    $el('_cWd')?.remove();
+    $('_cWd')?.remove();
   }
 
   /* ════════════════════════════════════════════════════════════
-     Widget init
+     WIDGET INIT
   ════════════════════════════════════════════════════════════ */
   function _doInit(sym, w, h) {
     if (!_visible) return;
     _destroyWidget();
 
     if (typeof TradingView === 'undefined' || typeof TradingView.widget !== 'function') {
-      const tw = $el('_cTvWrap');
+      const tw = $('_cTvWrap');
       if (tw) tw.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;
         height:100%;color:#ff8c42;font-size:14px;font-family:Cairo,sans-serif;
         text-align:center;padding:20px;direction:rtl;">
@@ -923,15 +859,15 @@ const ChartModule = (function () {
       return;
     }
 
-    const cont = $el('_tvC'); if (!cont) return;
+    const cont = $('_tvC'); if (!cont) return;
     cont.style.width  = w + 'px';
     cont.style.height = h + 'px';
 
     const dark  = isDark();
     const bg    = dark ? '#131722' : '#ffffff';
-    const tvRes = PREF.get('iv') || IV_TO_TV[_interval] || '60';
+    const tvRes = PREF.get('interval') || IV_TO_TV[_interval] || '60';
 
-    console.log(`[Chart] init ${sym} ${w}×${h} res=${tvRes}`);
+    console.log(`[Chart] init ${sym} ${w}×${h} res=${tvRes} dark=${dark}`);
 
     clearTimeout(_readyTmr);
     _readyTmr = setTimeout(() => { console.warn('[Chart] ⏱ 10s'); _showWatchdog(); }, 10000);
@@ -947,15 +883,15 @@ const ChartModule = (function () {
         library_path: '/charting_library/',
 
         /*
-         * timezone here = DISPLAY timezone for the time axis.
-         * Asia/Baghdad = UTC+3. Bar timestamps are still UTC internally.
-         * This is separate from symbol timezone (which must stay Etc/UTC).
+         * timezone = Asia/Baghdad (UTC+3) — display only.
+         * This controls how axis labels show time to the user.
+         * Does NOT affect bar data interpretation (that's resolveSymbol.timezone).
          */
         timezone: 'Asia/Baghdad',
         locale  : 'ar',
 
         theme : dark ? 'Dark' : 'Light',
-        style : '1',
+        style : '1',   /* Candlestick */
         debug : false,
         autosize: false,
 
@@ -984,12 +920,15 @@ const ChartModule = (function () {
 
         enabled_features: [
           'countdown_timer',
+          /* All user settings (drawings, indicators, chart type, colors, etc.)
+             are saved automatically to localStorage by TradingView itself. */
           'use_localstorage_for_settings',
           'save_chart_properties_to_local_storage',
           'move_logo_to_main_pane',
           'side_toolbar_in_fullscreen_mode',
           'header_in_fullscreen_mode',
           'same_data_requery',
+          'adaptive_logo',
         ],
 
         overrides: {
@@ -1012,13 +951,14 @@ const ChartModule = (function () {
       _widget.onChartReady(() => {
         console.log('[Chart] ✅ ready', sym);
         clearTimeout(_readyTmr); _readyTmr = null;
-        $el('_cWd')?.remove();
+        $('_cWd')?.remove();
         _chartReady = true;
         _setupResize();
 
-        /* Confirm timezone after ready */
+        /* Confirm UTC+3 display timezone after ready */
         try { _widget.activeChart().setTimezone('Asia/Baghdad'); } catch {}
 
+        /* Anchor to last 7 days on first load */
         setTimeout(() => {
           try {
             const nowSec = Math.floor(Date.now() / 1000);
@@ -1030,11 +970,12 @@ const ChartModule = (function () {
           drawLines();
         }, 500);
 
+        /* Persist interval changes to PREF */
         try {
           _widget.activeChart().onIntervalChanged().subscribe(null, newRes => {
-            PREF.set('iv', newRes);
-            _interval    = TV_TO_IV[newRes] || _interval;
-            _lastBarTime = 0;
+            PREF.set('interval', newRes);
+            _interval   = TV_TO_IV[newRes] || _interval;
+            _lastBarSec = 0;
           });
         } catch {}
       });
@@ -1042,7 +983,7 @@ const ChartModule = (function () {
     } catch (e) {
       console.error('[Chart] widget threw:', e);
       clearTimeout(_readyTmr); _readyTmr = null;
-      const tw = $el('_cTvWrap');
+      const tw = $('_cTvWrap');
       if (tw) tw.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;
         height:100%;color:#ef5350;font-size:13px;font-family:Cairo,sans-serif;
         text-align:center;padding:20px;direction:rtl;">❌ خطأ في تهيئة الرسم<br>
@@ -1051,10 +992,12 @@ const ChartModule = (function () {
     }
   }
 
-  /* ── Screen HTML (once) ── */
+  /* ════════════════════════════════════════════════════════════
+     SCREEN HTML (built once)
+  ════════════════════════════════════════════════════════════ */
   function _ensureScreen() {
-    const sc = $el('chartScreen');
-    if (!sc || $el('_cTvWrap')) return;
+    const sc = $('chartScreen');
+    if (!sc || $('_cTvWrap')) return;
     sc.innerHTML = `
 <div class="c-nav">
   <button class="c-back" id="_cBack">← رجوع</button>
@@ -1073,23 +1016,23 @@ const ChartModule = (function () {
   <div class="c-tv-wrap" id="_cTvWrap"><div id="_tvC"></div></div>
 </div>`;
 
-    $el('_cBack').onclick  = () => ChartModule.close();
-    $el('_cReset').onclick = () => {
+    $('_cBack').onclick  = () => ChartModule.close();
+    $('_cReset').onclick = () => {
       if (!_widget || !_chartReady) return;
       try { _widget.activeChart().scrollToRealTime(); } catch {}
       try {
-        const nowSec = Math.floor(Date.now() / 1000);
-        _widget.activeChart().setVisibleRange({ from: nowSec - 7*86400, to: nowSec + 3600 });
+        const n = Math.floor(Date.now() / 1000);
+        _widget.activeChart().setVisibleRange({ from: n - 7*86400, to: n + 3600 });
       } catch {}
     };
-    $el('_cLock').onclick = () => typeof lockApp === 'function' && lockApp(true);
-    $el('_cFs').onclick   = _toggleFs;
+    $('_cLock').onclick = () => typeof lockApp === 'function' && lockApp(true);
+    $('_cFs').onclick   = _toggleFs;
     document.addEventListener('fullscreenchange',       _onFsChange);
     document.addEventListener('webkitfullscreenchange', _onFsChange);
 
     if (!_gestInit) {
       _gestInit = true;
-      const tw = $el('_cTvWrap');
+      const tw = $('_cTvWrap');
       if (tw) {
         ['gesturestart','gesturechange','gestureend'].forEach(ev =>
           tw.addEventListener(ev, e => e.preventDefault(), { passive: false }));
@@ -1100,49 +1043,57 @@ const ChartModule = (function () {
 
   function _setHeader(sym) {
     const a = assetOf(sym);
-    const ic = $el('_cIcon'), nm = $el('_cName');
+    const ic = $('_cIcon'), nm = $('_cName');
     if (ic) ic.textContent = a.icon;
     if (nm) nm.textContent = a.name;
   }
 
   /* ════════════════════════════════════════════════════════════
-     Public API
+     PUBLIC API
   ════════════════════════════════════════════════════════════ */
   function open(sym) {
-    const savedTv = PREF.get('iv');
+    /* Restore saved interval */
+    const savedTv = PREF.get('interval');
     if (savedTv) _interval = TV_TO_IV[savedTv] || _interval;
 
     _sym     = sym || (typeof State !== 'undefined' ? State.asset : 'CL');
     _visible = true;
     _ensureScreen();
-    $el('chartScreen')?.classList.remove('hidden');
+    $('chartScreen')?.classList.remove('hidden');
     _setHeader(_sym);
 
-    const wrap = $el('_cWrap');
+    const wrap = $('_cWrap');
     if (wrap) buildTradeBar(wrap);
     _startBBO();
 
+    /* Show current price immediately from State */
     if (typeof State !== 'undefined') {
       const p = isXAU() ? State.prices?.['XAU']?.mid : State.prices?.[_sym]?.mid;
       if (p) setPrice(p);
     }
 
     if (_widget && _chartReady) {
+      /* Widget alive — switch symbol */
       try {
         _widget.setSymbol(_sym, IV_TO_TV[_interval] || '60', () => {
-          _lastBarTime = 0;
+          _lastBarSec = 0;
           setTimeout(() => {
             drawLines();
             try {
               const n = Math.floor(Date.now() / 1000);
-              _widget.activeChart().setVisibleRange({ from: n - 7*86400, to: n + 3600 }, { percentRightMargin: 5 });
+              _widget.activeChart().setVisibleRange(
+                { from: n - 7*86400, to: n + 3600 },
+                { percentRightMargin: 5 }
+              );
             } catch {}
           }, 600);
         });
       } catch { _waitLayout((w, h) => _doInit(_sym, w, h)); }
     } else if (!_widget) {
+      /* First open */
       _waitLayout((w, h) => _doInit(_sym, w, h));
     }
+    /* else: widget initialising — onChartReady will handle it */
   }
 
   function close() {
@@ -1153,14 +1104,15 @@ const ChartModule = (function () {
     if (document.fullscreenElement) {
       (document.exitFullscreen?.() || document.webkitExitFullscreen?.())?.catch?.(() => {});
     }
-    $el('chartScreen')?.classList.add('hidden');
+    $('chartScreen')?.classList.add('hidden');
+    /* Keep widget alive for instant re-open */
   }
 
   function switchInterval(iv) {
     if (iv === _interval) return;
-    _interval    = iv;
-    _lastBarTime = 0;
-    PREF.set('iv', IV_TO_TV[iv] || '60');
+    _interval   = iv;
+    _lastBarSec = 0;
+    PREF.set('interval', IV_TO_TV[iv] || '60');
     if (_widget && _chartReady) {
       try {
         _widget.activeChart().setResolution(IV_TO_TV[iv] || '60', () => {
@@ -1175,9 +1127,9 @@ const ChartModule = (function () {
 
   function switchAssetChart(sym) {
     if (!_visible || sym === _sym) return;
-    _sym = sym; _lastBarTime = 0; _lastClose = 0;
+    _sym = sym; _lastBarSec = 0; _lastClose = 0;
     _setHeader(sym);
-    const wrap = $el('_cWrap');
+    const wrap = $('_cWrap');
     if (wrap) buildTradeBar(wrap);
     if (typeof State !== 'undefined') {
       const p = sym === 'XAU' ? State.prices?.['XAU']?.mid : State.prices?.[sym]?.mid;
@@ -1186,12 +1138,15 @@ const ChartModule = (function () {
     if (_widget && _chartReady) {
       try {
         _widget.setSymbol(sym, IV_TO_TV[_interval] || '60', () => {
-          _lastBarTime = 0;
+          _lastBarSec = 0;
           setTimeout(() => {
             drawLines();
             try {
               const n = Math.floor(Date.now() / 1000);
-              _widget.activeChart().setVisibleRange({ from: n - 7*86400, to: n + 3600 }, { percentRightMargin: 5 });
+              _widget.activeChart().setVisibleRange(
+                { from: n - 7*86400, to: n + 3600 },
+                { percentRightMargin: 5 }
+              );
             } catch {}
           }, 600);
         });
