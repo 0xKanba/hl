@@ -1,31 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════
-   chart.js — TradingView Advanced Charts · سيولة v10
+   chart.js — TradingView Advanced Charts · سيولة v11
    ─────────────────────────────────────────────────────────────
-   FINAL FIX — 1970 bug root cause:
+   FINAL FIX — جذور علّة "21 يناير 1970" في النطاق المرئي:
 
-   HL candleSnapshot REST → c.t in MILLISECONDS (always)
-   TV pagination pp.from / pp.to → UNIX SECONDS (always)
+   السبب الحقيقي ليس resolveSymbol.timezone (مُصلَح فعلاً منذ v10)،
+   بل أن setVisibleRange({from,to}) كان يُستدعى داخل setTimeout(...,500)
+   بعد onChartReady، أحياناً قبل أن يحمّل TradingView أي بار حقيقي.
+   في هذه الحالة يفسّر TV قيم from/to كفهارس بارات بدل ثوانٍ يونكس،
+   فيقع الفهرس قرب الصفر → epoch → 1970-01-01 (± فرق المنطقة الزمنية
+   يعطي 31 ديسمبر 1969 أو 21 يناير 1970).
 
-   Previous bugs:
-   1. resolveSymbol had timezone:'Asia/Baghdad' → TV shifts bars +3h → 1970
-      FIX: resolveSymbol timezone = 'Etc/UTC' always
-      Widget timezone = 'Asia/Baghdad' for display only
-
-   2. Cache returning stale/poisoned bars
-      FIX: NO localStorage cache at all — every request hits API fresh
-           (matches old LightweightCharts behavior that worked)
-
-   3. pp.from/pp.to confusion: these ARE seconds from TV, multiply by 1000
-      for HL API (ms). Never multiply twice.
-
-   4. Empty bars on first request → noData:false → TV stops = 1 candle
-      FIX: empty always → noData:true
-
-   ARCHITECTURE (from d.md reverse engineering):
-   - Single WS connection, candle subscription per symbol+interval
-   - REST only for initial history snapshot
-   - allMids / webData2 handled by main app ws.js (not here)
-   - BBO ticks from State.prices (set by main WS in ws.js)
+   الإصلاحات في هذه النسخة:
+   1. علم _firstDataLoaded يُرفع داخل onDataLoaded.
+   2. setVisibleRange لا يُستدعى أبداً قبل _firstDataLoaded === true.
+   3. safeRangeSec() يرفض أي نطاق to/from <= MIN_SEC.
+   4. كل نقاط (REST + WS + BBO + pp.from/pp.to) تمر بـ toSec() صارم.
+   5. dedup للبارات على time.
+   6. BBO tick لا يصدر إلا إذا _lastBarSec > MIN_SEC.
+   7. orchestrator موحَّد بين open() / switchAssetChart() / switchInterval().
+   8. حماية ضد double-init + exponential backoff للـ WS.
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -35,14 +28,10 @@ const ChartModule = (function () {
   const HL_WS  = 'wss://api.hyperliquid.xyz/ws';
   const TL     = 31.1035;
 
-  /* 2020-01-01 00:00:00 UTC in seconds — HL earliest data */
+  /* 2020-01-01 00:00:00 UTC in seconds — أقدم تاريخ مسموح */
   const MIN_SEC = 1577836800;
 
-  /*
-   * MAX look-back per interval for FIRST getBars call (in ms).
-   * These are generous ranges so TV gets enough history to fill screen.
-   * TV will paginate back further if user scrolls left.
-   */
+  /* أقصى look-back لأول getBars (ms) */
   const LOOKBACK_MS = {
     '1m' :   6 * 3600_000,
     '3m' :  12 * 3600_000,
@@ -65,34 +54,52 @@ const ChartModule = (function () {
     '60':'1h','120':'2h','240':'4h','D':'1d','1D':'1d',
   };
 
-  /* Candle duration in seconds — for BBO tick snapping */
+  /* مدة الشمعة بالثواني */
   const IV_DUR_SEC = {
     '1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,
     '1h':3600,'2h':7200,'4h':14400,'1d':86400,
   };
 
+  /* النطاق الافتراضي عند الفتح (بالثواني) لكل فاصل */
+  const DEFAULT_VIEW_SEC = {
+    '1m':  3 * 3600,
+    '3m':  6 * 3600,
+    '5m': 12 * 3600,
+    '15m': 2 * 86400,
+    '30m': 3 * 86400,
+    '1h':  7 * 86400,
+    '2h': 14 * 86400,
+    '4h': 30 * 86400,
+    '1d':180 * 86400,
+  };
+
   /* ── module state ── */
-  let _widget      = null;
-  let _chartReady  = false;
-  let _visible     = false;
-  let _sym         = 'CL';
-  let _interval    = '1h';
-  let _lastClose   = 0;
-  let _lastBarSec  = 0;   // UNIX seconds of latest delivered bar
-  let _subs        = {};
-  let _chartWs     = null;
-  let _wsTimer     = null;
-  let _wsActiveCoin= null;
-  let _wsActiveIv  = null;
-  let _entryLines  = [];
-  let _tpLine      = null;
-  let _slLine      = null;
-  let _liqLine     = null;
-  let _ro          = null;
-  let _layoutTmr   = null;
-  let _readyTmr    = null;
-  let _bboTimer    = null;
-  let _gestInit    = false;
+  let _widget          = null;
+  let _chartReady      = false;
+  let _firstDataLoaded = false;   /* ⭐ يحرس setVisibleRange */
+  let _visible         = false;
+  let _sym             = 'CL';
+  let _interval        = '1h';
+  let _lastClose       = 0;
+  let _lastBarSec      = 0;
+  let _subs            = {};
+  let _chartWs         = null;
+  let _wsTimer         = null;
+  let _wsActiveCoin    = null;
+  let _wsActiveIv      = null;
+  let _wsRetry         = 0;
+  let _entryLines      = [];
+  let _tpLine          = null;
+  let _slLine          = null;
+  let _liqLine         = null;
+  let _ro              = null;
+  let _layoutTmr       = null;
+  let _readyTmr        = null;
+  let _bboTimer        = null;
+  let _gestInit        = false;
+  let _initInFlight    = false;   /* ⭐ منع double-init */
+  let _dataLoadedUnsub = null;
+  let _intervalUnsub   = null;
 
   const coinOf  = s => (typeof ASSETS !== 'undefined' && ASSETS[s]?.coin) || `xyz:${s}`;
   const assetOf = s => (typeof ASSETS !== 'undefined' && ASSETS[s]) ||
@@ -107,27 +114,55 @@ const ChartModule = (function () {
     set : (k,v) => { try { localStorage.setItem('_tv_pref_'+k, v); } catch {} },
   };
 
-  /*
-   * HL REST candleSnapshot always returns c.t in MILLISECONDS.
-   * Convert to UNIX seconds for TradingView.
-   */
-  function msToSec(ms) {
-    const n = Math.floor(+ms || 0);
-    /* Safety: if someone passes seconds by mistake (< 1e10), handle it */
-    if (n <= 0) return 0;
-    if (n < 1e10) return n; // already seconds
-    return Math.floor(n / 1000);
+  /* ════════════════════════════════════════════════════════════
+     TIME-SAFETY LAYER — تحويلات وحراس صارمة
+  ════════════════════════════════════════════════════════════ */
+
+  /* أي قيمة (ms أو s) → ثوانٍ يونكس صحيحة، أو 0 إذا فاسدة */
+  function toSec(v) {
+    const n = Math.floor(+v || 0);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    /* أكبر من 1e10 ≈ بعد 2286 → نعتبره ms */
+    return n < 1e10 ? n : Math.floor(n / 1000);
   }
 
-  /* Floor timestamp to candle open boundary */
+  /* أي قيمة → ms آمنة، أو 0 إذا فاسدة */
+  function toMs(v) {
+    const n = Math.floor(+v || 0);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    /* أصغر من 1e10 → ثوانٍ، نحوّل لـ ms */
+    return n < 1e10 ? n * 1000 : n;
+  }
+
+  /* يضمن نطاق ثوانٍ آمن. يرجع null إذا فشل التحقق */
+  function safeRangeSec(from, to) {
+    const f = toSec(from);
+    const t = toSec(to);
+    if (f <= MIN_SEC || t <= MIN_SEC) return null;
+    if (t <= f) return null;
+    if (!Number.isFinite(f) || !Number.isFinite(t)) return null;
+    return { from: f, to: t };
+  }
+
+  /* تقريب لبداية شمعة */
   function candleOpenSec(nowSec, iv) {
     const dur = IV_DUR_SEC[iv] || 3600;
     return Math.floor(nowSec / dur) * dur;
   }
 
-  /* Price display helpers — _lastClose always in display units (grams for XAU) */
+  /* النطاق الافتراضي الآمن للفاصل الحالي */
+  function defaultViewRange() {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const span   = DEFAULT_VIEW_SEC[_interval] || 7 * 86400;
+    const margin = (IV_DUR_SEC[_interval] || 3600);
+    return safeRangeSec(nowSec - span, nowSec + margin);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     PRICE DISPLAY
+  ════════════════════════════════════════════════════════════ */
   function setPrice(p) {
-    if (!p || +p <= 0) return;
+    if (!p || +p <= 0 || !Number.isFinite(+p)) return;
     _lastClose = +p;
     const el = $('_cPrice');
     if (el) el.textContent = '$' + (+p).toFixed(assetOf(_sym).pxDp);
@@ -286,13 +321,12 @@ const ChartModule = (function () {
   })();
 
   /* ════════════════════════════════════════════════════════════
-     CANDLE FETCHER — direct API, no cache
-     c.t from HL REST = MILLISECONDS → msToSec() converts to seconds
+     CANDLE FETCHER — REST مباشر بدون كاش
+     c.t من HL = MILLISECONDS → toSec()
   ════════════════════════════════════════════════════════════ */
   async function fetchCandles(sym, iv, isGr, startMs, endMs) {
-    /* clamp to valid range */
-    const sMs = Math.max(Math.floor(startMs), MIN_SEC * 1000);
-    const eMs = Math.min(Math.ceil(endMs),   Date.now() + 5000);
+    const sMs = Math.max(Math.floor(toMs(startMs)), MIN_SEC * 1000);
+    const eMs = Math.min(Math.ceil(toMs(endMs)),    Date.now() + 5000);
     if (sMs >= eMs) return [];
 
     let resp;
@@ -312,34 +346,31 @@ const ChartModule = (function () {
     try { raw = await resp.json(); } catch { return []; }
     if (!Array.isArray(raw) || !raw.length) return [];
 
-    return raw
-      .map(c => ({
-        time  : msToSec(c.t),      /* c.t is ms from HL REST → convert to seconds */
+    /* تحويل + فلترة + dedup على time */
+    const seen = new Set();
+    const out  = [];
+    for (const c of raw) {
+      const t = toSec(c.t);
+      if (t <= MIN_SEC) continue;
+      const close = isGr ? +c.c / TL : +c.c;
+      if (!Number.isFinite(close) || close <= 0) continue;
+      if (seen.has(t)) continue;
+      seen.add(t);
+      out.push({
+        time  : t,
         open  : isGr ? +c.o / TL : +c.o,
         high  : isGr ? +c.h / TL : +c.h,
         low   : isGr ? +c.l / TL : +c.l,
-        close : isGr ? +c.c / TL : +c.c,
+        close,
         volume: +c.v || 0,
-      }))
-      .filter(b => b.time > MIN_SEC && b.close > 0)
-      .sort((a, b) => a.time - b.time);
+      });
+    }
+    out.sort((a, b) => a.time - b.time);
+    return out;
   }
 
   /* ════════════════════════════════════════════════════════════
      DATAFEED
-
-     THE 1970 BUG — definitive explanation:
-     resolveSymbol.timezone must be 'Etc/UTC'.
-     TV uses this to interpret bar timestamps.
-     If set to 'Asia/Baghdad' (UTC+3), TV thinks each bar's
-     UNIX-second timestamp is in UTC+3 local time, so it subtracts
-     3 hours when placing bars on the UTC axis.
-     For the epoch bar (time=0), 0 - 3h = -10800 sec → renders as
-     "1970-01-01 minus 3 hours" which shows as Dec 31 1969 or Jan 1 1970.
-     Fixing to 'Etc/UTC' makes TV treat bar times as pure UTC seconds. ✓
-
-     Widget timezone = 'Asia/Baghdad' is correct — it only affects
-     how the axis LABELS are displayed to the user (UTC+3 display). ✓
   ════════════════════════════════════════════════════════════ */
   const Datafeed = {
 
@@ -375,13 +406,7 @@ const ChartModule = (function () {
         type: 'crypto', session: '24x7',
         exchange: 'Hyperliquid', listed_exchange: 'Hyperliquid',
 
-        /*
-         * ▼ CRITICAL — must be 'Etc/UTC' ▼
-         * Bar timestamps from HL are UNIX seconds in UTC.
-         * Anything other than 'Etc/UTC' here causes TV to
-         * misinterpret bar positions → 1970 date label bug.
-         * UTC+3 display is handled by the widget's timezone option.
-         */
+        /* ⚠️ يجب أن تكون Etc/UTC — TV يستخدمها لتفسير ثوانٍ البارات */
         timezone: 'Etc/UTC',
 
         format: 'price',
@@ -399,48 +424,36 @@ const ChartModule = (function () {
 
     async getBars(si, res, pp, onResult, onError) {
       try {
-        const iv     = TV_TO_IV[res] || '1h';
-        const sym    = si.ticker;
-        const isGr   = sym === 'XAU';
+        const iv      = TV_TO_IV[res] || '1h';
+        const sym     = si.ticker;
+        const isGr    = sym === 'XAU';
         const isFirst = !!(pp && pp.firstDataRequest);
-        const nowMs  = Date.now();
-        const lbMs   = LOOKBACK_MS[iv] || LOOKBACK_MS['1h'];
+        const nowMs   = Date.now();
+        const lbMs    = LOOKBACK_MS[iv] || LOOKBACK_MS['1h'];
 
         let startMs, endMs;
 
         if (isFirst) {
-          /*
-           * First request: load last LOOKBACK_MS of data.
-           * pp.from / pp.to are unreliable on first call.
-           */
           endMs   = nowMs;
           startMs = nowMs - lbMs;
         } else {
-          /*
-           * Pagination: TV sends pp.from and pp.to as UNIX SECONDS.
-           * Multiply by 1000 to get milliseconds for HL API.
-           *
-           * pp.to   = time of earliest bar delivered so far (seconds)
-           * pp.from = suggested start (seconds), but we use our own range
-           */
-          const toSec_   = pp.to   > 0 ? pp.to   : Math.floor(nowMs / 1000);
-          const fromSec_ = pp.from > 0 ? pp.from : toSec_ - Math.floor(lbMs / 1000);
-          endMs   = toSec_   * 1000;
-          startMs = fromSec_ * 1000;
+          /* pp.from / pp.to ثوانٍ من TV — مرّرها عبر toSec ثم clamp */
+          const toS   = toSec(pp.to);
+          const fromS = toSec(pp.from);
+          const safeTo   = toS   > MIN_SEC ? toS   : Math.floor(nowMs / 1000);
+          const safeFrom = fromS > MIN_SEC ? fromS : (safeTo - Math.floor(lbMs / 1000));
+          endMs   = safeTo   * 1000;
+          startMs = safeFrom * 1000;
         }
 
-        /* hard floor at MIN_SEC */
+        /* clamp نهائي */
         startMs = Math.max(startMs, MIN_SEC * 1000);
+        endMs   = Math.min(endMs,   nowMs + 5000);
         if (startMs >= endMs) { onResult([], { noData: true }); return; }
 
         const bars = await fetchCandles(sym, iv, isGr, startMs, endMs);
 
         if (!bars.length) {
-          /*
-           * ALWAYS noData:true on empty — never noData:false.
-           * noData:false + [] = TV assumes stream is live, stops
-           * paginating → only 1 candle shown (the open bug).
-           */
           onResult([], { noData: true });
           return;
         }
@@ -471,8 +484,7 @@ const ChartModule = (function () {
   };
 
   /* ════════════════════════════════════════════════════════════
-     WEBSOCKET — single connection per symbol+interval
-     Provides live candle updates (same as old LightweightCharts impl)
+     WEBSOCKET — اتصال واحد، exponential backoff
   ════════════════════════════════════════════════════════════ */
   function _wsConnect(c, iv) {
     if (_chartWs && _chartWs.readyState <= 1 &&
@@ -483,6 +495,7 @@ const ChartModule = (function () {
       _chartWs = new WebSocket(HL_WS);
       _chartWs.onopen = () => {
         if (!_chartWs) return;
+        _wsRetry = 0;
         _chartWs.send(JSON.stringify({
           method: 'subscribe',
           subscription: { type: 'candle', coin: c, interval: iv }
@@ -493,19 +506,17 @@ const ChartModule = (function () {
           const msg = JSON.parse(e.data);
           if (msg.channel !== 'candle' || !msg.data) return;
           const cd   = msg.data;
-          /*
-           * WS candle c.t = milliseconds (same as REST)
-           * msToSec() converts safely
-           */
-          const tSec = msToSec(cd.t);
-          if (tSec < MIN_SEC) return;
-          const gr  = isXAU();
+          const tSec = toSec(cd.t);
+          if (tSec <= MIN_SEC) return;
+          const gr    = isXAU();
+          const close = gr ? +cd.c / TL : +cd.c;
+          if (!Number.isFinite(close) || close <= 0) return;
           const bar = {
             time  : tSec,
             open  : gr ? +cd.o / TL : +cd.o,
             high  : gr ? +cd.h / TL : +cd.h,
             low   : gr ? +cd.l / TL : +cd.l,
-            close : gr ? +cd.c / TL : +cd.c,
+            close,
             volume: +cd.v || 0,
           };
           _lastBarSec = bar.time;
@@ -513,25 +524,25 @@ const ChartModule = (function () {
           Object.values(_subs).forEach(s => { try { s.cb(bar); } catch {} });
         } catch {}
       };
-      _chartWs.onerror  = () => {};
-      _chartWs.onclose  = () => {
-        if (_visible && Object.keys(_subs).length)
-          _wsTimer = setTimeout(() => _wsConnect(c, iv), 4000);
+      _chartWs.onerror = () => {};
+      _chartWs.onclose = () => {
+        if (!_visible || !Object.keys(_subs).length) return;
+        _wsRetry = Math.min(_wsRetry + 1, 6);
+        const delay = Math.min(1000 * 2 ** _wsRetry, 30000);
+        _wsTimer = setTimeout(() => _wsConnect(c, iv), delay);
       };
     } catch (e) { console.warn('[Chart] WS:', e.message); }
   }
 
   function _wsClose() {
-    clearTimeout(_wsTimer);
+    clearTimeout(_wsTimer); _wsTimer = null;
     if (_chartWs) { try { _chartWs.close(); } catch {} _chartWs = null; }
     _wsActiveCoin = null; _wsActiveIv = null;
   }
 
   /* ════════════════════════════════════════════════════════════
-     BBO POLLER — 1-second sub-candle tick
-     Reads State.prices (set by main app ws.js via allMids/BBO).
-     Tick price = display units (grams for XAU).
-     Tick time  = current candle open boundary (UNIX seconds).
+     BBO POLLER — tick داخلي للشمعة الحالية
+     لا يصدر إلا إذا _lastBarSec > MIN_SEC (يضمن أن TV استلم تاريخاً)
   ════════════════════════════════════════════════════════════ */
   function _startBBO() {
     clearInterval(_bboTimer);
@@ -540,13 +551,16 @@ const ChartModule = (function () {
       const p = isXAU()
         ? State.prices?.['XAU']?.mid
         : State.prices?.[_sym]?.mid;
-      if (!p || +p <= 0) return;
+      if (!p || +p <= 0 || !Number.isFinite(+p)) return;
 
       setPrice(p);
       if (!Object.keys(_subs).length) return;
+      if (_lastBarSec <= MIN_SEC) return; /* ⭐ لا tick قبل أول bar حقيقي */
 
       const nowSec  = Math.floor(Date.now() / 1000);
-      const barTime = Math.max(_lastBarSec, candleOpenSec(nowSec, _interval));
+      const openSec = candleOpenSec(nowSec, _interval);
+      const barTime = Math.max(_lastBarSec, openSec);
+      if (barTime <= MIN_SEC) return;
 
       Object.values(_subs).forEach(s => {
         try {
@@ -556,6 +570,29 @@ const ChartModule = (function () {
     }, 1000);
   }
   function _stopBBO() { clearInterval(_bboTimer); _bboTimer = null; }
+
+  /* ════════════════════════════════════════════════════════════
+     SAFE VISIBLE-RANGE ORCHESTRATOR
+     يضمن ألا تُستدعى setVisibleRange قبل _firstDataLoaded
+  ════════════════════════════════════════════════════════════ */
+  function _applyVisibleRange() {
+    if (!_widget || !_chartReady || !_firstDataLoaded) return;
+    const r = defaultViewRange();
+    try {
+      const ch = _widget.activeChart();
+      if (r) {
+        ch.setVisibleRange(r, { percentRightMargin: 5 }).catch?.(() => {});
+      } else {
+        ch.scrollToRealTime();
+      }
+    } catch (e) { console.warn('[Chart] setVisibleRange:', e.message); }
+  }
+
+  /* يستدعى عند تغيير الأصل/الفاصل: ينتظر تحميل البيانات أولاً */
+  function _scheduleRangeAfterData() {
+    _firstDataLoaded = false;
+    /* عند _onDataLoaded سيتم استدعاء _applyVisibleRange + drawLines */
+  }
 
   /* ════════════════════════════════════════════════════════════
      POSITION LINES
@@ -832,9 +869,13 @@ const ChartModule = (function () {
     clearTimeout(_layoutTmr); _layoutTmr = null;
     clearTimeout(_readyTmr);  _readyTmr  = null;
     if (_ro) { _ro.disconnect(); _ro = null; }
+    try { _dataLoadedUnsub && _dataLoadedUnsub(); } catch {}
+    try { _intervalUnsub   && _intervalUnsub();   } catch {}
+    _dataLoadedUnsub = null; _intervalUnsub = null;
     clearLines();
     if (_widget) { try { _widget.remove(); } catch {} _widget = null; }
-    _chartReady = false; _subs = {};
+    _chartReady = false; _firstDataLoaded = false; _initInFlight = false;
+    _subs = {};
     _wsClose();
     const c = $('_tvC');
     if (c) { c.innerHTML = ''; c.style.width = ''; c.style.height = ''; }
@@ -845,10 +886,13 @@ const ChartModule = (function () {
      WIDGET INIT
   ════════════════════════════════════════════════════════════ */
   function _doInit(sym, w, h) {
-    if (!_visible) return;
+    if (!_visible || _initInFlight) return;
+    _initInFlight = true;
     _destroyWidget();
+    _initInFlight = true; /* destroy reset it — restore */
 
     if (typeof TradingView === 'undefined' || typeof TradingView.widget !== 'function') {
+      _initInFlight = false;
       const tw = $('_cTvWrap');
       if (tw) tw.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;
         height:100%;color:#ff8c42;font-size:14px;font-family:Cairo,sans-serif;
@@ -859,13 +903,15 @@ const ChartModule = (function () {
       return;
     }
 
-    const cont = $('_tvC'); if (!cont) return;
+    const cont = $('_tvC');
+    if (!cont) { _initInFlight = false; return; }
     cont.style.width  = w + 'px';
     cont.style.height = h + 'px';
 
     const dark  = isDark();
     const bg    = dark ? '#131722' : '#ffffff';
     const tvRes = PREF.get('interval') || IV_TO_TV[_interval] || '60';
+    _interval   = TV_TO_IV[tvRes] || _interval;
 
     console.log(`[Chart] init ${sym} ${w}×${h} res=${tvRes} dark=${dark}`);
 
@@ -882,16 +928,12 @@ const ChartModule = (function () {
         datafeed   : Datafeed,
         library_path: '/charting_library/',
 
-        /*
-         * timezone = Asia/Baghdad (UTC+3) — display only.
-         * This controls how axis labels show time to the user.
-         * Does NOT affect bar data interpretation (that's resolveSymbol.timezone).
-         */
+        /* عرض فقط — Asia/Baghdad للـ axis labels */
         timezone: 'Asia/Baghdad',
         locale  : 'ar',
 
         theme : dark ? 'Dark' : 'Light',
-        style : '1',   /* Candlestick */
+        style : '1',
         debug : false,
         autosize: false,
 
@@ -920,8 +962,6 @@ const ChartModule = (function () {
 
         enabled_features: [
           'countdown_timer',
-          /* All user settings (drawings, indicators, chart type, colors, etc.)
-             are saved automatically to localStorage by TradingView itself. */
           'use_localstorage_for_settings',
           'save_chart_properties_to_local_storage',
           'move_logo_to_main_pane',
@@ -952,36 +992,58 @@ const ChartModule = (function () {
         console.log('[Chart] ✅ ready', sym);
         clearTimeout(_readyTmr); _readyTmr = null;
         $('_cWd')?.remove();
-        _chartReady = true;
+        _chartReady   = true;
+        _initInFlight = false;
         _setupResize();
 
-        /* Confirm UTC+3 display timezone after ready */
         try { _widget.activeChart().setTimezone('Asia/Baghdad'); } catch {}
 
-        /* Anchor to last 7 days on first load */
-        setTimeout(() => {
-          try {
-            const nowSec = Math.floor(Date.now() / 1000);
-            _widget.activeChart().setVisibleRange(
-              { from: nowSec - 7 * 86400, to: nowSec + 3600 },
-              { percentRightMargin: 5 }
-            );
-          } catch {}
-          drawLines();
-        }, 500);
-
-        /* Persist interval changes to PREF */
+        /* ⭐ الاشتراك في onDataLoaded — هنا فقط يصبح setVisibleRange آمناً */
         try {
-          _widget.activeChart().onIntervalChanged().subscribe(null, newRes => {
+          const sub = _widget.activeChart().onDataLoaded();
+          const handler = () => {
+            if (!_firstDataLoaded) {
+              _firstDataLoaded = true;
+              /* تأجيل لما بعد رسم البارات */
+              requestAnimationFrame(() => requestAnimationFrame(() => {
+                _applyVisibleRange();
+                drawLines();
+              }));
+            } else {
+              drawLines();
+            }
+          };
+          sub.subscribe(null, handler);
+          _dataLoadedUnsub = () => { try { sub.unsubscribe(null, handler); } catch {} };
+        } catch (e) { console.warn('[Chart] onDataLoaded:', e.message); }
+
+        /* fallback: إذا لم يطلق onDataLoaded خلال 3 ثوانٍ، نحاول مرة واحدة */
+        setTimeout(() => {
+          if (!_firstDataLoaded && _chartReady) {
+            console.warn('[Chart] onDataLoaded fallback');
+            _firstDataLoaded = true;
+            _applyVisibleRange();
+            drawLines();
+          }
+        }, 3000);
+
+        /* حفظ تغييرات الفاصل */
+        try {
+          const iSub = _widget.activeChart().onIntervalChanged();
+          const iH   = newRes => {
             PREF.set('interval', newRes);
-            _interval   = TV_TO_IV[newRes] || _interval;
-            _lastBarSec = 0;
-          });
+            _interval        = TV_TO_IV[newRes] || _interval;
+            _lastBarSec      = 0;
+            _firstDataLoaded = false; /* انتظر تحميل بيانات الفاصل الجديد */
+          };
+          iSub.subscribe(null, iH);
+          _intervalUnsub = () => { try { iSub.unsubscribe(null, iH); } catch {} };
         } catch {}
       });
 
     } catch (e) {
       console.error('[Chart] widget threw:', e);
+      _initInFlight = false;
       clearTimeout(_readyTmr); _readyTmr = null;
       const tw = $('_cTvWrap');
       if (tw) tw.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;
@@ -993,7 +1055,7 @@ const ChartModule = (function () {
   }
 
   /* ════════════════════════════════════════════════════════════
-     SCREEN HTML (built once)
+     SCREEN HTML
   ════════════════════════════════════════════════════════════ */
   function _ensureScreen() {
     const sc = $('chartScreen');
@@ -1020,10 +1082,7 @@ const ChartModule = (function () {
     $('_cReset').onclick = () => {
       if (!_widget || !_chartReady) return;
       try { _widget.activeChart().scrollToRealTime(); } catch {}
-      try {
-        const n = Math.floor(Date.now() / 1000);
-        _widget.activeChart().setVisibleRange({ from: n - 7*86400, to: n + 3600 });
-      } catch {}
+      if (_firstDataLoaded) _applyVisibleRange();
     };
     $('_cLock').onclick = () => typeof lockApp === 'function' && lockApp(true);
     $('_cFs').onclick   = _toggleFs;
@@ -1052,7 +1111,6 @@ const ChartModule = (function () {
      PUBLIC API
   ════════════════════════════════════════════════════════════ */
   function open(sym) {
-    /* Restore saved interval */
     const savedTv = PREF.get('interval');
     if (savedTv) _interval = TV_TO_IV[savedTv] || _interval;
 
@@ -1066,34 +1124,30 @@ const ChartModule = (function () {
     if (wrap) buildTradeBar(wrap);
     _startBBO();
 
-    /* Show current price immediately from State */
     if (typeof State !== 'undefined') {
       const p = isXAU() ? State.prices?.['XAU']?.mid : State.prices?.[_sym]?.mid;
       if (p) setPrice(p);
     }
 
     if (_widget && _chartReady) {
-      /* Widget alive — switch symbol */
+      /* widget حي — بدّل الرمز */
+      _firstDataLoaded = false;
+      _lastBarSec      = 0;
       try {
         _widget.setSymbol(_sym, IV_TO_TV[_interval] || '60', () => {
-          _lastBarSec = 0;
+          /* onDataLoaded سيتولى applyVisibleRange + drawLines */
           setTimeout(() => {
-            drawLines();
-            try {
-              const n = Math.floor(Date.now() / 1000);
-              _widget.activeChart().setVisibleRange(
-                { from: n - 7*86400, to: n + 3600 },
-                { percentRightMargin: 5 }
-              );
-            } catch {}
-          }, 600);
+            if (!_firstDataLoaded && _chartReady) {
+              _firstDataLoaded = true;
+              _applyVisibleRange();
+              drawLines();
+            }
+          }, 3000);
         });
       } catch { _waitLayout((w, h) => _doInit(_sym, w, h)); }
     } else if (!_widget) {
-      /* First open */
       _waitLayout((w, h) => _doInit(_sym, w, h));
     }
-    /* else: widget initialising — onChartReady will handle it */
   }
 
   function close() {
@@ -1105,21 +1159,24 @@ const ChartModule = (function () {
       (document.exitFullscreen?.() || document.webkitExitFullscreen?.())?.catch?.(() => {});
     }
     $('chartScreen')?.classList.add('hidden');
-    /* Keep widget alive for instant re-open */
+    /* نُبقي widget للفتح السريع */
   }
 
   function switchInterval(iv) {
     if (iv === _interval) return;
-    _interval   = iv;
-    _lastBarSec = 0;
+    _interval        = iv;
+    _lastBarSec      = 0;
+    _firstDataLoaded = false;
     PREF.set('interval', IV_TO_TV[iv] || '60');
     if (_widget && _chartReady) {
       try {
         _widget.activeChart().setResolution(IV_TO_TV[iv] || '60', () => {
-          try {
-            const n = Math.floor(Date.now() / 1000);
-            _widget.activeChart().setVisibleRange({ from: n - 7*86400, to: n + 3600 });
-          } catch {}
+          setTimeout(() => {
+            if (!_firstDataLoaded && _chartReady) {
+              _firstDataLoaded = true;
+              _applyVisibleRange();
+            }
+          }, 3000);
         });
       } catch (e) { console.warn('[Chart] setResolution:', e.message); }
     }
@@ -1127,7 +1184,7 @@ const ChartModule = (function () {
 
   function switchAssetChart(sym) {
     if (!_visible || sym === _sym) return;
-    _sym = sym; _lastBarSec = 0; _lastClose = 0;
+    _sym = sym; _lastBarSec = 0; _lastClose = 0; _firstDataLoaded = false;
     _setHeader(sym);
     const wrap = $('_cWrap');
     if (wrap) buildTradeBar(wrap);
@@ -1138,17 +1195,13 @@ const ChartModule = (function () {
     if (_widget && _chartReady) {
       try {
         _widget.setSymbol(sym, IV_TO_TV[_interval] || '60', () => {
-          _lastBarSec = 0;
           setTimeout(() => {
-            drawLines();
-            try {
-              const n = Math.floor(Date.now() / 1000);
-              _widget.activeChart().setVisibleRange(
-                { from: n - 7*86400, to: n + 3600 },
-                { percentRightMargin: 5 }
-              );
-            } catch {}
-          }, 600);
+            if (!_firstDataLoaded && _chartReady) {
+              _firstDataLoaded = true;
+              _applyVisibleRange();
+              drawLines();
+            }
+          }, 3000);
         });
       } catch (e) { console.warn('[Chart] setSymbol:', e.message); }
     }
