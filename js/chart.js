@@ -11,6 +11,10 @@
       كل الإصدارات السابقة كانت تطرح ivMs من c.t ظنّاً أنه close time —
       هذا كان خاطئاً ويُزيح كل شمعة للخلف بمقدار interval كامل.
       هذا الإصدار يزيل الطرح نهائياً لكلا المصدرين (REST + WS).
+   ✅ أسبوعي (1W): يُبنى يدوياً من شموع يومية '1d' مجمَّعة إلى أسابيع
+      تبدأ الاثنين حسب توقيت الكويت — بدلاً من الاعتماد على '1w' الجاهزة
+      من Hyperliquid والتي لا تضمن حدود أسبوع محددة. يشمل تحديث حي.
+   ✅ خط محاور السعر/الزمن أكبر قليلاً (12–13px متجاوب) لسهولة القراءة
    ✅ No white flash: overlay على مستوى chartScreen
    ✅ Timezone: Kuwait افتراضياً، TV يحفظ تغيير المستخدم محلياً تلقائياً
    ✅ Responsive: موبايل + ديسكتوب
@@ -34,6 +38,42 @@ const ChartModule = (function () {
     '60':'1h','120':'2h','240':'4h','360':'6h','720':'12h',
     '1D':'1d','1W':'1w',
   };
+
+  /*
+   * الأسبوع يبدأ الاثنين — Hyperliquid's own '1w' candles لا تُستخدم
+   * (حدودها غير مضمونة). بدلاً من ذلك نجلب شموع يومية '1d' ونجمّعها
+   * يدوياً إلى أسابيع تبدأ الاثنين حسب توقيت الكويت (UTC+3 ثابت، بلا DST).
+   */
+  const KW_OFF = 3 * 3600000;
+
+  function _weekStartMs(utcMs) {
+    const local = utcMs + KW_OFF;
+    const d = new Date(local);
+    const dow  = d.getUTCDay();                 // 0=أحد..6=سبت (بإطار محلي مُزاح)
+    const back = dow === 0 ? 6 : dow - 1;        // أيام منذ آخر اثنين
+    const mon  = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - back*86400000;
+    return mon - KW_OFF;                         // رجوع لـ UTC حقيقي
+  }
+  function _dayKeyMs(utcMs) {
+    const local = utcMs + KW_OFF;
+    const d = new Date(local);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  function _aggregateWeekly(dailyBars) {
+    const map = new Map();
+    for (const d of dailyBars) {
+      const ws = _weekStartMs(d.time);
+      const w  = map.get(ws);
+      if (!w) map.set(ws, { time:ws, open:d.open, high:d.high, low:d.low, close:d.close, volume:d.volume });
+      else {
+        w.high  = Math.max(w.high, d.high);
+        w.low   = Math.min(w.low,  d.low);
+        w.close = d.close;      // dailyBars مرتّبة تصاعدياً — الأخير يفوز
+        w.volume += d.volume;
+      }
+    }
+    return Array.from(map.values()).sort((a,b)=>a.time-b.time);
+  }
 
   const NAV_ASSETS = [
     { sym:'CL',     ar:'النفط',     icon:'🛢'  },
@@ -438,71 +478,22 @@ const ChartModule = (function () {
     const hlCoin = _hlCoin(sym);
     const isGr   = _isGr(sym);
     const a      = _ai(sym);
-    let _dfIv    = '60';
     let _cws=null, _ctm=null, _ccb=null;
+    /* أيام الأسبوع الجاري تجميعها لحظياً — لتحديث الشمعة الأسبوعية الحيّة */
+    let _curWeek = new Map();   // dayKeyMs → daily bar
 
-    function _cwConn(res, cb) {
-      _cwClose(); _ccb=cb; _dfIv=res;
-      try {
-        _cws = new WebSocket(HL_WS);
-        _cws.onopen = () => _cws.send(JSON.stringify({
-          method:'subscribe',
-          subscription:{type:'candle',coin:hlCoin,interval:IV_HL[res]||'1h'}
-        }));
-        _cws.onmessage = e => {
-          try {
-            const msg=JSON.parse(e.data);
-            if(msg.channel!=='candle'||!msg.data||!_ccb) return;
-            const c=msg.data;
-            /*
-             * ✅ c.t = open time بالفعل (مؤكَّد من WS Candle type الرسمي).
-             * لا طرح، لا تعديل — استخدام مباشر.
-             */
-            const tMs = c.t>1e12?c.t:c.t*1000;
-            if (tMs<MIN_2020) return;
-            const bar={
-              time:tMs,
-              open:isGr?+c.o/TROY:+c.o, high:isGr?+c.h/TROY:+c.h,
-              low:isGr?+c.l/TROY:+c.l,  close:isGr?+c.c/TROY:+c.c,
-              volume:+c.v||0,
-            };
-            if (bar.close>0) {
-              _ccb(bar);
-              _setPrice(_dfSym,bar.close);
-              _scheduleLines();
-            }
-          } catch {}
-        };
-        _cws.onerror=()=>{};
-        _cws.onclose=()=>{
-          if(_ccb&&_visible&&_dfSym===_sym)
-            _ctm=setTimeout(()=>_cwConn(res,_ccb),5000);
-        };
-      } catch {}
-    }
-    function _cwClose() {
-      clearTimeout(_ctm);
-      if(_cws){try{_cws.close();}catch{}_cws=null;}
-      _ccb=null;
-    }
-
-    async function _fetchBars(from,to,res) {
-      const toMs  =Math.min(to*1000,Date.now()+5000);
-      const fromMs=Math.max(from*1000,MIN_2020);
-      if(fromMs>=toMs) return [];
-      const r=await fetch(HL_API+'/info',{
-        method:'POST',headers:{'Content-Type':'application/json'},
+    /* ── جلب REST خام بأي interval فعلي من Hyperliquid ── */
+    async function _fetchRaw(fromMs, toMs, hlIv) {
+      const r = await fetch(HL_API+'/info', {
+        method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({type:'candleSnapshot',req:{
-          coin:hlCoin,interval:IV_HL[res]||'1h',startTime:fromMs,endTime:toMs
+          coin:hlCoin, interval:hlIv, startTime:fromMs, endTime:toMs
         }})
       });
-      if(!r.ok) return [];
-      const raw=await r.json();
-      if(!Array.isArray(raw)||!raw.length) return [];
-      /*
-       * ✅ c.t = open time بالفعل (candleSnapshot response: t=open, T=close).
-       * لا طرح، لا تعديل — استخدام مباشر.
-       */
+      if (!r.ok) return [];
+      const raw = await r.json();
+      if (!Array.isArray(raw)||!raw.length) return [];
+      /* ✅ c.t = open time بالفعل (مؤكَّد من توثيق Hyperliquid الرسمي) */
       const seen=new Set();
       return raw.map(c=>{
         const tMs=c.t>1e12?c.t:c.t*1000;
@@ -517,6 +508,80 @@ const ChartModule = (function () {
         if(seen.has(b.time)) return false;
         seen.add(b.time); return true;
       }).sort((x,y)=>x.time-y.time);
+    }
+
+    /* ── موزّع: '1W' يُبنى من شموع يومية مجمَّعة، الباقي مباشر ── */
+    async function _fetchBars(from, to, res) {
+      const toMs   = Math.min(to*1000, Date.now()+5000);
+      const fromMs = Math.max(from*1000, MIN_2020);
+      if (fromMs>=toMs) return [];
+
+      if (res === '1W') {
+        const daily = await _fetchRaw(fromMs, toMs, '1d');
+        if (!daily.length) return [];
+        /* ابذر تتبّع الأسبوع الجاري من آخر أيام مجلوبة — للتحديث الحي لاحقاً */
+        const lastWs = _weekStartMs(daily[daily.length-1].time);
+        _curWeek.clear();
+        daily.forEach(d => { if (_weekStartMs(d.time)===lastWs) _curWeek.set(_dayKeyMs(d.time), d); });
+        return _aggregateWeekly(daily);
+      }
+      return _fetchRaw(fromMs, toMs, IV_HL[res]||'1h');
+    }
+
+    /* ── WS حيّ ── */
+    function _cwConn(res, cb) {
+      _cwClose(); _ccb=cb;
+      const wsIv = res==='1W' ? '1d' : (IV_HL[res]||'1h');
+      try {
+        _cws = new WebSocket(HL_WS);
+        _cws.onopen = () => _cws.send(JSON.stringify({
+          method:'subscribe',
+          subscription:{type:'candle',coin:hlCoin,interval:wsIv}
+        }));
+        _cws.onmessage = e => {
+          try {
+            const msg=JSON.parse(e.data);
+            if(msg.channel!=='candle'||!msg.data||!_ccb) return;
+            const c=msg.data;
+            /* ✅ c.t = open time بالفعل — لا طرح، لا تعديل */
+            const tMs = c.t>1e12?c.t:c.t*1000;
+            if (tMs<MIN_2020) return;
+            const bar={
+              time:tMs,
+              open:isGr?+c.o/TROY:+c.o, high:isGr?+c.h/TROY:+c.h,
+              low:isGr?+c.l/TROY:+c.l,  close:isGr?+c.c/TROY:+c.c,
+              volume:+c.v||0,
+            };
+            if (bar.close<=0) return;
+
+            if (res==='1W') {
+              /* دمج التِك اليومي في الشمعة الأسبوعية الجارية (اثنين→الآن) */
+              const ws=_weekStartMs(bar.time);
+              for (const [k,v] of _curWeek) if (_weekStartMs(v.time)!==ws) _curWeek.delete(k);
+              _curWeek.set(_dayKeyMs(bar.time), bar);
+              const merged  = _aggregateWeekly(Array.from(_curWeek.values()));
+              const weekBar = merged.find(w=>w.time===ws);
+              if (!weekBar) return;
+              _ccb(weekBar);
+              _setPrice(_dfSym, weekBar.close);
+            } else {
+              _ccb(bar);
+              _setPrice(_dfSym, bar.close);
+            }
+            _scheduleLines();
+          } catch {}
+        };
+        _cws.onerror=()=>{};
+        _cws.onclose=()=>{
+          if(_ccb&&_visible&&_dfSym===_sym)
+            _ctm=setTimeout(()=>_cwConn(res,_ccb),5000);
+        };
+      } catch {}
+    }
+    function _cwClose() {
+      clearTimeout(_ctm);
+      if(_cws){try{_cws.close();}catch{}_cws=null;}
+      _ccb=null;
     }
 
     return {
@@ -547,7 +612,6 @@ const ChartModule = (function () {
         }),0);
       },
       getBars(info,res,pp,onH,onE){
-        _dfIv=res;
         if(_dfSym===_sym) _interval=res;
         _fetchBars(pp.from,pp.to,res)
           .then(bars=>{
@@ -700,6 +764,8 @@ const ChartModule = (function () {
   function _mkWidget(sym,iv,saved){
     if(!window.TradingView?.widget){console.error('[chart.js] TV not loaded');return null;}
     const dark=_dark();
+    /* حجم خط المحاور (سعر + زمن) — أكبر قليلاً، متجاوب مع حجم الشاشة */
+    const scaleFont = window.innerWidth>=600 ? 13 : 12;
     const cfg={
       container:'_tvC', autosize:true,
       symbol:sym, interval:iv,
@@ -737,9 +803,9 @@ const ChartModule = (function () {
          * Override مباشر — لا يتعارض مع أي شيء آخر
          */
         'mainSeriesProperties.showCountdown':               true,
-        /* المحاور */
-        'scalesProperties.fontSize':                        11,
-        'scalesProperties.textColor':                       dark?'#777':'#555',
+        /* المحاور — خط أكبر لسهولة القراءة (سعر + زمن) */
+        'scalesProperties.fontSize':                        scaleFont,
+        'scalesProperties.textColor':                       dark?'#999':'#444',
         'scalesProperties.lineColor':                       dark?'#222':'#ddd',
         'scalesProperties.backgroundColor':                 dark?'#000':'#F9F9F9',
       },
