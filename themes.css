@@ -1,0 +1,200 @@
+/* ═══════════════════════════════════════════════════════════════
+   themes.css — سيولة (Suyula) · Color System
+   Palette sourced directly from the Nixuge.me reference spec:
+   4-tier neutral grays + cyan(dark)/blue(light) accent.
+   Trading semantics (up/down/warn/tp/sl) are the one addition the
+   source has no concept of — tuned to sit cleanly beside the cyan.
+═══════════════════════════════════════════════════════════════ */
+
+@layer themes {
+
+/* ════════════════════════════════════
+   DARK (default)
+════════════════════════════════════ */
+:root,
+[data-theme="dark"] {
+  --bg-app:     #111111;  /* background-1 */
+  --bg-card:    #222222;  /* background-2 */
+  --bg-elev:    #333333;  /* background-3 */
+  --bg-input:   #444444;  /* background-4 */
+  --bg-overlay: #333333cc; /* background-3-slight-transparency */
+
+  --border-subtle: rgba(255,255,255,.06);
+  --border:         rgba(255,255,255,.14);
+  --border-strong:  #999999;  /* border-fade */
+  --border-max:     #ffffff;  /* border-main — reserved, used sparingly */
+
+  --text-primary:   #ffffff;  /* text-main */
+  --text-secondary: #b5b5b5;  /* text-fade-1 */
+  --text-muted:     #888888;  /* widened from text-fade-2 #aaaaaa for a real 3rd tier */
+
+  /* Brand — cyan, straight from the source */
+  --ac:     #00ccff;
+  --ac-2:   #00f7ff;  /* color-a-visited */
+  --ac-dim: color-mix(in srgb, var(--ac) 15%, transparent);
+
+  /* Trading semantics — the one layer the source has no equivalent for */
+  --up:       #00e676;
+  --up-dim:   color-mix(in srgb, var(--up) 14%, transparent);
+  --dn:       #ff3d3d;
+  --dn-dim:   color-mix(in srgb, var(--dn) 14%, transparent);
+  --warn:     #ffd600;
+  --warn-dim: color-mix(in srgb, var(--warn) 14%, transparent);
+  --tp:       #00e8a2;
+  --tp-dim:   color-mix(in srgb, var(--tp) 14%, transparent);
+  --sl:       #ff6a4a;
+  --sl-dim:   color-mix(in srgb, var(--sl) 14%, transparent);
+
+  --glow-ac:  0 0 16px color-mix(in srgb, var(--ac) 55%, transparent), 0 0 32px color-mix(in srgb, var(--ac) 20%, transparent);
+  --glow-up:  0 0 16px color-mix(in srgb, var(--up) 55%, transparent), 0 0 32px color-mix(in srgb, var(--up) 20%, transparent);
+  --glow-dn:  0 0 16px color-mix(in srgb, var(--dn) 55%, transparent), 0 0 32px color-mix(in srgb, var(--dn) 20%, transparent);
+  --glow-bdr: 0 0 0 1px rgba(255,255,255,.08), inset 0 1px 0 rgba(255,255,255,.05);
+
+  --tglow-up: 0 0 12px color-mix(in srgb, var(--up) 55%, transparent);
+  --tglow-dn: 0 0 12px color-mix(in srgb, var(--dn) 55%, transparent);
+
+  --shadow:    0 8px 32px rgba(0,0,0,.90);
+  --shadow-sm: 0 4px 16px rgba(0,0,0,.70);
+
+  /* Scrollbar (Nixuge spec: thumb #535255 / hover #7a787c / active = accent) */
+  --sb-thumb:       #535255;
+  --sb-thumb-hover: #7a787c;
+  --sb-track-hover: rgba(100,100,100,.3);
+
+  /* Legacy-safe aliases — inline JS-rendered markup (positions/account/
+     trading) still writes style="color:var(--hc-*)" directly. */
+  --hc-up:   var(--up);
+  --hc-dn:   var(--dn);
+  --hc-ac:   var(--ac);
+  --hc-warn: var(--warn);
+  --hc-tp:   var(--tp);
+  --hc-sl:   var(--sl);
+
+  color-scheme: dark;
+}
+
+/* ════════════════════════════════════
+   LIGHT
+════════════════════════════════════ */
+[data-theme="light"] {
+  --bg-app:     #f0f0f6;  /* background-1 */
+  --bg-card:    #e8e9ef;  /* background-2 */
+  --bg-elev:    #cdced7;  /* background-3 */
+  --bg-input:   #bfbfc8;  /* background-4 */
+  --bg-overlay: #cdced7cc; /* background-3-slight-transparency */
+
+  --border-subtle: rgba(0,0,0,.06);
+  --border:         rgba(0,0,0,.14);
+  --border-strong:  #555555;  /* border-fade */
+  --border-max:     #000000;  /* border-main — reserved, used sparingly */
+
+  --text-primary:   #000000;  /* text-main */
+  --text-secondary: #252525;  /* text-fade-1 */
+  --text-muted:     #565656;  /* widened from text-fade-2 #444444 for legibility at small sizes */
+
+  --ac:     #0080ff;
+  --ac-2:   #005eff;  /* color-a-visited */
+  --ac-dim: color-mix(in srgb, var(--ac) 12%, transparent);
+
+  --up:       #007c3a;
+  --up-dim:   color-mix(in srgb, var(--up) 12%, transparent);
+  --dn:       #cc0000;
+  --dn-dim:   color-mix(in srgb, var(--dn) 12%, transparent);
+  --warn:     #9a6400;
+  --warn-dim: color-mix(in srgb, var(--warn) 12%, transparent);
+  --tp:       #007a52;
+  --tp-dim:   color-mix(in srgb, var(--tp) 12%, transparent);
+  --sl:       #b8461f;
+  --sl-dim:   color-mix(in srgb, var(--sl) 12%, transparent);
+
+  --glow-ac:  0 0 8px color-mix(in srgb, var(--ac) 22%, transparent);
+  --glow-up:  0 0 8px color-mix(in srgb, var(--up) 20%, transparent);
+  --glow-dn:  0 0 8px color-mix(in srgb, var(--dn) 20%, transparent);
+  --glow-bdr: 0 0 0 1px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.9);
+
+  --tglow-up: none;
+  --tglow-dn: none;
+
+  --shadow:    0 4px 20px rgba(0,0,0,.12);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
+
+  --sb-thumb:       #b0b0b8;
+  --sb-thumb-hover: #8c8c94;
+  --sb-track-hover: rgba(0,0,0,.12);
+
+  --hc-up:   var(--up);
+  --hc-dn:   var(--dn);
+  --hc-ac:   var(--ac);
+  --hc-warn: var(--warn);
+  --hc-tp:   var(--tp);
+  --hc-sl:   var(--sl);
+
+  color-scheme: light;
+}
+
+/* ════════════════════════════════════
+   SYSTEM FALLBACK
+   Guards the pre-hydration paint only — index.html's inline
+   script sets data-theme before first paint in normal operation.
+════════════════════════════════════ */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) { color-scheme: light; }
+}
+
+/* ════════════════════════════════════
+   HIGH CONTRAST — prefers-contrast: more
+   Boosts the canonical tokens directly, so every component and
+   every inline --hc-* alias inherits the boost automatically.
+════════════════════════════════════ */
+@media (prefers-contrast: more) {
+  :root,
+  [data-theme="dark"] {
+    --bg-app:   #000000;
+    --bg-card:  #0a0a0a;
+    --bg-elev:  #1a1a1a;
+    --bg-input: #262626;
+    --border:         #555555;
+    --border-strong:  #cccccc;
+    --text-primary:   #ffffff;
+    --text-secondary: #e6e6e6;
+    --text-muted:     #b0b0b0;
+
+    --ac:   #4dd9ff;
+    --up:   #00ff7f;
+    --dn:   #ff4444;
+    --warn: #ffee00;
+    --tp:   #00ffb0;
+    --sl:   #ff8a5c;
+
+    --glow-ac: 0 0 0 2px color-mix(in srgb, var(--ac) 65%, transparent);
+    --glow-up: 0 0 0 2px color-mix(in srgb, var(--up) 65%, transparent);
+    --glow-dn: 0 0 0 2px color-mix(in srgb, var(--dn) 65%, transparent);
+    --tglow-up: none;
+    --tglow-dn: none;
+  }
+
+  [data-theme="light"] {
+    --bg-app:   #ffffff;
+    --bg-card:  #f8f8f8;
+    --bg-elev:  #ececec;
+    --bg-input: #dcdcdc;
+    --border:         #777777;
+    --border-strong:  #222222;
+    --text-primary:   #000000;
+    --text-secondary: #1a1a1a;
+    --text-muted:     #3d3d3d;
+
+    --ac:   #0058b3;
+    --up:   #005a28;
+    --dn:   #990000;
+    --warn: #6b4700;
+    --tp:   #00563a;
+    --sl:   #7a2a00;
+
+    --glow-ac: none;
+    --glow-up: none;
+    --glow-dn: none;
+  }
+}
+
+} /* @layer themes */

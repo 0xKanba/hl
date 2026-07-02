@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="سيولة">
-  <meta name="theme-color" content="#ff8c42">
+  <meta name="theme-color" content="#00ccff">
   <title>سيولة · HL Simple</title>
 
   <link rel="icon" href="/images/btc21.png" type="image/png">
@@ -18,9 +18,10 @@
   <link rel="apple-touch-icon" href="/icon-512x512.png">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/hl.css">
-  <link rel="stylesheet" href="/hl2.css">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/themes.css">
+  <link rel="stylesheet" href="/css/components.css">
 
   <link rel="preload" as="image" href="/images/oil.svg">
   <link rel="preload" as="image" href="/images/gold.svg">
@@ -588,6 +589,12 @@
 
 <script>
 if ('serviceWorker' in navigator) {
+  let _swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_swRefreshing) return;
+    _swRefreshing = true;
+    window.location.reload();
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(()=>{}).catch(()=>{});
   });
