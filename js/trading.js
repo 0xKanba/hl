@@ -47,7 +47,6 @@ async function execTrade() {
   const execSzDp = a.gram ? 4 : a.szDp;
   if (!p?.mid) { toast('لا يوجد سعر', 'err'); closeModal('modalConfirm'); return; }
 
-  /* Instant UI close — no blocking spinner */
   closeModal('modalConfirm');
   State.pendingTrade = null;
   toast(`⏳ ${a.icon} ${isBuy ? 'شراء' : 'بيع'} ${qty} ${a.unit}...`, 'info', 3000);
@@ -92,6 +91,33 @@ function _multiPoll() {
   setTimeout(() => pollAccount().catch(() => {}), 3000);
   setTimeout(() => pollAccount().catch(() => {}), 7000);
   setTimeout(() => pollAccount().catch(() => {}), 13000);
+}
+
+/* ════ Register a coin as optimistically closed ════
+ *
+ * ✅ FIX for ghost-position bug (Issue 2).
+ *
+ * When execClose() or execCloseAll() optimistically removes a position from
+ * State.positions, it must also register the position's coin here so that
+ * pollAccount() can filter it out of rawPos during the guard window.
+ *
+ * Without this registration, pollAccount() would see rawPos.length > 0 (API
+ * hasn't settled the close yet) and re-add the position to State.positions
+ * via _applyPositions(), making it reappear as a ghost.
+ *
+ * The coin is auto-expired from State._closedCoins after 25 seconds — just
+ * beyond the 20-second guard window — so normal sync resumes cleanly.
+ ════ */
+function _registerClosedCoin(coin) {
+  if (!coin) return;
+  if (!State._closedCoins) State._closedCoins = [];
+  if (!State._closedCoins.includes(coin)) {
+    State._closedCoins.push(coin);
+  }
+  /* auto-expire after guard window + safety margin */
+  setTimeout(() => {
+    State._closedCoins = (State._closedCoins || []).filter(c => c !== coin);
+  }, 25000);
 }
 
 /* ════ Close position ════ */
@@ -149,6 +175,10 @@ async function execClose() {
   closeModal('modalClose');
   State._lastOptimisticClose = Date.now();
   State._emptyPosCount       = 0;
+
+  /* ✅ FIX: register coin BEFORE splicing so pollAccount can filter it */
+  _registerClosedCoin(pos.coin);
+
   State.positions.splice(idx, 1);
   resetPosFingerprint();
   renderPositions();
@@ -172,7 +202,7 @@ async function execClose() {
     _multiPoll();
   } catch (e) {
     toast(tradeErr(e.message), 'err', 6000);
-    /* Revert optimistic — re-poll will restore position */
+    /* API failed: re-poll so position is restored from API if still open */
     _multiPoll();
   }
 }
@@ -201,6 +231,10 @@ async function execCloseAll() {
   closeModal('modalCloseAll');
   State._lastOptimisticClose = Date.now();
   State._emptyPosCount       = 0;
+
+  /* ✅ FIX: register ALL coins before clearing */
+  positions.forEach(p => _registerClosedCoin(p.position.coin));
+
   State.positions = [];
   resetPosFingerprint();
   renderPositions();

@@ -63,7 +63,6 @@
         <span class="nav-logo-icon">💧</span>
         <span class="nav-logo-text">سيولة</span>
       </button>
-      <!-- ✅ Theme toggle — replaces old "مباشر" link -->
       <button class="nav-theme-btn" id="btnTheme" title="تبديل المظهر">🌙</button>
     </div>
     <div class="nav-right">
@@ -223,7 +222,13 @@
   </div>
 </div>
 
-<!-- chart screen — built by js/chart.js dynamically -->
+<!--
+  ════════════════════════════════════════════════════════════
+  CHART SCREEN — built dynamically by /js/chart.js
+  TradingView Advanced Charts renders inside #_tvC (injected
+  by chart.js into this div at runtime via ChartModule.open())
+  ════════════════════════════════════════════════════════════
+-->
 <div id="chartScreen" class="chart-screen hidden"></div>
 
 <!-- ══ MODALS ══ -->
@@ -533,19 +538,36 @@
 <div id="toast"></div>
 <div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
 
+<!-- Preload key scripts for faster parse -->
 <link rel="preload" as="script" href="/js/config.js">
 <link rel="preload" as="script" href="/js/state.js">
 <link rel="preload" as="script" href="/js/utils.js">
 <link rel="preload" as="script" href="/js/ws.js">
 
-<!-- ethers only — lightweight-charts REMOVED -->
+<!--
+  ════════════════════════════════════════════════════════════════
+  SCRIPT LOADING ORDER — DO NOT CHANGE
+
+  1. ethers.js      — wallet signing (EIP-712)
+  2. charting_library.standalone.js — TradingView Advanced Charts
+     Provides: window.TradingView.widget
+     Path:     /charting_library/  (your licensed private library)
+     NOTE: datafeeds/udf/dist/bundle.js is NOT loaded here.
+           We use a custom Datafeed object inside /js/chart.js
+           that calls Hyperliquid's API directly — no UDF server needed.
+  3. App modules — must come after both libraries above
+  ════════════════════════════════════════════════════════════════
+-->
+
+<!-- 1. Wallet library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- ✅ TradingView Advanced Charts — local, MUST load before js/chart.js -->
+<!-- 2. TradingView Advanced Charts (private licensed library)
+        MUST load before /js/chart.js — makes window.TradingView available -->
 <script src="/charting_library/charting_library.standalone.js"></script>
 
-<!-- App modules in /js/ -->
+<!-- 3. App modules — order matters -->
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/utils.js"></script>
