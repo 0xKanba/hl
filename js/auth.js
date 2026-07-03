@@ -43,7 +43,7 @@ async function login() {
     State.isGuest = false;
     localStorage.setItem(LS_KEY, key);
 
-    setTxt('navAddress', State.wallet.address.slice(0,6) + '...' + State.wallet.address.slice(-4));
+    updateNavAddressDisplay();
     $('withdrawAddress').value = State.wallet.address;
 
     closeModal('modalLogin');
@@ -197,4 +197,26 @@ function updateConnectBtn() {
   /* تحديث المحتوى */
   const lbl = hasWallet ? 'متصل' : 'اتصال';
   btn.innerHTML = `<span class="cb-dot"></span><span class="cb-lbl">${lbl}</span>`;
+}
+
+/* ════ اسم العرض المخصص ════
+   يستبدل عنوان المحفظة المختصر في شريط التنقل باسم يختاره المستخدم.
+   تجميلي فقط — كل توقيع وعملية تداول يستخدم العنوان الحقيقي دائماً.
+════ */
+function updateNavAddressDisplay() {
+  if (!State.wallet) return;
+  const custom = (localStorage.getItem(DISPNAME_KEY) || '').trim();
+  const fallback = State.wallet.address.slice(0,6) + '...' + State.wallet.address.slice(-4);
+  setTxt('navAddress', custom || fallback);
+}
+
+function promptDisplayName() {
+  if (!State.wallet) return toast('يجب تسجيل الدخول أولاً', 'err');
+  const current = localStorage.getItem(DISPNAME_KEY) || '';
+  const input = prompt('اسم العرض في الأعلى (اتركه فارغاً لعرض العنوان المختصر):', current);
+  if (input === null) return; /* ألغى المستخدم */
+  const name = input.trim().slice(0, 20);
+  if (name) { localStorage.setItem(DISPNAME_KEY, name); toast(`✅ الاسم: ${name}`, 'ok'); }
+  else       { localStorage.removeItem(DISPNAME_KEY);   toast('تمت إزالة الاسم المخصص', 'info'); }
+  updateNavAddressDisplay();
 }

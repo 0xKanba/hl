@@ -164,6 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
   $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
+  $('optDisplayName').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); promptDisplayName(); };
   $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
   $('btnBuy').onclick  = () => askTrade(true);
@@ -244,12 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (State.isGuest) return _promptConnect();
     lockApp(true);
   };
-
-  $('navLogo')?.addEventListener('click', e => {
-    e.preventDefault(); e.stopPropagation();
-    openModal('modalAbout');
-  });
-  $('aboutClose').onclick = () => closeModal('modalAbout');
 
   $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
   $('pinLogout').onclick = () => {

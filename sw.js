@@ -5,9 +5,9 @@
    needs to be remembered. A stale value here only ever means "the
    cache tag didn't change"; it never blocks a real deploy, because
    the app shell below is network-first, not stale-while-revalidate. */
-const CACHE_APP   = 'hltrade-app-202607021947-55d9f70';
-const CACHE_IMGS  = 'hltrade-img-202607021947-55d9f70';
-const CACHE_FONTS = 'hltrade-fnt-202607021947-55d9f70';
+const CACHE_APP   = 'hltrade-app-v402';
+const CACHE_IMGS  = 'hltrade-img-v402';
+const CACHE_FONTS = 'hltrade-fnt-v402';
 
 const APP_SHELL = [
   '/',
