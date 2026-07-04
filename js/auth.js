@@ -210,13 +210,19 @@ function updateNavAddressDisplay() {
   setTxt('navAddress', custom || fallback);
 }
 
-function promptDisplayName() {
+function openDisplayNameModal() {
   if (!State.wallet) return toast('يجب تسجيل الدخول أولاً', 'err');
-  const current = localStorage.getItem(DISPNAME_KEY) || '';
-  const input = prompt('اسم العرض في الأعلى (اتركه فارغاً لعرض العنوان المختصر):', current);
-  if (input === null) return; /* ألغى المستخدم */
-  const name = input.trim().slice(0, 20);
+  const input = $('displayNameInput');
+  if (input) input.value = localStorage.getItem(DISPNAME_KEY) || '';
+  openModal('modalDisplayName');
+  setTimeout(() => input?.focus(), 200);
+}
+
+function saveDisplayName() {
+  const input = $('displayNameInput');
+  const name  = (input?.value || '').trim().slice(0, 20);
   if (name) { localStorage.setItem(DISPNAME_KEY, name); toast(`✅ الاسم: ${name}`, 'ok'); }
   else       { localStorage.removeItem(DISPNAME_KEY);   toast('تمت إزالة الاسم المخصص', 'info'); }
   updateNavAddressDisplay();
+  closeModal('modalDisplayName');
 }

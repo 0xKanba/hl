@@ -25,31 +25,64 @@ jobs:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
+      - name: Debug trigger context
+        run: |
+          echo "ref: ${{ github.ref }}"
+          echo "ref_name: ${{ github.ref_name }}"
+          echo "actor: ${{ github.actor }}"
+          echo "sha: ${{ github.sha }}"
+
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 1
 
       - name: Compute version tag
         id: ver
         run: echo "tag=$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - name: Bump CACHE_APP / CACHE_IMGS / CACHE_FONTS in sw.js
+      - name: Bump cache version and push (retries against concurrent pushes)
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -e
-          TAG="${{ steps.ver.outputs.tag }}"
-          sed -i -E "s/(CACHE_APP[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-app-${TAG}\2/" sw.js
-          sed -i -E "s/(CACHE_IMGS[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-img-${TAG}\2/" sw.js
-          sed -i -E "s/(CACHE_FONTS[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-fnt-${TAG}\2/" sw.js
-          grep -q "$TAG" sw.js || (echo "::error::sed did not match — check CACHE_* constant format in sw.js" && exit 1)
-
-      - name: Commit and push
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- sw.js; then
-            echo "No version change needed"
-            exit 0
-          fi
-          git add sw.js
-          git commit -m "chore: bump sw.js cache version to ${{ steps.ver.outputs.tag }}"
-          git push
+
+          bump() {
+            test -f sw.js || { echo "::error::sw.js not found at repo root"; exit 1; }
+            sed -i -E "s/(CACHE_APP[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-app-${TAG}\2/" sw.js
+            sed -i -E "s/(CACHE_IMGS[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-img-${TAG}\2/" sw.js
+            sed -i -E "s/(CACHE_FONTS[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-fnt-${TAG}\2/" sw.js
+          }
+
+          # Another workflow in this repo (the tree/structure auto-updater)
+          # also commits straight to this branch, so the remote can move
+          # between our checkout and our push. Every retry resets to the
+          # LATEST remote tip and re-derives sw.js fresh from there — no
+          # merge, no rebase, nothing that can conflict — then tries again.
+          for i in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            bump
+
+            if git diff --quiet -- sw.js; then
+              echo "sw.js already carries this tag after sync — nothing to push"
+              exit 0
+            fi
+
+            git add sw.js
+            git commit -m "chore: bump sw.js cache version to ${TAG}"
+
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $i"
+              exit 0
+            fi
+
+            echo "Push rejected on attempt $i — remote moved again, retrying..."
+            sleep $((i * 3))
+          done
+
+          echo "::error::Failed to push after 5 attempts — something is pushing to $BRANCH faster than this workflow can land. Check the other workflow's schedule/trigger."
+          exit 1

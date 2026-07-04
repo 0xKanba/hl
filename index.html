@@ -234,6 +234,7 @@
     <button class="opts-item" id="optDeposit">💵 ايداع</button>
     <button class="opts-item" id="optWithdraw">📤 سحب</button>
     <button class="opts-item" id="optDisplayName">✏️ اسم العرض</button>
+    <button class="opts-item" id="optSound">🔊 صوت التنبيهات</button>
     <button class="opts-item opts-item-logout" id="optLogout">تغيير المحفظة</button>
     <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
   </div>
@@ -360,6 +361,33 @@
     </div>
     <div id="slDeleteRow" class="delete-row hidden">
       <button class="btn-delete-tpsl" id="slDelete">🗑 إلغاء وقف الخسارة الحالي</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalPosDetail">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title" id="posDetailTitle">تفاصيل الصفقة</h3>
+    <div class="confirm-details" id="posDetailBody"></div>
+    <div class="modal-buttons modal-buttons-center">
+      <button class="btn-modal btn-cancel" id="posDetailClose">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalDisplayName">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">✏️ اسم العرض</h3>
+    <p class="modal-subtitle">يظهر بدل عنوان محفظتك في الأعلى — للعرض فقط، لا يغيّر العنوان الفعلي</p>
+    <div class="form-group">
+      <label>الاسم</label>
+      <input type="text" class="form-input" id="displayNameInput" placeholder="مثال: MyName" maxlength="20" dir="auto">
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="displayNameCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-success" id="displayNameSave">حفظ ✓</button>
     </div>
   </div>
 </div>
@@ -529,6 +557,7 @@
   </div>
 </div>
 
+<div id="cornerStatus"></div>
 <div id="toast"></div>
 <div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
 

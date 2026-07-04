@@ -109,6 +109,7 @@ async function pollAccount() {
 }
 
 function _applyPositions(rawPos) {
+  _trackOpenTimes(rawPos);
   State.positions = rawPos.map(p => {
     const existing = State.positions.find(e => e.position.coin === p.position.coin);
     const tpsl     = parseTpslFromOrders(State.openOrders, p.position.coin);
@@ -117,6 +118,24 @@ function _applyPositions(rawPos) {
   });
   updateFundingFromPositions(rawPos);
   renderPositions();
+}
+
+/* ════ وقت فتح الصفقة ════
+   Hyperliquid لا يوفر "وقت فتح" لمركز صافٍ — نُسجّله محلياً أول
+   لحظة يظهر فيها الـ coin، ونحذفه عند إغلاق الصفقة. صفقات كانت
+   مفتوحة قبل هذا التحديث تظهر بلا وقت (—) بدل رقم مُختلَق.
+════ */
+function _loadOpenTimes() {
+  try { return JSON.parse(localStorage.getItem(OPENTIME_KEY) || '{}'); } catch { return {}; }
+}
+function _trackOpenTimes(rawPos) {
+  const times   = _loadOpenTimes();
+  const current = new Set(rawPos.map(p => p.position.coin));
+  let changed = false;
+  current.forEach(coin => { if (!times[coin]) { times[coin] = Date.now(); changed = true; } });
+  Object.keys(times).forEach(coin => { if (!current.has(coin)) { delete times[coin]; changed = true; } });
+  if (changed) { try { localStorage.setItem(OPENTIME_KEY, JSON.stringify(times)); } catch {} }
+  State._openTimes = times;
 }
 
 /* ════ Balance Modal ════ */

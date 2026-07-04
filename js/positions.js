@@ -102,11 +102,53 @@ function startFundingTimer() {
   State._fundingTimer = setInterval(fetchFundingRates, 60_000);
 }
 
+/* ════ تفاصيل الصفقة — عند النقر على اسم الأصل ════ */
+window.openPosDetail = function (i) {
+  const p = State.positions[i]; if (!p) return;
+  const pos     = p.position;
+  const sziOz   = parseFloat(pos.szi);
+  const sym     = shortCoinPos(pos.coin);
+  const a       = ASSETS[sym] || { name: sym, unit: '', icon: '📊', pxDp: 2, lev: 10, cross: true };
+  const isGram  = !!a.gram;
+  const isLong  = sziOz > 0;
+  const entryOz = parseFloat(pos.entryPx || 0);
+  const entryDisp = isGram ? entryOz / TROY : entryOz;
+  const curPx   = State.prices[sym]?.mid;
+  const fundUsd = State.fundingRates[sym] || State.fundingRates['GOLD'] || 0;
+  const bal     = State.balance?.total || 0;
+  const liqInfo = liqPriceDisplay(sym, entryOz, sziOz, bal);
+  const openTs  = State._openTimes?.[pos.coin];
+  const openStr = openTs
+    ? new Date(openTs).toLocaleString('ar-EG', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+    : '—';
+
+  setTxt('posDetailTitle', `${a.icon} ${a.name}`);
+  $('posDetailBody').innerHTML = `
+    <div class="confirm-row"><span class="confirm-key">الاتجاه</span><span class="confirm-val ${isLong?'buy':'sell'}">${isLong?'▲ شراء':'▼ بيع'}</span></div>
+    <div class="confirm-row"><span class="confirm-key">الرافعة المالية</span><span class="confirm-val">${a.lev}x ${a.cross?'· Cross':'· Isolated'}</span></div>
+    <div class="confirm-row"><span class="confirm-key">وقت الفتح</span><span class="confirm-val">${openStr}</span></div>
+    <div class="confirm-row"><span class="confirm-key">رسوم التمويل</span><span class="confirm-val ${fundUsd>=0?'buy':'sell'}">${fundUsd>=0?'+':'-'}$${Math.abs(fundUsd).toFixed(4)}</span></div>
+    <div class="confirm-row"><span class="confirm-key">⚡ سعر التصفية</span><span class="confirm-val warn">${liqInfo.text}</span></div>
+  `;
+  openModal('modalPosDetail');
+};
+
 /* ════ Render ════ */
 /* ✅ null sentinel — empty string '' equals '' causing ghost cards bug */
 let _posFingerprint = null;
 
 function resetPosFingerprint() { _posFingerprint = null; }
+
+function _fmtOpenTime(ts) {
+  if (!ts) return '—';
+  const diffSec = Math.floor((Date.now() - ts) / 1000);
+  if (diffSec < 60) return 'الآن';
+  const m = Math.floor(diffSec / 60);
+  if (m < 60) return `${m} د`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} س`;
+  return `${Math.floor(h / 24)} ي`;
+}
 
 function renderPositions() {
   const count = State.positions.length;
@@ -147,15 +189,8 @@ function renderPositions() {
       cpEl.textContent = cur ? `$${fmt(cur, a.pxDp)}` : '—';
     }
 
-    const liqEl = document.querySelector(`[data-liq-idx="${i}"]`);
-    if (liqEl) {
-      const sym     = shortCoinPos(p.position.coin);
-      const entryOz = parseFloat(p.position.entryPx || 0);
-      const sziOz   = parseFloat(p.position.szi || 0);
-      const bal     = State.balance?.total || 0;
-      const info    = liqPriceDisplay(sym, entryOz, sziOz, bal);
-      liqEl.textContent = info.text;
-    }
+    const otEl = document.querySelector(`[data-opentime-idx="${i}"]`);
+    if (otEl) otEl.textContent = _fmtOpenTime(State._openTimes?.[p.position.coin]);
   });
 
   const tEl = $('totalPnl');
@@ -192,18 +227,12 @@ function renderPositions() {
     const tpsl      = p.tpsl || {};
     const tpDisp    = tpsl.tp ? (isGram ? tpsl.tp / TROY : tpsl.tp) : null;
     const slDisp    = tpsl.sl ? (isGram ? tpsl.sl / TROY : tpsl.sl) : null;
-    const fundUsd   = State.fundingRates[sym] || State.fundingRates['GOLD'] || 0;
-    const fundSign  = fundUsd >= 0 ? '+' : '-';
-    const fundCls   = fundUsd >= 0 ? 'pos' : 'neg';
-    const entryOz   = parseFloat(pos.entryPx || 0);
-    const bal       = State.balance?.total || 0;
-    const liqInfo   = liqPriceDisplay(sym, entryOz, sziOz, bal);
 
     return `<div class="position-item">
       <div class="pos-top">
         <div>
-          <div class="pos-name">${a.icon} ${a.name}</div>
-          <div class="pos-dir ${isLong?'long':'short'}">${isLong?'▲ شراء':'▼ بيع'} · رافعة ${a.lev}x</div>
+          <div class="pos-name" onclick="openPosDetail(${i})" role="button" tabindex="0">${a.icon} ${a.name} <span class="pos-name-hint">ⓘ</span></div>
+          <div class="pos-dir ${isLong?'long':'short'}">${isLong?'▲ شراء':'▼ بيع'}</div>
         </div>
         <div class="pos-right">
           <div class="pos-pnl ${pCls}" data-pnl-idx="${i}">${pnl>=0?'+':''}$${fmt(pnl,2)}</div>
@@ -220,12 +249,8 @@ function renderPositions() {
           <span class="pos-data-value" data-curpx-idx="${i}">${curPx?`$${fmt(curPx,a.pxDp)}`:'—'}</span>
         </div>
         <div class="pos-data-item">
-          <span class="pos-data-label">رسوم التمويل</span>
-          <span class="pos-data-value pos-funding-val ${fundCls}" data-funding-sym="${sym}">${fundSign}$${Math.abs(fundUsd).toFixed(4)}</span>
-        </div>
-        <div class="pos-data-item" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:4px;margin-top:2px;">
-          <span class="pos-data-label">⚡ سعر التصفية</span>
-          <span class="pos-data-value" style="color:var(--warn)" data-liq-idx="${i}">${liqInfo.text}</span>
+          <span class="pos-data-label">وقت الفتح</span>
+          <span class="pos-data-value" data-opentime-idx="${i}">${_fmtOpenTime(State._openTimes?.[pos.coin])}</span>
         </div>
       </div>
       <div class="pos-tpsl-row">

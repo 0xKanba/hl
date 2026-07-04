@@ -85,6 +85,62 @@ function resetBtn(id) {
   b.disabled = false; if (b._orig) b.innerHTML = b._orig;
 }
 
+/* ════ Corner Status — مؤشر صغير للعمليات في الخلفية (زاوية يمين) ════ */
+function cornerStatus(msg, dur = 5000) {
+  const e = $('cornerStatus');
+  if (!e) return;
+  e.textContent = msg;
+  e.classList.add('show');
+  clearTimeout(e._t);
+  e._t = setTimeout(() => e.classList.remove('show'), dur);
+}
+function hideCornerStatus() {
+  const e = $('cornerStatus');
+  if (!e) return;
+  clearTimeout(e._t);
+  e.classList.remove('show');
+}
+
+/* ════ صوت خفيف عند تنفيذ الصفقة — WebAudio، بلا ملف خارجي ════ */
+let _audioCtx = null;
+function _getAudioCtx() {
+  if (!_audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) { try { _audioCtx = new AC(); } catch {} }
+  }
+  return _audioCtx;
+}
+function isSoundEnabled() { return localStorage.getItem(SOUND_KEY) !== 'off'; }
+function toggleSound() {
+  const wasOn = isSoundEnabled();
+  localStorage.setItem(SOUND_KEY, wasOn ? 'off' : 'on');
+  toast(wasOn ? '🔇 تم إيقاف صوت التنبيهات' : '🔊 تم تفعيل صوت التنبيهات', 'info');
+  updateSoundOptionLabel();
+}
+function updateSoundOptionLabel() {
+  const btn = $('optSound');
+  if (btn) btn.textContent = isSoundEnabled() ? '🔊 صوت التنبيهات' : '🔇 صوت التنبيهات (متوقف)';
+}
+function playFillSound() {
+  if (!isSoundEnabled()) return;
+  try {
+    const ctx = _getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    [[880, now, 0.09], [1175, now + 0.09, 0.11]].forEach(([freq, start, dur]) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.12, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(start); osc.stop(start + dur + 0.02);
+    });
+  } catch {}
+}
+
 /* ════ Number Formatting ════ */
 const fmt = (n, d) => (+n).toFixed(d);
 

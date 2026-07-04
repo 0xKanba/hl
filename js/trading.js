@@ -50,6 +50,7 @@ async function execTrade() {
   closeModal('modalConfirm');
   State.pendingTrade = null;
   toast(`⏳ ${a.icon} ${isBuy ? 'شراء' : 'بيع'} ${qty} ${a.unit}...`, 'info', 3000);
+  cornerStatus(`⏳ جاري ${isBuy ? 'الشراء' : 'البيع'}...`);
 
   try {
     try { await hlExchange({ type: 'updateLeverage', asset: a.idx, isCross: a.cross, leverage: a.lev }); } catch {}
@@ -73,15 +74,18 @@ async function execTrade() {
       const dispSz = a.gram ? (+f.totalSz * TROY).toFixed(2) : f.totalSz;
       const dispPx = (parseFloat(f.avgPx) / (a.gram ? TROY : 1)).toFixed(a.pxDp);
       toast(`✅ مُنفَّذ — ${a.icon} ${dispSz} ${a.unit} @ $${dispPx}`, 'ok', 5000);
+      playFillSound();
     } else if (status?.resting) {
       toast(`⏳ أمر معلق — ${a.icon} ${qty} ${a.unit}`, 'info', 4000);
     } else {
       toast('⚠️ لم يُنفَّذ — حاول مجدداً', 'err', 4000);
     }
 
+    hideCornerStatus();
     autoSetReferrer();
     _multiPoll();
   } catch (e) {
+    hideCornerStatus();
     toast(tradeErr(e.message), 'err', 6000);
   }
 }
@@ -186,6 +190,7 @@ async function execClose() {
 
   const aDisp = ASSETS[sym] || aApi;
   toast(`⏳ إغلاق ${aDisp.icon||''} ${aDisp.name||''}...`, 'info', 2500);
+  cornerStatus(`⏳ جاري إغلاق ${aDisp.icon||''} ${aDisp.name||''}...`);
 
   try {
     const isBuy = sziOz < 0;
@@ -199,8 +204,11 @@ async function execClose() {
       grouping: 'na'
     });
     toast(`✅ أُغلقت — ${aDisp.icon||''} ${aDisp.name||''}`, 'ok', 4000);
+    playFillSound();
+    hideCornerStatus();
     _multiPoll();
   } catch (e) {
+    hideCornerStatus();
     toast(tradeErr(e.message), 'err', 6000);
     /* API failed: re-poll so position is restored from API if still open */
     _multiPoll();
@@ -239,6 +247,7 @@ async function execCloseAll() {
   resetPosFingerprint();
   renderPositions();
   toast('⏳ إغلاق جميع الصفقات...', 'info', 3000);
+  cornerStatus('⏳ جاري إغلاق جميع الصفقات...');
 
   let ok = 0, fail = 0;
   try {
@@ -264,9 +273,11 @@ async function execCloseAll() {
         ok++;
       } catch (e) { fail++; console.warn('[closeAll]', sym, e.message); }
     }
+    hideCornerStatus();
+    if (ok) playFillSound();
     toast(`✅ أُغلق ${ok} مركز${fail ? ` · فشل ${fail}` : ''}`, 'ok', 5000);
     _multiPoll();
-  } catch { _multiPoll(); }
+  } catch { hideCornerStatus(); _multiPoll(); }
 }
 
 /* ════ Prompt connect for guests ════ */

@@ -36,20 +36,29 @@
   --text-muted:     #857e79;
 
   /* Brand — blue, from the reference spec, independent of the neutral rework */
-  --ac:     #00ccff;
-  --ac-2:   #00f7ff;
-  --ac-dim: color-mix(in srgb, var(--ac) 15%, transparent);
+  --ac:      #00ccff;
+  --ac-2:    #00f7ff;
+  --ac-dim:  color-mix(in srgb, var(--ac) 15%, transparent);
+  /* ac itself is 1.9:1 vs white — fine for glow/text-on-neutral, unusable
+     as a solid fill under white text. ac-deep/ac-soft are the fill-safe
+     pair (verified 6.5:1 / ~5.5:1 vs white respectively). */
+  --ac-deep: #006680;
+  --ac-soft: color-mix(in srgb, var(--ac) 50%, var(--bg-elev));
 
-  /* Trading semantics — paired base+deep tone each, no runtime
-     black-mixing (that muddied gradients, especially in light mode) */
+  /* Trading semantics — base tone for text/glow-on-neutral contexts,
+     "-2" for solid fills under white text. The bright base tones read
+     great as text on a dark card but fail contrast as a fill *behind*
+     white text — up/dn/warn -2 are hue-preserving darkened variants,
+     each verified >=5:1 against white, not a runtime black-mix (that
+     muddied gradients, especially in light mode). */
   --up:       #00e676;
-  --up-2:     #00a152;
+  --up-2:     #007f41;
   --up-dim:   color-mix(in srgb, var(--up) 14%, transparent);
   --dn:       #ff3d3d;
-  --dn-2:     #b30000;
+  --dn-2:     #cd0000;
   --dn-dim:   color-mix(in srgb, var(--dn) 14%, transparent);
   --warn:     #ffd600;
-  --warn-2:   #c8a000;
+  --warn-2:   #806b00;
   --warn-dim: color-mix(in srgb, var(--warn) 14%, transparent);
   --tp:       #00e8a2;
   --tp-dim:   color-mix(in srgb, var(--tp) 14%, transparent);
@@ -106,9 +115,13 @@
   --text-secondary: #4f4641;
   --text-muted:     #796f6a;
 
-  --ac:     #0080ff;
-  --ac-2:   #005eff;
-  --ac-dim: color-mix(in srgb, var(--ac) 12%, transparent);
+  --ac:      #0080ff;
+  --ac-2:    #005eff;
+  --ac-dim:  color-mix(in srgb, var(--ac) 12%, transparent);
+  /* ac-2 already clears 5.2:1 vs white — reuse it as the fill-safe deep
+     tone instead of inventing a second value that could drift from it. */
+  --ac-deep: var(--ac-2);
+  --ac-soft: color-mix(in srgb, var(--ac) 50%, var(--bg-elev));
 
   --up:       #007c3a;
   --up-2:     #005c2b;
