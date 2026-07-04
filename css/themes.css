@@ -1,0 +1,174 @@
+/* ═══════════════════════════════════════════════════════════════
+   themes.css — سيولة (Suyula) · Color System
+   Neutral scale: warm, Claude.ai-style (computed in OKLCH — L climbs
+   for elevation, tiny constant chroma/hue keeps it warm instead of
+   clinical-white or cold-gray, converted to sRGB below).
+   Accent: blue, per the Nixuge reference spec — unchanged by the
+   neutral rework, layered independently on top.
+   No prefers-contrast override: a separate "boosted" tier was found
+   to distort text color rather than help it — the fix is a strong
+   default, not a second mode.
+═══════════════════════════════════════════════════════════════ */
+
+@layer themes {
+
+/* ════════════════════════════════════
+   DARK (default)
+   oklch(10% .006 50) → oklch(29% .018 50) — warm charcoal, not AMOLED
+   neutral. bg-app stays close enough to black to keep most of the
+   OLED power saving; warmth shows up as you move up the elevation
+   scale, most visible on cards/inputs.
+════════════════════════════════════ */
+:root,
+[data-theme="dark"] {
+  --bg-app:     #040302;
+  --bg-card:    #110c09;
+  --bg-elev:    #201915;
+  --bg-input:   #332923;
+  --bg-overlay: #201915cc;
+
+  --border-subtle: rgba(255,255,255,.06);
+  --border:         rgba(255,255,255,.14);
+  --border-strong:  #8a8078;
+
+  --text-primary:   #f4f1ef;
+  --text-secondary: #b0a9a5;
+  --text-muted:     #857e79;
+
+  /* Brand — blue, from the reference spec, independent of the neutral rework */
+  --ac:      #00ccff;
+  --ac-2:    #00f7ff;
+  --ac-dim:  color-mix(in srgb, var(--ac) 15%, transparent);
+  /* ac itself is 1.9:1 vs white — fine for glow/text-on-neutral, unusable
+     as a solid fill under white text. ac-deep/ac-soft are the fill-safe
+     pair (verified 6.5:1 / ~5.5:1 vs white respectively). */
+  --ac-deep: #006680;
+  --ac-soft: color-mix(in srgb, var(--ac) 50%, var(--bg-elev));
+
+  /* Trading semantics — base tone for text/glow-on-neutral contexts,
+     "-2" for solid fills under white text. The bright base tones read
+     great as text on a dark card but fail contrast as a fill *behind*
+     white text — up/dn/warn -2 are hue-preserving darkened variants,
+     each verified >=5:1 against white, not a runtime black-mix (that
+     muddied gradients, especially in light mode). */
+  --up:       #00e676;
+  --up-2:     #007f41;
+  --up-dim:   color-mix(in srgb, var(--up) 14%, transparent);
+  --dn:       #ff3d3d;
+  --dn-2:     #cd0000;
+  --dn-dim:   color-mix(in srgb, var(--dn) 14%, transparent);
+  --warn:     #ffd600;
+  --warn-2:   #806b00;
+  --warn-dim: color-mix(in srgb, var(--warn) 14%, transparent);
+  --tp:       #00e8a2;
+  --tp-dim:   color-mix(in srgb, var(--tp) 14%, transparent);
+  --sl:       #ff6a4a;
+  --sl-dim:   color-mix(in srgb, var(--sl) 14%, transparent);
+
+  --glow-ac:  0 0 16px color-mix(in srgb, var(--ac) 55%, transparent), 0 0 32px color-mix(in srgb, var(--ac) 20%, transparent);
+  --glow-up:  0 0 16px color-mix(in srgb, var(--up) 55%, transparent), 0 0 32px color-mix(in srgb, var(--up) 20%, transparent);
+  --glow-dn:  0 0 16px color-mix(in srgb, var(--dn) 55%, transparent), 0 0 32px color-mix(in srgb, var(--dn) 20%, transparent);
+  --glow-bdr: 0 0 0 1px rgba(255,255,255,.08), inset 0 1px 0 rgba(255,255,255,.05);
+
+  --tglow-up: 0 0 12px color-mix(in srgb, var(--up) 55%, transparent);
+  --tglow-dn: 0 0 12px color-mix(in srgb, var(--dn) 55%, transparent);
+
+  --shadow:    0 8px 32px rgba(0,0,0,.90);
+  --shadow-sm: 0 4px 16px rgba(0,0,0,.70);
+
+  --sb-thumb:       #4d443e;
+  --sb-thumb-hover: #6e6259;
+  --sb-track-hover: rgba(120,110,100,.25);
+
+  /* Legacy-safe aliases — inline JS-rendered markup (positions/account/
+     trading) still writes style="color:var(--hc-*)" directly. */
+  --hc-up:   var(--up);
+  --hc-dn:   var(--dn);
+  --hc-ac:   var(--ac);
+  --hc-warn: var(--warn);
+  --hc-tp:   var(--tp);
+  --hc-sl:   var(--sl);
+
+  color-scheme: dark;
+}
+
+/* ════════════════════════════════════
+   LIGHT
+   oklch(98.5% .005 70) → oklch(93.5% .012 70) — reads as clear white,
+   not the cool blue-grey of a generic UI kit and not a beige/cream
+   tint heavy enough to stop reading as "white". Border leans toward
+   the accent blue instead of neutral gray, so panels read as
+   deliberately framed rather than just outlined.
+════════════════════════════════════ */
+[data-theme="light"] {
+  --bg-app:     #fcfaf7;
+  --bg-card:    #fefdfc;
+  --bg-elev:    #f7f3ee;
+  --bg-input:   #efe8e1;
+  --bg-overlay: #f7f3eecc;
+
+  --border-subtle: rgba(0,128,255,.07);
+  --border:         rgba(0,128,255,.16);
+  --border-strong:  #6b9fc9;
+
+  --text-primary:   #1a1511;
+  --text-secondary: #4f4641;
+  --text-muted:     #796f6a;
+
+  --ac:      #0080ff;
+  --ac-2:    #005eff;
+  --ac-dim:  color-mix(in srgb, var(--ac) 12%, transparent);
+  /* ac-2 already clears 5.2:1 vs white — reuse it as the fill-safe deep
+     tone instead of inventing a second value that could drift from it. */
+  --ac-deep: var(--ac-2);
+  --ac-soft: color-mix(in srgb, var(--ac) 50%, var(--bg-elev));
+
+  --up:       #007c3a;
+  --up-2:     #005c2b;
+  --up-dim:   color-mix(in srgb, var(--up) 12%, transparent);
+  --dn:       #cc0000;
+  --dn-2:     #a30000;
+  --dn-dim:   color-mix(in srgb, var(--dn) 12%, transparent);
+  --warn:     #9a6400;
+  --warn-2:   #704900;
+  --warn-dim: color-mix(in srgb, var(--warn) 12%, transparent);
+  --tp:       #007a52;
+  --tp-dim:   color-mix(in srgb, var(--tp) 12%, transparent);
+  --sl:       #b8461f;
+  --sl-dim:   color-mix(in srgb, var(--sl) 12%, transparent);
+
+  --glow-ac:  0 0 10px color-mix(in srgb, var(--ac) 25%, transparent);
+  --glow-up:  0 0 8px  color-mix(in srgb, var(--up) 20%, transparent);
+  --glow-dn:  0 0 8px  color-mix(in srgb, var(--dn) 20%, transparent);
+  --glow-bdr: 0 0 0 1px color-mix(in srgb, var(--ac) 20%, transparent), inset 0 1px 0 rgba(255,255,255,.9);
+
+  --tglow-up: none;
+  --tglow-dn: none;
+
+  --shadow:    0 4px 20px rgba(26,21,17,.10);
+  --shadow-sm: 0 2px 8px rgba(26,21,17,.07);
+
+  --sb-thumb:       #cdc3b8;
+  --sb-thumb-hover: #a89c8e;
+  --sb-track-hover: rgba(0,128,255,.08);
+
+  --hc-up:   var(--up);
+  --hc-dn:   var(--dn);
+  --hc-ac:   var(--ac);
+  --hc-warn: var(--warn);
+  --hc-tp:   var(--tp);
+  --hc-sl:   var(--sl);
+
+  color-scheme: light;
+}
+
+/* ════════════════════════════════════
+   SYSTEM FALLBACK
+   Guards the pre-hydration paint only — index.html's inline
+   script sets data-theme before first paint in normal operation.
+════════════════════════════════════ */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) { color-scheme: light; }
+}
+
+} /* @layer themes */

@@ -10,17 +10,21 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="سيولة">
-  <meta name="theme-color" content="#ff8c42">
-  <title>سيولة · HL Simple</title>
+  <meta name="theme-color" content="#00ccff">
+  <meta name="description" content="سيولة — منصة تداول لامركزية تعمل بالكامل من متصفحك بلا خادم وسيط. تداول الذهب والفضة والنفط الخام وناسداك 100 برافعة مالية مباشرة على Hyperliquid.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://hl.kanba.pw/">
+  <title>سيولة — تداول مباشر: ذهب، فضة، نفط، ناسداك</title>
 
   <link rel="icon" href="/images/btc21.png" type="image/png">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-512x512.png">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/hl.css">
-  <link rel="stylesheet" href="/hl2.css">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/themes.css">
+  <link rel="stylesheet" href="/css/components.css">
 
   <link rel="preload" as="image" href="/images/oil.svg">
   <link rel="preload" as="image" href="/images/gold.svg">
@@ -31,17 +35,29 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "HL simple",
+    "@type": "WebApplication",
+    "name": "سيولة",
+    "alternateName": "Suyula",
     "url": "https://hl.kanba.pw/",
-    "image": "/images/100.png",
-    "publisher": { "@type": "Organization", "name": "HL simple" }
+    "image": "https://hl.kanba.pw/icon-512x512.png",
+    "inLanguage": "ar",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Any (Web/PWA)",
+    "description": "منصة تداول لامركزية للذهب والفضة والنفط وناسداك برافعة مالية على Hyperliquid، بلا خادم وسيط — التوقيع والتنفيذ يتمّان محلياً من متصفحك.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "publisher": { "@type": "Organization", "name": "سيولة" }
   }
   </script>
-  <meta property="og:title" content="HL simple">
-  <meta property="og:description" content="تداول مباشر على Hyperliquid — ذهب فضة نفط ناسداك">
-  <meta property="og:image" content="https://hl.kanba.pw/icon-192x192.png">
+  <meta property="og:site_name" content="سيولة">
+  <meta property="og:title" content="سيولة — تداول مباشر: ذهب، فضة، نفط، ناسداك">
+  <meta property="og:description" content="منصة تداول لامركزية بلا خادم وسيط — ذهب، فضة، نفط خام، وناسداك 100 برافعة مالية على Hyperliquid.">
+  <meta property="og:image" content="https://hl.kanba.pw/icon-512x512.png">
   <meta property="og:url" content="https://hl.kanba.pw/">
+  <meta property="og:locale" content="ar_AR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="سيولة — تداول مباشر: ذهب، فضة، نفط، ناسداك">
+  <meta name="twitter:description" content="منصة تداول لامركزية بلا خادم وسيط — ذهب، فضة، نفط خام، وناسداك 100 برافعة مالية على Hyperliquid.">
+  <meta name="twitter:image" content="https://hl.kanba.pw/icon-512x512.png">
   <meta property="og:type" content="website">
 
   <!-- Apply theme before paint — prevents flash of wrong theme -->
@@ -59,10 +75,10 @@
   <!-- NAV -->
   <nav class="nav">
     <div class="nav-left">
-      <button class="nav-logo-btn" id="navLogo">
+      <div class="nav-logo-btn" id="navLogo">
         <span class="nav-logo-icon">💧</span>
         <span class="nav-logo-text">سيولة</span>
-      </button>
+      </div>
       <button class="nav-theme-btn" id="btnTheme" title="تبديل المظهر">🌙</button>
     </div>
     <div class="nav-right">
@@ -217,6 +233,8 @@
     <button class="opts-item" id="optCalendar">📅 التقويم الشهري</button>
     <button class="opts-item" id="optDeposit">💵 ايداع</button>
     <button class="opts-item" id="optWithdraw">📤 سحب</button>
+    <button class="opts-item" id="optDisplayName">✏️ اسم العرض</button>
+    <button class="opts-item" id="optSound">🔊 صوت التنبيهات</button>
     <button class="opts-item opts-item-logout" id="optLogout">تغيير المحفظة</button>
     <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
   </div>
@@ -347,6 +365,33 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modalPosDetail">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title" id="posDetailTitle">تفاصيل الصفقة</h3>
+    <div class="confirm-details" id="posDetailBody"></div>
+    <div class="modal-buttons modal-buttons-center">
+      <button class="btn-modal btn-cancel" id="posDetailClose">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalDisplayName">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">✏️ اسم العرض</h3>
+    <p class="modal-subtitle">يظهر بدل عنوان محفظتك في الأعلى — للعرض فقط، لا يغيّر العنوان الفعلي</p>
+    <div class="form-group">
+      <label>الاسم</label>
+      <input type="text" class="form-input" id="displayNameInput" placeholder="مثال: MyName" maxlength="20" dir="auto">
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="displayNameCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-success" id="displayNameSave">حفظ ✓</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalBalance">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -433,29 +478,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modalAbout">
-  <div class="modal" style="max-width:600px;">
-    <div class="modal-handle"></div>
-    <h3 class="modal-title" style="text-align:center;color:var(--hc-ac);">💧 سيولة · كيف يعمل؟</h3>
-    <div class="about-body">
-      <div class="about-block">
-        <p>منصة تداول مباشر على بروتوكول Hyperliquid اللامركزي، تعمل بالكامل داخل متصفحك دون أي خوادم وسيطة. الأسعار تعمل للجميع — ربط المحفظة يُتيح التداول.</p>
-      </div>
-      <div class="about-section">
-        <div class="about-item"><span class="about-icon">🔑</span><div><strong>المفتاح الخاص</strong><p>يُخزَّن في متصفحك فقط ولا يُرسَل لأي جهة. احتفظ بنسخة احتياطية دائماً.</p></div></div>
-        <div class="about-item"><span class="about-icon">📈</span><div><strong>الشراء والبيع</strong><p>شراء = توقع ارتفاع السعر. بيع = توقع انخفاضه. تُنفَّذ الصفقات فوراً بأفضل سعر.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚖️</span><div><strong>الرافعة المالية</strong><p>تتيح التحكم بمركز أكبر من رصيدك. تزيد الأرباح المحتملة وكذلك المخاطر.</p></div></div>
-        <div class="about-item"><span class="about-icon">🎯</span><div><strong>جني الربح (TP)</strong><p>أمر تلقائي يُغلق الصفقة عند بلوغ سعر محدد لتأمين الأرباح.</p></div></div>
-        <div class="about-item"><span class="about-icon">🛡️</span><div><strong>وقف الخسارة (SL)</strong><p>يُغلق الصفقة تلقائياً عند حد خسارة تحدده للحد من المخاطر.</p></div></div>
-        <div class="about-item"><span class="about-icon">⚡</span><div><strong>سعر التصفية</strong><p>السعر الذي تُغلَق عنده الصفقة إذا تجاوزت الخسارة الهامش.</p></div></div>
-      </div>
-    </div>
-    <div class="modal-buttons modal-buttons-center">
-      <button class="btn-modal btn-confirm btn-success" id="aboutClose">فهمت — ابدأ التداول</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="modalPIN">
   <div class="lock-screen">
     <div class="lock-header">
@@ -535,6 +557,7 @@
   </div>
 </div>
 
+<div id="cornerStatus"></div>
 <div id="toast"></div>
 <div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
 
@@ -588,6 +611,12 @@
 
 <script>
 if ('serviceWorker' in navigator) {
+  let _swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_swRefreshing) return;
+    _swRefreshing = true;
+    window.location.reload();
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(()=>{}).catch(()=>{});
   });

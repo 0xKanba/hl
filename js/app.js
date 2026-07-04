@@ -131,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
   _initMonthsPanel();
   _initOptsBackdrop();
   _initQtyInput();
+  updateSoundOptionLabel();
 
   $('loginBtn').onclick     = login;
   $('privateKey').onkeydown = e => e.key === 'Enter' && login();
@@ -164,6 +165,8 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
   $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
+  $('optDisplayName').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openDisplayNameModal(); };
+  $('optSound').onclick = () => { closeOptions(); toggleSound(); };
   $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
   $('btnBuy').onclick  = () => askTrade(true);
@@ -205,6 +208,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
   $('historyClose').onclick = () => closeModal('modalHistory');
 
+  $('posDetailClose').onclick = () => closeModal('modalPosDetail');
+  $('displayNameCancel').onclick = () => closeModal('modalDisplayName');
+  $('displayNameSave').onclick = saveDisplayName;
+  $('displayNameInput').onkeydown = e => e.key === 'Enter' && saveDisplayName();
+
   $('depositCancel').onclick  = () => closeModal('modalDeposit');
   $('depositExecute').onclick = () => requirePin(doDeposit);
 
@@ -244,12 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (State.isGuest) return _promptConnect();
     lockApp(true);
   };
-
-  $('navLogo')?.addEventListener('click', e => {
-    e.preventDefault(); e.stopPropagation();
-    openModal('modalAbout');
-  });
-  $('aboutClose').onclick = () => closeModal('modalAbout');
 
   $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
   $('pinLogout').onclick = () => {

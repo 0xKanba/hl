@@ -16,6 +16,9 @@ const PIN_KEY      = 'hl_trade_pin';
 const LOCKED_KEY   = 'hl_trade_locked';
 const LAST_PIN_KEY = 'hl_last_pin_time';
 const QSTATE_KEY   = 'hl_qstate_v1';
+const DISPNAME_KEY  = 'hl_display_name';
+const OPENTIME_KEY  = 'hl_position_opens';
+const SOUND_KEY      = 'hl_sound_enabled';
 
 /* تعريف الأصول */
 const ASSETS = {
