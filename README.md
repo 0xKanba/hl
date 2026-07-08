@@ -21,6 +21,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 repo tree
@@ -28,7 +29,6 @@
 ```text
 .
 ├── README.md
-├── bump-sw-version.yml
 ├── charting_library
 │   ├── bundles
 │   │   ├── 1049.3418d3509b4f6a41c2eb.css
@@ -2002,8 +2002,6 @@
 │       │   └── udf-compatible-datafeed.ts
 │       ├── tsconfig.json
 │       └── types.d.ts
-├── hl.css
-├── hl2.css
 ├── icon-192x192.png
 ├── icon-512x512.png
 ├── images
@@ -2037,12 +2035,18 @@
 │   ├── tree.md
 │   └── us.md
 ├── md.html
+├── privy-widget
+│   ├── build.mjs
+│   ├── package-lock.json
+│   ├── package.json
+│   └── src
+│       └── index.jsx
 ├── sw.js
 ├── tree.txt
 ├── x1.png
 ├── x2.png
 └── x3.png
 
-12 directories, 2004 files
+14 directories, 2005 files
 ```
 <!-- TREE END -->
