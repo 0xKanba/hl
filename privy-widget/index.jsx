@@ -110,6 +110,12 @@ createRoot(mountNode).render(
         theme: 'dark',
         accentColor: '#00ccff',
         logo: 'https://hl.kanba.pw/icon-512x512.png',
+        /* ✅ Trust Wallet وRabby ما إلهم زر مباشر بقائمة Privy (مو مدرجين
+           بالأسماء الخاصة) — الطريقة الوحيدة للوصول لهم فعلياً هي
+           wallet_connect (سجل WalletConnect الكامل، +100 محفظة).
+           بدونها، الضغط على "اتصال" داخل Trust Wallet كان ينتهي بمهلة
+           لأن Privy ما كان يعرف كيف يوصل لها أصلاً. */
+        walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets', 'wallet_connect'],
       },
     }}
   >
