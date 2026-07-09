@@ -235,6 +235,8 @@
     <button class="opts-item" id="optWithdraw">📤 سحب</button>
     <button class="opts-item" id="optDisplayName">✏️ اسم العرض</button>
     <button class="opts-item" id="optSound">🔊 صوت التنبيهات</button>
+    <button class="opts-item" id="optExportKey">🔑 تصدير المفتاح الخاص</button>
+    <button class="opts-item" id="optWalletRecovery">🔐 استرداد المحفظة</button>
     <button class="opts-item opts-item-logout" id="optLogout">تغيير المحفظة</button>
     <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
   </div>
@@ -262,7 +264,7 @@
       تداول مباشر · ذهب · فضة · نفط · ناسداك
     </div>
     <div class="form-group">
-      <label class="field-label" for="privateKey">المفتاح الخاص للمحفظة</label>
+      <label class="field-label" for="privateKey">المفتاح الخاص للمحفظة (مسار قديم)</label>
       <div class="key-wrapper">
         <input class="key-input form-input" id="privateKey" type="password"
                placeholder="0x4a3b..." autocomplete="off"
@@ -557,6 +559,11 @@
   </div>
 </div>
 
+<!-- ✅ نقطة تثبيت React الخاصة بـ Privy — headless بالكامل، لا واجهة مرئية
+     خاصة به. يُحمَّل js/privy-bridge.js كسولاً من auth.js عند أول اتصال
+     فعلي — لا سطر <script> ثابت هنا عمداً. -->
+<div id="privyRoot" style="display:none"></div>
+
 <div id="cornerStatus"></div>
 <div id="toast"></div>
 <div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
@@ -579,6 +586,11 @@
            We use a custom Datafeed object inside /js/chart.js
            that calls Hyperliquid's API directly — no UDF server needed.
   3. App modules — must come after both libraries above
+
+  NOTE: js/privy-bridge.js (React island, ~1.4MB gzip) is NOT listed
+  here on purpose. auth.js injects it dynamically on first real "اتصال"
+  click (or on boot if a previous Privy session needs restoring), so a
+  guest just watching prices never downloads it.
   ════════════════════════════════════════════════════════════════
 -->
 

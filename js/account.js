@@ -285,7 +285,10 @@ async function showHistory() {
   }
 }
 
-/* ════ Deposit ════ */
+/* ════ Deposit ════
+   ✅ Signer الآن يأتي من المحفظة الرئيسية الفعلية (Privy أو خارجية عبر
+   الجسر)، أو من المسار القديم _raw لمن لسا على مفتاح خاص يدوي.
+   State.wallet.privateKey لم يعد موجوداً لمحافظ Privy — لا تُرجعه. ════ */
 async function doDeposit() {
   const amt = parseFloat($('depositAmount').value || 0);
   if (!amt || amt < 5) return toast('الحد الأدنى للإيداع $5', 'err');
@@ -293,20 +296,22 @@ async function doDeposit() {
   setBtnLoading('depositExecute', '⏳');
   showLoader('جارٍ التحقق من رصيد USDC...');
   try {
-    const p    = new ethers.JsonRpcProvider(ARB_RPC);
-    const w    = new ethers.Wallet(State.wallet.privateKey, p);
+    const w = State.wallet.walletClientType === 'raw-key'
+      ? State.wallet._raw.connect(new ethers.JsonRpcProvider(ARB_RPC))
+      : await window.PrivyBridge.getArbitrumSigner(State.wallet.address);
+
     const usdc = new ethers.Contract(USDC_CA, [
       'function approve(address,uint256) returns(bool)',
       'function balanceOf(address) view returns(uint256)'
     ], w);
     const bridge = new ethers.Contract(BRDG_CA, ['function deposit(address,uint64) external'], w);
     const raw    = ethers.parseUnits(amt.toString(), 6);
-    const bal    = await usdc.balanceOf(w.address);
+    const bal    = await usdc.balanceOf(State.wallet.address);
     if (bal < raw) throw new Error('رصيد USDC غير كافٍ على Arbitrum');
     showLoader('انتظر موافقة المحفظة...');
     await (await usdc.approve(BRDG_CA, raw)).wait();
     showLoader('جارٍ إرسال USDC...');
-    await (await bridge.deposit(w.address, raw)).wait();
+    await (await bridge.deposit(State.wallet.address, raw)).wait();
     closeModal('modalDeposit');
     toast(`✅ تم إرسال $${amt} — يصل خلال 1-3 دقائق`, 'ok', 6000);
     setTimeout(pollAccount, 6000);
@@ -315,7 +320,9 @@ async function doDeposit() {
   } finally { resetBtn('depositExecute'); hideLoader(); }
 }
 
-/* ════ Withdraw ════ */
+/* ════ Withdraw ════
+   بدون تغيير — يوقّع دايماً بالمحفظة الرئيسية (State.wallet.signTypedData)،
+   سواء Privy أو خارجية. Hyperliquid يمنع محفظة الوكيل من السحب أصلاً. ════ */
 async function doWithdraw() {
   const amt  = parseFloat($('withdrawAmount').value || 0);
   const dest = $('withdrawAddress').value.trim();

@@ -11,14 +11,15 @@ const USDC_CA = '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8';
 const BRDG_CA = '0x2Df1c51E09aECF9d2B5688B5c82A9bBDE18B9494';
 
 /* مفاتيح localStorage */
-const LS_KEY       = 'hl_trade_pk';
-const PIN_KEY      = 'hl_trade_pin';
-const LOCKED_KEY   = 'hl_trade_locked';
-const LAST_PIN_KEY = 'hl_last_pin_time';
-const QSTATE_KEY   = 'hl_qstate_v1';
+const LS_KEY        = 'hl_trade_pk';
+const PIN_KEY       = 'hl_trade_pin';
+const LOCKED_KEY    = 'hl_trade_locked';
+const LAST_PIN_KEY  = 'hl_last_pin_time';
+const QSTATE_KEY    = 'hl_qstate_v1';
 const DISPNAME_KEY  = 'hl_display_name';
 const OPENTIME_KEY  = 'hl_position_opens';
-const SOUND_KEY      = 'hl_sound_enabled';
+const SOUND_KEY     = 'hl_sound_enabled';
+const PRIVY_FLAG_KEY = 'hl_privy_connected'; /* ✅ جديد — علم استعادة جلسة Privy عند إعادة فتح التطبيق */
 
 /* تعريف الأصول */
 const ASSETS = {

@@ -6,6 +6,7 @@
 const State = {
   /* المحفظة والأصل الحالي */
   wallet: null,
+  agent:  null,   /* ✅ جديد — ethers.Wallet محلي، صلاحية تداول فقط، راجع ensureAgent() بـ auth.js */
   asset:  'CL',
   qty:    0.1,
   isGuest: true,

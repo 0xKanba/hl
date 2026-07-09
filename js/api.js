@@ -15,9 +15,13 @@ async function hlInfo(body) {
   return JSON.parse(text.replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"'));
 }
 
-/* ════ REST Exchange (توقيع EIP-712) ════ */
+/* ════ REST Exchange (توقيع EIP-712) ════
+   ✅ يوقّع بمحفظة الوكيل (State.agent) — مفتاح محلي مُفوَّض عبر
+   approveAgent، صلاحيته تداول فقط (Hyperliquid نفسه يمنعه من السحب).
+   بهذا كل صفقة تُنفَّذ فوراً بلا Privy وبلا نافذة تأكيد، سواء المحفظة
+   الرئيسية بريد أو خارجية — راجع ensureAgent() بـ auth.js. ════ */
 async function hlExchange(action) {
-  if (!State.wallet) throw new Error('لا توجد محفظة');
+  if (!State.agent) throw new Error('محفظة التداول غير مفوّضة بعد — أعد تسجيل الدخول');
   const nonce   = Date.now();
   const encoded = MsgPack.encode(action);
   const nb      = new ArrayBuffer(8);
@@ -28,7 +32,7 @@ async function hlExchange(action) {
   payload[encoded.length + 8] = 0x00;
 
   const connId = ethers.keccak256(payload);
-  const sig    = await State.wallet.signTypedData(
+  const sig    = await State.agent.signTypedData(
     { name:'Exchange', version:'1', chainId:1337, verifyingContract:'0x0000000000000000000000000000000000000000' },
     { Agent:[{ name:'source', type:'string' }, { name:'connectionId', type:'bytes32' }] },
     { source:'a', connectionId:connId }

@@ -133,8 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
   _initQtyInput();
   updateSoundOptionLabel();
 
-  $('loginBtn').onclick     = login;
-  $('privateKey').onkeydown = e => e.key === 'Enter' && login();
+  /* ✅ مسار الدخول اليدوي القديم (#modalLogin) — احتياطي/انتقالي فقط.
+     الزر الرئيسي "اتصال" لا يفتح هذا المودال بعد الآن (راجع btnConnect
+     بالأسفل) — يبقى موجوداً فقط لو احتجت تستورد محفظتك الحالية مؤقتاً. */
+  $('loginBtn').onclick     = loginWithRawKey;
+  $('privateKey').onkeydown = e => e.key === 'Enter' && loginWithRawKey();
   $('toggleKey').onclick    = () => {
     const i = $('privateKey');
     i.type = i.type === 'password' ? 'text' : 'password';
@@ -152,8 +155,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ChartModule.open(State.asset);
   };
 
+  /* ✅ اتصال — يفتح مودال Privy مباشرة (بريد أولاً، محفظة خارجية تحته) */
   $('btnConnect').onclick = () => {
-    if (State.isGuest) openLoginModal();
+    if (State.isGuest) connectWallet();
     else openOptions();
   };
 
@@ -167,6 +171,9 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
   $('optDisplayName').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openDisplayNameModal(); };
   $('optSound').onclick = () => { closeOptions(); toggleSound(); };
+  /* ✅ جديد */
+  $('optExportKey')?.addEventListener('click', () => { closeOptions(); exportPrivateKey(); });
+  $('optWalletRecovery')?.addEventListener('click', () => { closeOptions(); openWalletRecovery(); });
   $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
   $('btnBuy').onclick  = () => askTrade(true);
@@ -293,23 +300,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ═══════════════════════════════════════
      Boot sequence
+     أولوية الاستعادة: جلسة Privy → مفتاح خاص قديم → وضع زائر.
   ═══════════════════════════════════════ */
   startMainWs();
 
-  const saved = localStorage.getItem(LS_KEY);
-  if (saved) {
-    $('privateKey').value = saved;
-    $('loginScreen')?.classList.add('hidden');
-    $('appScreen')?.classList.remove('hidden');
-    login().then(() => {
-      State.timers.push(setInterval(pollAccount, 4000));
-      State.timers.push(setInterval(pollPrices,  3000));
-      startSessionPolling();
-      startFundingTimer();
-    }).catch(() => initGuestMode());
-  } else {
+  function _startAuthedTimers() {
+    State.timers.push(setInterval(pollAccount, 4000));
+    State.timers.push(setInterval(pollPrices,  3000));
+    startSessionPolling();
+    startFundingTimer();
+  }
+  function _fallbackToGuest() {
     initGuestMode();
     State.timers.push(setInterval(pollPrices, 3000));
+  }
+
+  if (localStorage.getItem(PRIVY_FLAG_KEY)) {
+    $('loginScreen')?.classList.add('hidden');
+    $('appScreen')?.classList.remove('hidden');
+    _loadPrivyBridge()
+      .then(() => {
+        const w = window.PrivyBridge.authenticated && window.PrivyBridge.getActiveWallet();
+        if (!w) throw new Error('no active Privy session');
+        return _onPrivyUpdate({ authenticated: true, wallet: w });
+      })
+      .then(_startAuthedTimers)
+      .catch(_fallbackToGuest);
+  } else if (localStorage.getItem(LS_KEY)) {
+    $('privateKey').value = localStorage.getItem(LS_KEY);
+    $('loginScreen')?.classList.add('hidden');
+    $('appScreen')?.classList.remove('hidden');
+    loginWithRawKey().then(_startAuthedTimers).catch(_fallbackToGuest);
+  } else {
+    _fallbackToGuest();
   }
 
   if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
