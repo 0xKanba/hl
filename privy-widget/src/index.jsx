@@ -15,18 +15,21 @@ import {
   useWallets,
   useSignTypedData,
   useExportWallet,
+  useSetWalletRecovery,
 } from '@privy-io/react-auth';
 
-/* App ID يُحقن وقت البناء من متغيّر بيئة PRIVY_APP_ID (راجع build.mjs) —
-   على Cloudflare Pages: Settings → Environment variables → PRIVY_APP_ID.
+/* App ID + Client ID يُحقنان وقت البناء من متغيّرات بيئة (راجع build.mjs) —
+   على Cloudflare Pages: Settings → Environment variables → PRIVY_APP_ID, PRIVY_CLIENT_ID.
    لا حاجة لتعديل هذا الملف يدوياً أبداً. */
-const PRIVY_APP_ID = process.env.PRIVY_APP_ID;
+const PRIVY_APP_ID    = process.env.PRIVY_APP_ID;
+const PRIVY_CLIENT_ID = process.env.PRIVY_CLIENT_ID;
 
 function Bridge() {
   const { ready, authenticated, login, logout } = usePrivy();
   const { wallets } = useWallets();
   const { signTypedData } = useSignTypedData();
   const { exportWallet } = useExportWallet();
+  const { setWalletRecovery } = useSetWalletRecovery();
 
   /* مرجع حي يتفادى الـ stale closures جوا window.PrivyBridge */
   const live = useRef({ ready, authenticated, wallets });
@@ -69,6 +72,10 @@ function Bridge() {
       /* يفتح مودال Privy الآمن لتصدير المفتاح/الـ seed phrase */
       exportWallet: (address) => exportWallet(address ? { address } : undefined),
 
+      /* يفتح مودال Privy لتفعيل استرداد المحفظة (كلمة سر / Google Drive / iCloud) —
+         حماية إضافية ضد فقدان الجهاز لمحفظة embedded (بريد) تحديداً */
+      setupRecovery: () => setWalletRecovery(),
+
       /* Signer متصل بـ Arbitrum جاهز لعقود USDC/الجسر (يستخدم doDeposit) */
       getArbitrumSigner: async (address) => {
         const target = address || activeWallet()?.address;
@@ -84,7 +91,7 @@ function Bridge() {
     window.dispatchEvent(new CustomEvent('privy:update', {
       detail: { ready, authenticated, wallet: activeWallet() }
     }));
-  }, [ready, authenticated, wallets, login, logout, signTypedData, exportWallet]);
+  }, [ready, authenticated, wallets, login, logout, signTypedData, exportWallet, setWalletRecovery]);
 
   return null; /* headless تماماً — modalLogin بتاع سيولة يبقى هو الواجهة */
 }
@@ -93,6 +100,7 @@ const mountNode = document.getElementById('privyRoot');
 createRoot(mountNode).render(
   <PrivyProvider
     appId={PRIVY_APP_ID}
+    clientId={PRIVY_CLIENT_ID}
     config={{
       loginMethods: ['email', 'wallet'],
       embeddedWallets: {
@@ -102,6 +110,12 @@ createRoot(mountNode).render(
         theme: 'dark',
         accentColor: '#00ccff',
         logo: 'https://hl.kanba.pw/icon-512x512.png',
+        /* ✅ Trust Wallet وRabby ما إلهم زر مباشر بقائمة Privy (مو مدرجين
+           بالأسماء الخاصة) — الطريقة الوحيدة للوصول لهم فعلياً هي
+           wallet_connect (سجل WalletConnect الكامل، +100 محفظة).
+           بدونها، الضغط على "اتصال" داخل Trust Wallet كان ينتهي بمهلة
+           لأن Privy ما كان يعرف كيف يوصل لها أصلاً. */
+        walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets', 'wallet_connect'],
       },
     }}
   >
