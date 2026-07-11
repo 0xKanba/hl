@@ -1,4 +1,4 @@
- /* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════
    privy-bridge — React island مستقل، بدون واجهة مرئية خاصة به.
    يفتح مودال Privy الجاهز (بريد + محافظ خارجية) ويعرض واجهة برمجية
    بسيطة على window.PrivyBridge يستدعيها auth.js (vanilla JS).
@@ -102,7 +102,10 @@ createRoot(mountNode).render(
     appId={PRIVY_APP_ID}
     clientId={PRIVY_CLIENT_ID}
     config={{
-      loginMethods: ['email', 'wallet'],
+      /* ✅ Privy الآن خاص بالبريد الإلكتروني فقط — الاتصال بمحافظ خارجية
+         (Trust/Brave/أي محفظة) صار بملف wallets.js منفصل تماماً، بلا
+         أي اعتماد على Privy أو WalletConnect. */
+      loginMethods: ['email'],
       embeddedWallets: {
         createOnLogin: 'users-without-wallets',
       },
@@ -110,12 +113,6 @@ createRoot(mountNode).render(
         theme: 'dark',
         accentColor: '#00ccff',
         logo: 'https://hl.kanba.pw/icon-512x512.png',
-        /* ✅ Trust Wallet وRabby ما إلهم زر مباشر بقائمة Privy (مو مدرجين
-           بالأسماء الخاصة) — الطريقة الوحيدة للوصول لهم فعلياً هي
-           wallet_connect (سجل WalletConnect الكامل، +100 محفظة).
-           بدونها، الضغط على "اتصال" داخل Trust Wallet كان ينتهي بمهلة
-           لأن Privy ما كان يعرف كيف يوصل لها أصلاً. */
-        walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets', 'wallet_connect'],
       },
     }}
   >

@@ -260,6 +260,14 @@
       <div class="login-icon">💧</div>
       <div class="login-title">سيولة</div>
     </div>
+
+    <!-- ✅ جديد: بريد إلكتروني عبر Privy فقط -->
+    <button class="login-btn" id="connectEmailBtn" style="margin-bottom:14px;">📧 الدخول بالبريد الإلكتروني ←</button>
+
+    <!-- ✅ جديد: محافظ Web3 مكتشَفة عبر wallets.js — بلا أي علاقة بـPrivy -->
+    <div class="login-header" style="text-align:center;margin:4px 0 10px;">أو اختر محفظتك</div>
+    <div id="extWalletList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;"></div>
+
     <div class="login-header" style="text-align:center;margin-bottom:16px;">
       تداول مباشر · ذهب · فضة · نفط · ناسداك
     </div>
@@ -587,10 +595,15 @@
            that calls Hyperliquid's API directly — no UDF server needed.
   3. App modules — must come after both libraries above
 
-  NOTE: js/privy-bridge.js (React island, ~1.4MB gzip) is NOT listed
-  here on purpose. auth.js injects it dynamically on first real "اتصال"
-  click (or on boot if a previous Privy session needs restoring), so a
-  guest just watching prices never downloads it.
+  NOTE: js/wallets.js (Brave/Trust/Rabby/... — zero Privy involvement)
+  loads eagerly, early, right after config/state — tiny file, and its
+  EIP-6963 listener needs to register ASAP to catch wallet announcements.
+
+  NOTE: js/privy-bridge.js (React island, ~1.4MB gzip, email login only)
+  is NOT listed here on purpose. auth.js injects it dynamically only
+  when the user picks "الدخول بالبريد الإلكتروني" (or on boot if a
+  previous Privy session needs restoring), so a guest just watching
+  prices — or anyone connecting an external wallet — never downloads it.
   ════════════════════════════════════════════════════════════════
 -->
 
@@ -605,6 +618,7 @@
 <!-- 3. App modules — order matters -->
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
+<script src="/js/wallets.js"></script>
 <script src="/js/utils.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/ws.js"></script>

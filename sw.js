@@ -5,9 +5,9 @@
    needs to be remembered. A stale value here only ever means "the
    cache tag didn't change"; it never blocks a real deploy, because
    the app shell below is network-first, not stale-while-revalidate. */
-const CACHE_APP   = 'hltrade-app-202607090853-78d9da9';
-const CACHE_IMGS  = 'hltrade-img-202607090853-78d9da9';
-const CACHE_FONTS = 'hltrade-fnt-202607090853-78d9da9';
+const CACHE_APP   = 'hltrade-app-202607042200-e0cb170';
+const CACHE_IMGS  = 'hltrade-img-202607042200-e0cb170';
+const CACHE_FONTS = 'hltrade-fnt-202607042200-e0cb170';
 
 const APP_SHELL = [
   '/',
@@ -18,6 +18,7 @@ const APP_SHELL = [
   '/manifest.json',
   '/js/config.js',
   '/js/state.js',
+  '/js/wallets.js',
   '/js/utils.js',
   '/js/api.js',
   '/js/ws.js',
@@ -41,6 +42,12 @@ const APP_SHELL = [
   '/icon-192x192.png',
   '/icon-512x512.png'
 ];
+
+/* Note: js/privy-bridge.js (~1.4MB gzip, email-login only) is
+   deliberately NOT in APP_SHELL — it's lazy-loaded by auth.js only
+   when a user picks email login, so guests and external-wallet users
+   never pay for it. The generic same-origin handler below still
+   caches it after first real use, so offline works fine after that. */
 
 /* App-shell file types — always network-first so a fresh deploy is
    visible on the very next load while online. Cache is the offline
@@ -86,7 +93,8 @@ self.addEventListener('fetch', e => {
     e.respondWith(cacheFirst(e.request, CACHE_IMGS));
     return;
   }
-  /* Everything same-origin (navigations + the html/css/js/json app shell)
+  /* Everything same-origin (navigations + the html/css/js/json app shell,
+     including js/privy-bridge.js the one time it's actually fetched)
      — network-first with a fast timeout. Online, you always get the
      live file; offline or slow, you fall back to whatever was last
      cached. This is what makes deploys show up immediately instead of

@@ -1,19 +1,20 @@
 /* ═══════════════════════════════════════
    auth.js — دخول وخروج + وضع الزائر
-   ✅ الدخول الأساسي: Privy (بريد OTP أولاً، محفظة خارجية ثانوياً)
+   ✅ بريد إلكتروني → Privy فقط (embedded wallet + OTP)
+   ✅ محفظة خارجية (Brave/Trust/Rabby/أي محفظة) → wallets.js فقط،
+      بلا أي علاقة بـPrivy إطلاقاً — راجع connectWallet()
    ✅ محفظة الوكيل (Agent Wallet): تفويض مرة واحدة، توقيع محلي بلا
       نوافذ تأكيد لكل صفقة بعدها — راجع ensureAgent()
    ✅ الموقع يعمل بدون محفظة (وضع زائر)
-   ✅ loginWithRawKey() القديم موجود كمسار احتياطي/انتقالي فقط —
-      غير موصول بأي زر افتراضياً، وصله يدوياً بـ app.js إذا احتجته
-   ✅ زر الاتصال: لون حسب Hyperliquid WS، نص حسب هوية المحفظة الفعلية
+   ✅ loginWithRawKey() القديم موجود كمسار احتياطي/انتقالي فقط
 ═══════════════════════════════════════ */
 'use strict';
 
 /* ════════════════════════════════════════════════
    تحميل كسول لـ privy-bridge.js (~1.4MB gzip)
-   يُحمَّل فقط عند الحاجة الفعلية: أول اتصال، أو عند استرجاع
-   جلسة Privy سابقة عند الإقلاع — أبداً لوضع الزائر البارد.
+   يُحمَّل فقط عند اختيار "بريد إلكتروني" فعلياً، أو عند استرجاع
+   جلسة Privy سابقة عند الإقلاع — أبداً لوضع الزائر البارد، وأبداً
+   لمسار المحفظة الخارجية (wallets.js لا يحتاجه إطلاقاً).
 ════════════════════════════════════════════════ */
 let _privyLoadPromise = null;
 function _loadPrivyBridge() {
@@ -23,7 +24,7 @@ function _loadPrivyBridge() {
   _privyLoadPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = '/js/privy-bridge.js';
-    s.onerror = () => { _privyLoadPromise = null; reject(new Error('تعذّر تحميل وحدة الاتصال')); };
+    s.onerror = () => { _privyLoadPromise = null; reject(new Error('تعذّر تحميل وحدة البريد الإلكتروني')); };
     s.onload = () => {
       const t0 = Date.now();
       (function wait() {
@@ -37,14 +38,14 @@ function _loadPrivyBridge() {
   return _privyLoadPromise;
 }
 
-/* ════ إنشاء محفظة جديدة محلياً (مسار قديم — راجع الشرح أعلاه) ════ */
+/* ════ إنشاء محفظة جديدة محلياً (مسار قديم — راجع الشرح بالأسفل) ════ */
 function createNewWallet() {
   const wallet = ethers.Wallet.createRandom();
   const key    = wallet.privateKey;
   const input  = $('privateKey');
   if (input) { input.value = key; input.type = 'text'; }
   navigator.clipboard?.writeText(key).catch(() => {});
-  alert(`✅ تم إنشاء محفظة جديدة!\n\nالمفتاح الخاص:\n${key}\n\n⚠️ احفظه الآن في مكان آمن!`);
+  alert('✅ تم إنشاء محفظة جديدة!\n\nالمفتاح الخاص:\n' + key + '\n\n⚠️ احفظه الآن في مكان آمن!');
   toast('✅ المفتاح جاهز — احفظه!', 'ok', 6000);
 }
 
@@ -62,47 +63,103 @@ function initGuestMode() {
 }
 
 /* ════════════════════════════════════════════════
-   الدخول عبر Privy — هذا هو المسار الافتراضي الوحيد الآن.
-   يفتح مودال Privy الرسمي مباشرة: بريد + OTP أولاً، ثم قائمة
-   محافظ خارجية (Brave/Trust/Rabby/...) عبر EIP-6963 تلقائياً.
-   لا يوجد نموذج مخصص من طرفنا — Privy يتكفّل بكل الواجهة.
+   نافذة الاتصال — بريد إلكتروني (زر واحد بالأعلى) أو محفظة
+   مكتشَفة (قائمة بالأسفل، من wallets.js، بلا Privy إطلاقاً).
 ════════════════════════════════════════════════ */
-async function connectWallet() {
+function connectWallet() {
   if (!State.isGuest) return openOptions();
-  setBtnLoading('btnConnect', '⏳');
+  _renderExtWalletList();
+  if (typeof Wallets !== 'undefined') Wallets.onListChanged(_renderExtWalletList); /* حي أثناء فتح النافذة */
+  openModal('modalLogin');
+}
+
+/* يوقف الاستماع الحي لما تُغلق النافذة (بأي طريقة: زر إغلاق، اتصال ناجح، نقر خارج المودال) */
+function _stopWalletListWatch() {
+  if (typeof Wallets !== 'undefined') Wallets.onListChanged(null);
+}
+
+function _renderExtWalletList() {
+  const box = $('extWalletList');
+  if (!box) return;
+  const entries = (typeof Wallets !== 'undefined') ? Wallets.list() : [];
+
+  if (!entries.length) {
+    box.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:var(--fs-sm);padding:8px 4px;">لا توجد محفظة مكتشَفة بهذا المتصفح — افتح الموقع من داخل تطبيق محفظتك (مثل Trust Wallet) أو من متصفح فيه إضافة محفظة.</div>';
+    return;
+  }
+
+  box.innerHTML = entries.map(function (e, i) {
+    const iconHtml = e.info.icon
+      ? '<img src="' + e.info.icon + '" alt="" style="width:20px;height:20px;border-radius:5px;">'
+      : '👛';
+    return '<button class="create-wallet-btn" data-ext-idx="' + i + '" style="display:flex;align-items:center;justify-content:center;gap:8px;">'
+      + iconHtml + '<span>' + e.info.name + '</span></button>';
+  }).join('');
+
+  box.querySelectorAll('[data-ext-idx]').forEach(function (btn) {
+    btn.onclick = function () { _connectExternal(entries[+btn.dataset.extIdx]); };
+  });
+}
+
+/* ════ اتصال بريد إلكتروني — Privy فقط، لا محافظ هنا إطلاقاً ════ */
+async function connectEmail() {
+  setBtnLoading('connectEmailBtn', '⏳');
   try {
     await _loadPrivyBridge();
     await window.PrivyBridge.connect();
-    /* النتيجة الفعلية تصل عبر حدث privy:update — راجع _onPrivyUpdate بالأسفل.
-       لو المستخدم أغلق المودال بدون تسجيل، ما راح يوصل أي حدث — طبيعي. */
+    /* النتيجة تصل عبر حدث privy:update بالأسفل */
   } catch (e) {
-    toast('⚠️ ' + (e.message || 'تعذّر فتح نافذة الاتصال'), 'err', 5000);
+    toast('⚠️ ' + (e.message || 'تعذّر فتح نافذة البريد الإلكتروني'), 'err', 5000);
   } finally {
-    resetBtn('btnConnect');
+    resetBtn('connectEmailBtn');
   }
 }
 
-/* يُستدعى تلقائياً من privy-bridge.js عند كل تغيّر بحالة التوثيق */
-window.addEventListener('privy:update', e => _onPrivyUpdate(e.detail || {}));
+/* ════ اتصال محفظة خارجية — wallets.js فقط، بلا Privy ════ */
+async function _connectExternal(entry) {
+  _stopWalletListWatch();
+  showLoader('جارٍ الاتصال بـ ' + entry.info.name + '...');
+  try {
+    const w = await Wallets.connect(entry);
+    closeModal('modalLogin');
+    await _onWalletConnected(w);
+  } catch (e) {
+    toast('⚠️ تعذّر الاتصال بالمحفظة: ' + (e.message || '').slice(0, 100), 'err', 5000);
+  } finally {
+    hideLoader();
+  }
+}
 
-async function _onPrivyUpdate(detail) {
-  if (!detail.authenticated || !detail.wallet) return;
-  if (State.wallet?.address === detail.wallet.address) return; /* لا تكرر نفس الجلسة */
-
-  const meta = detail.wallet; /* {address, walletClientType, name, icon} */
-
-  State.wallet = {
+/* يُستدعى تلقائياً من privy-bridge.js عند كل تغيّر بحالة التوثيق (مسار البريد فقط) */
+window.addEventListener('privy:update', function (e) {
+  const d = e.detail || {};
+  if (!d.authenticated || !d.wallet) return;
+  const meta = d.wallet; /* {address, walletClientType:'privy', name, icon} */
+  _onWalletConnected({
     address:          meta.address,
-    walletClientType: meta.walletClientType,   /* 'privy' = بريد/embedded، غير ذلك = محفظة خارجية */
-    walletName:       meta.name,               /* "Brave Wallet" / "Trust Wallet" / ... من EIP-6963 */
+    walletClientType: meta.walletClientType,
+    walletName:       meta.name,
     walletIcon:       meta.icon,
-    /* شكل موحّد يطابق ethers.Wallet.signTypedData(domain, types, value) —
-       بهذا الشكل account.js (doWithdraw) ما يحتاج يتغيّر إطلاقاً */
-    signTypedData: (domain, types, value) =>
-      window.PrivyBridge.signTypedData(domain, types, value, meta.address),
-  };
+    signTypedData:    function (domain, types, value) { return window.PrivyBridge.signTypedData(domain, types, value, meta.address); },
+    getArbitrumSigner: function () { return window.PrivyBridge.getArbitrumSigner(meta.address); },
+  });
+});
+
+/* ════════════════════════════════════════════════
+   نقطة إنهاء موحّدة — تشتغل بغض النظر عن مصدر المحفظة (Privy بريد،
+   أو wallets.js خارجية، أو المسار القديم). كل مصدر يبني كائن
+   بنفس الشكل بالضبط: {address, walletClientType, walletName,
+   walletIcon, signTypedData(domain,types,value), getArbitrumSigner()}
+   — وبهذا باقي التطبيق (account.js, api.js) ما يعرف ولا يهتم من
+   أين جاءت المحفظة.
+════════════════════════════════════════════════ */
+async function _onWalletConnected(walletObj) {
+  if (State.wallet && State.wallet.address === walletObj.address) return; /* لا تكرر نفس الجلسة */
+
+  State.wallet = walletObj;
   State.isGuest = false;
-  localStorage.setItem(PRIVY_FLAG_KEY, '1');
+  if (walletObj.walletClientType === 'privy') localStorage.setItem(PRIVY_FLAG_KEY, '1');
+  else localStorage.setItem(EXTWALLET_FLAG_KEY, JSON.stringify({ address: walletObj.address }));
 
   updateNavAddressDisplay();
   $('withdrawAddress').value = State.wallet.address;
@@ -119,7 +176,7 @@ async function _onPrivyUpdate(detail) {
     toast('⚠️ فشل تفويض محفظة التداول: ' + e.message.slice(0, 100), 'err', 6000);
   }
 
-  _maybePromptRecovery(meta);
+  _maybePromptRecovery(walletObj);
 
   await pollAccount();
   autoSetReferrer();
@@ -127,16 +184,15 @@ async function _onPrivyUpdate(detail) {
   toast('مرحباً 🤝', 'ok');
 
   if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
-    setTimeout(() => { if (State.wallet) lockApp(); }, 300);
+    setTimeout(function () { if (State.wallet) lockApp(); }, 300);
 }
 
 /* ════════════════════════════════════════════════
    محفظة الوكيل (Agent / API Wallet) — Hyperliquid native.
-   تفويض بتوقيع واحد من المحفظة الرئيسية (Privy)، بعدها كل أوامر
-   hlExchange() (فتح/إغلاق/TP/SL/رافعة) توقّع محلياً بهذا المفتاح —
-   بلا Privy، بلا نافذة تأكيد لكل صفقة. هذا يحافظ على سرعة التداول
-   تماماً متل النظام القديم، حتى مع محفظة خارجية (Brave/Trust/Rabby)
-   اللي ما تقدر Privy تسكت نافذة تأكيدها.
+   تفويض بتوقيع واحد من المحفظة الرئيسية (بريد أو خارجية، ما يفرق)،
+   بعدها كل أوامر hlExchange() (فتح/إغلاق/TP/SL/رافعة) توقّع محلياً
+   بهذا المفتاح — بلا Privy، بلا wallets.js، بلا نافذة تأكيد لكل
+   صفقة. هذا يحافظ على سرعة التداول تماماً متل النظام القديم.
 
    ✅ صلاحية 30 يوم — بعدها يطلب توقيع جديد ظاهر من المحفظة الرئيسية
    (مرة كل شهر، مو مزعج). حماية إضافية: لو التطبيق تعرّض لاختراق
@@ -153,7 +209,7 @@ async function ensureAgent() {
   const meta = JSON.parse(localStorage.getItem(key) || 'null');
 
   if (meta && (Date.now() - meta.createdAt) < AGENT_TTL_MS) {
-    try { State.agent = new ethers.Wallet(meta.pk); return; } catch { /* تالف — أعد التفويض */ }
+    try { State.agent = new ethers.Wallet(meta.pk); return; } catch (e) { /* تالف — أعد التفويض */ }
   }
 
   showLoader(meta ? 'تجديد تفويض التداول (كل 30 يوم لحمايتك)...' : 'تفويض محفظة التداول (مرة واحدة فقط)...');
@@ -163,7 +219,7 @@ async function ensureAgent() {
     const agentName = 'suyula-' + nonce;
     const action = {
       type: 'approveAgent', hyperliquidChain: 'Mainnet', signatureChainId: '0xa4b1',
-      agentAddress: agent.address, agentName, nonce
+      agentAddress: agent.address, agentName: agentName, nonce: nonce
     };
     const sig = await State.wallet.signTypedData(
       { name: 'HyperliquidSignTransaction', version: '1', chainId: 42161,
@@ -174,12 +230,12 @@ async function ensureAgent() {
           { name: 'agentName',        type: 'string' },
           { name: 'nonce',            type: 'uint64' }
       ]},
-      { hyperliquidChain: 'Mainnet', agentAddress: agent.address, agentName, nonce }
+      { hyperliquidChain: 'Mainnet', agentAddress: agent.address, agentName: agentName, nonce: nonce }
     );
-    const { r, s, v } = ethers.Signature.from(sig);
+    const sigParts = ethers.Signature.from(sig);
     const res = await fetch(HL_API + '/exchange', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, nonce, signature: { r, s, v } })
+      body: JSON.stringify({ action: action, nonce: nonce, signature: { r: sigParts.r, s: sigParts.s, v: sigParts.v } })
     });
     const d = await res.json();
     if (d.status !== 'ok') throw new Error(typeof d.response === 'string' ? d.response : JSON.stringify(d));
@@ -191,17 +247,17 @@ async function ensureAgent() {
 
 /* فحص دوري خفيف — لو التطبيق ضل مفتوح أسابيع بدون إعادة تحميل، يجدد
    الوكيل تلقائياً (بتوقيع ظاهر واحد) قبل ما ينتهي بمنتصف صفقة */
-setInterval(() => { if (State.wallet) ensureAgent().catch(() => {}); }, 6 * 3600_000);
+setInterval(function () { if (State.wallet) ensureAgent().catch(function () {}); }, 6 * 3600000);
 
 /* ════ اقتراح تفعيل استرداد المحفظة — مرة واحدة فقط، لمحفظة البريد ════
    حماية ضد فقدان الجهاز (مسح بيانات المتصفح، تغيير هاتف) — بدونها،
    محفظة embedded تعتمد على "device share" محلي فقط قد يضيع. ════ */
-function _maybePromptRecovery(meta) {
-  if (meta.walletClientType !== 'privy') return; /* خارجية — المفتاح أصلاً بمحفظتها هي */
-  const flag = 'hl_recovery_prompted_' + meta.address.toLowerCase();
+function _maybePromptRecovery(walletObj) {
+  if (walletObj.walletClientType !== 'privy') return; /* خارجية — المفتاح أصلاً بمحفظتها هي */
+  const flag = 'hl_recovery_prompted_' + walletObj.address.toLowerCase();
   if (localStorage.getItem(flag)) return;
   localStorage.setItem(flag, '1');
-  setTimeout(() => toast('🔐 فعّل استرداد المحفظة لحمايتها من فقدان الجهاز — الخيارات ⚙️', 'info', 8000), 2500);
+  setTimeout(function () { toast('🔐 فعّل استرداد المحفظة لحمايتها من فقدان الجهاز — الخيارات ⚙️', 'info', 8000); }, 2500);
 }
 
 /* ════ تصدير المفتاح الخاص / الـ seed phrase ════
@@ -236,20 +292,21 @@ async function openWalletRecovery() {
 /* ════ جلب الأسعار الأولي ════ */
 function _fetchPricesBackground() {
   const uniqueCoins = {};
-  Object.keys(ASSETS).forEach(sym => {
+  Object.keys(ASSETS).forEach(function (sym) {
     if (sym === 'XAU') return;
     const c = ASSETS[sym].coin;
     if (!uniqueCoins[c]) uniqueCoins[c] = sym;
   });
-  Object.entries(uniqueCoins).forEach(([coinStr, sym]) => {
+  Object.entries(uniqueCoins).forEach(function (entry) {
+    const coinStr = entry[0], sym = entry[1];
     hlInfo({ type: 'l2Book', coin: coinStr })
-      .then(lb => {
-        const bid = parseFloat(lb.levels?.[0]?.[0]?.px || 0);
-        const ask = parseFloat(lb.levels?.[1]?.[0]?.px || 0);
+      .then(function (lb) {
+        const bid = parseFloat((lb.levels && lb.levels[0] && lb.levels[0][0] && lb.levels[0][0].px) || 0);
+        const ask = parseFloat((lb.levels && lb.levels[1] && lb.levels[1][0] && lb.levels[1][0].px) || 0);
         const mid = (bid && ask) ? (bid + ask) / 2 : 0;
         if (!mid) return;
         if (sym === 'GOLD') {
-          State.prices['GOLD'] = { bid, ask, mid };
+          State.prices['GOLD'] = { bid: bid, ask: ask, mid: mid };
           _updateTabText('GOLD', mid, ASSETS['GOLD'].pxDp);
           State.prevMid['GOLD'] = mid;
           if (State.asset === 'GOLD') updatePriceUI();
@@ -259,13 +316,13 @@ function _fetchPricesBackground() {
           State.prevMid['XAU'] = gm;
           if (State.asset === 'XAU') updatePriceUI();
         } else {
-          State.prices[sym] = { bid, ask, mid };
+          State.prices[sym] = { bid: bid, ask: ask, mid: mid };
           _updateTabText(sym, mid, ASSETS[sym].pxDp);
           State.prevMid[sym] = mid;
           if (sym === State.asset) updatePriceUI();
         }
       })
-      .catch(() => {});
+      .catch(function () {});
   });
 }
 
@@ -287,9 +344,10 @@ function doLogout() {
   localStorage.removeItem(LAST_PIN_KEY);
   localStorage.removeItem(QSTATE_KEY);
   localStorage.removeItem(PRIVY_FLAG_KEY);
+  localStorage.removeItem(EXTWALLET_FLAG_KEY);
   if (agentKey) localStorage.removeItem(agentKey);
 
-  if (window.PrivyBridge) { try { window.PrivyBridge.logout(); } catch {} }
+  if (window.PrivyBridge) { try { window.PrivyBridge.logout(); } catch (e) {} }
 
   State.wallet     = null;
   State.agent      = null;
@@ -324,9 +382,7 @@ function _showGuestBanner() {
     b = document.createElement('div');
     b.id = 'guestBanner';
     b.className = 'guest-banner';
-    b.innerHTML = `
-      <span class="gb-msg">🔒 اربط محفظتك لبدء التداول وعرض صفقاتك المفتوحة</span>
-      <button class="gb-btn" onclick="connectWallet()">اتصال ←</button>`;
+    b.innerHTML = '<span class="gb-msg">🔒 اربط محفظتك لبدء التداول وعرض صفقاتك المفتوحة</span><button class="gb-btn" onclick="connectWallet()">اتصال ←</button>';
     const main = $('appScreen');
     if (main) {
       const footer = main.querySelector('.footer');
@@ -338,10 +394,11 @@ function _showGuestBanner() {
 }
 
 function _hideGuestBanner() {
-  $('guestBanner')?.classList.add('hidden');
+  const b = $('guestBanner');
+  if (b) b.classList.add('hidden');
 }
 
-/* ════ فتح نافذة الدخول — الآن يعني: افتح مودال Privy مباشرة ════ */
+/* ════ فتح نافذة الدخول — نفس connectWallet() ════ */
 function openLoginModal() { connectWallet(); }
 
 /* ════════════════════════════════════════════════
@@ -349,7 +406,7 @@ function openLoginModal() { connectWallet(); }
    اللون  ← Hyperliquid WS (أخضر/أصفر/أحمر) — بدون تغيير
    النص   ← هوية المحفظة الفعلية: "بريد" لمحفظة Privy embedded،
             أو اسم المحفظة الخارجية الحقيقي (Brave Wallet/Trust Wallet/...)
-            كما تُبلّغه هي نفسها عبر EIP-6963.
+            كما تُبلّغه هي نفسها.
 ════════════════════════════════════════════════ */
 function updateConnectBtn() {
   const btn = $('btnConnect');
@@ -373,7 +430,7 @@ function updateConnectBtn() {
       ? '📧 بريد'
       : (State.wallet.walletName || 'متصل');
   }
-  btn.innerHTML = `<span class="cb-dot"></span><span class="cb-lbl">${lbl}</span>`;
+  btn.innerHTML = '<span class="cb-dot"></span><span class="cb-lbl">' + lbl + '</span>';
 }
 
 /* ════ اسم العرض المخصص — بدون تغيير ════ */
@@ -389,13 +446,13 @@ function openDisplayNameModal() {
   const input = $('displayNameInput');
   if (input) input.value = localStorage.getItem(DISPNAME_KEY) || '';
   openModal('modalDisplayName');
-  setTimeout(() => input?.focus(), 200);
+  setTimeout(function () { if (input) input.focus(); }, 200);
 }
 
 function saveDisplayName() {
   const input = $('displayNameInput');
-  const name  = (input?.value || '').trim().slice(0, 20);
-  if (name) { localStorage.setItem(DISPNAME_KEY, name); toast(`✅ الاسم: ${name}`, 'ok'); }
+  const name  = ((input && input.value) || '').trim().slice(0, 20);
+  if (name) { localStorage.setItem(DISPNAME_KEY, name); toast('✅ الاسم: ' + name, 'ok'); }
   else       { localStorage.removeItem(DISPNAME_KEY);   toast('تمت إزالة الاسم المخصص', 'info'); }
   updateNavAddressDisplay();
   closeModal('modalDisplayName');
@@ -403,11 +460,9 @@ function saveDisplayName() {
 
 /* ════════════════════════════════════════════════
    مسار احتياطي/انتقالي: دخول بمفتاح خاص يدوي (النظام القديم)
-   غير موصول بأي زر افتراضياً بعد التحديث. لو احتجته مؤقتاً
-   (مثلاً لاستيراد محفظتك الحالية قبل نقلها إلى Rabby/Brave):
+   غير موصول بأي زر افتراضياً بعد التحديث. لو احتجته مؤقتاً:
      $('loginBtn').onclick = loginWithRawKey;
-   بـ app.js، واستخدم #modalLogin زي ما هو.
-   احذف هذي الدالة كلياً بعد ما تتأكد إن الهجرة تمّت بأمان.
+   بـ app.js. احذف هذي الدالة كلياً بعد ما تتأكد إن الهجرة تمّت بأمان.
 ════════════════════════════════════════════════ */
 async function loginWithRawKey() {
   let key = $('privateKey').value.trim();
@@ -418,32 +473,14 @@ async function loginWithRawKey() {
   setBtnLoading('loginBtn', '⏳');
   try {
     const rawWallet = new ethers.Wallet(key);
-    State.wallet = {
+    await _onWalletConnected({
       address: rawWallet.address,
       walletClientType: 'raw-key',
       walletName: 'مفتاح محلي',
-      signTypedData: (domain, types, value) => rawWallet.signTypedData(domain, types, value),
-      _raw: rawWallet, /* يُستخدم فقط من doDeposit() لبناء signer متصل بـ Arbitrum لهذا المسار القديم */
-    };
-    State.isGuest = false;
+      signTypedData: function (domain, types, value) { return rawWallet.signTypedData(domain, types, value); },
+      getArbitrumSigner: async function () { return rawWallet.connect(new ethers.JsonRpcProvider(ARB_RPC)); },
+    });
     localStorage.setItem(LS_KEY, key);
-
-    updateNavAddressDisplay();
-    $('withdrawAddress').value = State.wallet.address;
-
-    closeModal('modalLogin');
-    _hideGuestBanner();
-    loadQuickState();
-    _fetchPricesBackground();
-    try { await ensureAgent(); } catch (e) { toast('⚠️ فشل تفويض محفظة التداول', 'err'); }
-    await pollAccount();
-    autoSetReferrer();
-    updateConnectBtn();
-    toast('مرحباً 🤝', 'ok');
-
-    if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
-      setTimeout(() => { if (State.wallet) lockApp(); }, 300);
-
   } catch (e) {
     State.wallet  = null;
     State.isGuest = true;

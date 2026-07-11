@@ -20,6 +20,7 @@ const DISPNAME_KEY  = 'hl_display_name';
 const OPENTIME_KEY  = 'hl_position_opens';
 const SOUND_KEY     = 'hl_sound_enabled';
 const PRIVY_FLAG_KEY = 'hl_privy_connected'; /* ✅ جديد — علم استعادة جلسة Privy عند إعادة فتح التطبيق */
+const EXTWALLET_FLAG_KEY = 'hl_extwallet_connected'; /* ✅ جديد — علم محاولة إعادة اتصال صامتة بمحفظة خارجية (wallets.js) عند الإقلاع */
 
 /* تعريف الأصول */
 const ASSETS = {

@@ -286,9 +286,9 @@ async function showHistory() {
 }
 
 /* ════ Deposit ════
-   ✅ Signer الآن يأتي من المحفظة الرئيسية الفعلية (Privy أو خارجية عبر
-   الجسر)، أو من المسار القديم _raw لمن لسا على مفتاح خاص يدوي.
-   State.wallet.privateKey لم يعد موجوداً لمحافظ Privy — لا تُرجعه. ════ */
+   ✅ Signer يأتي من State.wallet.getArbitrumSigner() — واجهة موحّدة
+   يوفّرها كل مصدر محفظة (بريد/Privy، خارجية/wallets.js، أو المسار
+   القديم بمفتاح خام)، فما تحتاج doDeposit يعرف مصدر المحفظة إطلاقاً. ════ */
 async function doDeposit() {
   const amt = parseFloat($('depositAmount').value || 0);
   if (!amt || amt < 5) return toast('الحد الأدنى للإيداع $5', 'err');
@@ -296,9 +296,7 @@ async function doDeposit() {
   setBtnLoading('depositExecute', '⏳');
   showLoader('جارٍ التحقق من رصيد USDC...');
   try {
-    const w = State.wallet.walletClientType === 'raw-key'
-      ? State.wallet._raw.connect(new ethers.JsonRpcProvider(ARB_RPC))
-      : await window.PrivyBridge.getArbitrumSigner(State.wallet.address);
+    const w = await State.wallet.getArbitrumSigner();
 
     const usdc = new ethers.Contract(USDC_CA, [
       'function approve(address,uint256) returns(bool)',

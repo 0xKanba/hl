@@ -144,7 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
     $('toggleKey').textContent = i.type === 'password' ? '👁' : '🙈';
   };
   $('createWalletBtn')?.addEventListener('click', createNewWallet);
-  $('loginClose')?.addEventListener('click', () => closeModal('modalLogin'));
+  $('connectEmailBtn')?.addEventListener('click', connectEmail);
+  $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
 
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
     t.onclick = () => switchAsset(t.dataset.asset)
@@ -300,7 +301,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ═══════════════════════════════════════
      Boot sequence
-     أولوية الاستعادة: جلسة Privy → مفتاح خاص قديم → وضع زائر.
+     أولوية الاستعادة: جلسة Privy (بريد) → محفظة خارجية (صامت،
+     بدون نافذة موافقة) → مفتاح خاص قديم → وضع زائر.
   ═══════════════════════════════════════ */
   startMainWs();
 
@@ -314,22 +316,35 @@ document.addEventListener('DOMContentLoaded', () => {
     initGuestMode();
     State.timers.push(setInterval(pollPrices, 3000));
   }
-
-  if (localStorage.getItem(PRIVY_FLAG_KEY)) {
+  function _showAppOptimistically() {
     $('loginScreen')?.classList.add('hidden');
     $('appScreen')?.classList.remove('hidden');
+  }
+
+  if (localStorage.getItem(PRIVY_FLAG_KEY)) {
+    _showAppOptimistically();
     _loadPrivyBridge()
       .then(() => {
         const w = window.PrivyBridge.authenticated && window.PrivyBridge.getActiveWallet();
         if (!w) throw new Error('no active Privy session');
-        return _onPrivyUpdate({ authenticated: true, wallet: w });
+        return _onWalletConnected({
+          address: w.address, walletClientType: w.walletClientType,
+          walletName: w.name, walletIcon: w.icon,
+          signTypedData: (d, t, v) => window.PrivyBridge.signTypedData(d, t, v, w.address),
+          getArbitrumSigner: () => window.PrivyBridge.getArbitrumSigner(w.address),
+        });
       })
+      .then(_startAuthedTimers)
+      .catch(_fallbackToGuest);
+  } else if (localStorage.getItem(EXTWALLET_FLAG_KEY)) {
+    _showAppOptimistically();
+    (typeof Wallets !== 'undefined' ? Wallets.reconnectSilently() : Promise.resolve(null))
+      .then(w => { if (!w) throw new Error('no prior wallet authorization'); return _onWalletConnected(w); })
       .then(_startAuthedTimers)
       .catch(_fallbackToGuest);
   } else if (localStorage.getItem(LS_KEY)) {
     $('privateKey').value = localStorage.getItem(LS_KEY);
-    $('loginScreen')?.classList.add('hidden');
-    $('appScreen')?.classList.remove('hidden');
+    _showAppOptimistically();
     loginWithRawKey().then(_startAuthedTimers).catch(_fallbackToGuest);
   } else {
     _fallbackToGuest();
