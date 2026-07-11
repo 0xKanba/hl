@@ -26,6 +26,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 repo tree
@@ -2032,6 +2033,7 @@
 │   ├── tpsl.js
 │   ├── trading.js
 │   ├── utils.js
+│   ├── wallets.js
 │   └── ws.js
 ├── manifest.json
 ├── md
@@ -2051,6 +2053,6 @@
 ├── x2.png
 └── x3.png
 
-14 directories, 2005 files
+14 directories, 2006 files
 ```
 <!-- TREE END -->
