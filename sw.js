@@ -39,8 +39,8 @@ const APP_SHELL = [
   '/images/silver.svg',
   '/images/100.png',
   '/images/btc21.png',
-  '/icon-192x192.png',
-  '/icon-512x512.png'
+  '/images/icon-192x192.png',
+  '/images/icon-512x512.png'
 ];
 
 /* Note: js/privy-bridge.js (~1.4MB gzip, email-login only) is
