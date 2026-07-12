@@ -28,6 +28,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 repo tree
@@ -1972,50 +1973,17 @@
 │   ├── base.css
 │   ├── components.css
 │   └── themes.css
-├── datafeeds
-│   ├── README.md
-│   └── udf
-│       ├── README.md
-│       ├── dist
-│       │   └── bundle.js
-│       ├── lib
-│       │   ├── data-pulse-provider.js
-│       │   ├── helpers.js
-│       │   ├── history-provider.js
-│       │   ├── iquotes-provider.js
-│       │   ├── irequester.js
-│       │   ├── provider-interfaces.js
-│       │   ├── quotes-provider.js
-│       │   ├── quotes-pulse-provider.js
-│       │   ├── requester.js
-│       │   ├── symbols-storage.js
-│       │   ├── udf-compatible-datafeed-base.js
-│       │   └── udf-compatible-datafeed.js
-│       ├── package.json
-│       ├── rollup.config.mjs
-│       ├── src
-│       │   ├── data-pulse-provider.ts
-│       │   ├── helpers.ts
-│       │   ├── history-provider.ts
-│       │   ├── iquotes-provider.ts
-│       │   ├── irequester.ts
-│       │   ├── provider-interfaces.ts
-│       │   ├── quotes-provider.ts
-│       │   ├── quotes-pulse-provider.ts
-│       │   ├── requester.ts
-│       │   ├── symbols-storage.ts
-│       │   ├── udf-compatible-datafeed-base.ts
-│       │   └── udf-compatible-datafeed.ts
-│       ├── tsconfig.json
-│       └── types.d.ts
-├── icon-192x192.png
-├── icon-512x512.png
 ├── images
 │   ├── 100.png
 │   ├── btc21.png
 │   ├── gold.svg
+│   ├── icon-192x192.png
+│   ├── icon-512x512.png
 │   ├── oil.svg
-│   └── silver.svg
+│   ├── silver.svg
+│   ├── x1.png
+│   ├── x2.png
+│   └── x3.png
 ├── index.html
 ├── js
 │   ├── account.js
@@ -2049,11 +2017,8 @@
 │   └── src
 │       └── index.jsx
 ├── sw.js
-├── tree.txt
-├── x1.png
-├── x2.png
-└── x3.png
+└── tree.txt
 
-14 directories, 2006 files
+9 directories, 1975 files
 ```
 <!-- TREE END -->
