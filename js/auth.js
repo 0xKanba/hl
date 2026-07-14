@@ -6,7 +6,9 @@
    ✅ محفظة الوكيل (Agent Wallet): تفويض مرة واحدة، توقيع محلي بلا
       نوافذ تأكيد لكل صفقة بعدها — راجع ensureAgent()
    ✅ الموقع يعمل بدون محفظة (وضع زائر)
-   ✅ loginWithRawKey() القديم موجود كمسار احتياطي/انتقالي فقط
+   ✅ لا يوجد مسار مفتاح خاص يدوي إطلاقاً — كل مفتاح إما داخل Privy
+      (embedded، مقسّم device+cloud) أو داخل محفظة خارجية حقيقية،
+      أو مفتاح وكيل محلي بصلاحية تداول فقط (راجع ensureAgent())
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -36,17 +38,6 @@ function _loadPrivyBridge() {
     document.body.appendChild(s);
   });
   return _privyLoadPromise;
-}
-
-/* ════ إنشاء محفظة جديدة محلياً (مسار قديم — راجع الشرح بالأسفل) ════ */
-function createNewWallet() {
-  const wallet = ethers.Wallet.createRandom();
-  const key    = wallet.privateKey;
-  const input  = $('privateKey');
-  if (input) { input.value = key; input.type = 'text'; }
-  navigator.clipboard?.writeText(key).catch(() => {});
-  alert('✅ تم إنشاء محفظة جديدة!\n\nالمفتاح الخاص:\n' + key + '\n\n⚠️ احفظه الآن في مكان آمن!');
-  toast('✅ المفتاح جاهز — احفظه!', 'ok', 6000);
 }
 
 /* ════ وضع الزائر ════ */
@@ -172,8 +163,11 @@ async function _onWalletConnected(walletObj) {
   try {
     await ensureAgent();
   } catch (e) {
-    /* فشل approveAgent ما يمنع تسجيل الدخول — بس التداول السريع بلا محفظة وكيل غير متاح لحد ما ينجح */
-    toast('⚠️ فشل تفويض محفظة التداول: ' + e.message.slice(0, 100), 'err', 6000);
+    if (e.message === 'CANCELLED') {
+      toast('تم تخطي تفويض التداول السريع — تقدر تفعّله لاحقاً من الخيارات', 'info', 5000);
+    } else {
+      toast('⚠️ فشل تفويض محفظة التداول: ' + e.message.slice(0, 100), 'err', 6000);
+    }
   }
 
   _maybePromptRecovery(walletObj);
@@ -204,6 +198,18 @@ async function _onWalletConnected(walletObj) {
 ════════════════════════════════════════════════ */
 const AGENT_TTL_MS = 30 * 24 * 3600 * 1000;
 
+/* شاشة مراجعة كاملة قبل أي توقيع فعلي — المستخدم العادي يشوف بالضبط
+   شنو راح يوافق عليه بلغة واضحة، قبل ما تظهر نافذة التوقيع الحقيقية
+   (من Privy أو من المحفظة الخارجية نفسها) فوقها. */
+function _showAgentApprovalModal(agentAddress) {
+  return new Promise(function (resolve, reject) {
+    setTxt('agentAddrPreview', agentAddress);
+    openModal('modalAgentApproval');
+    $('agentApprovalConfirm').onclick = function () { closeModal('modalAgentApproval'); resolve(); };
+    $('agentApprovalCancel').onclick  = function () { closeModal('modalAgentApproval'); reject(new Error('CANCELLED')); };
+  });
+}
+
 async function ensureAgent() {
   const key  = 'hl_agent_' + State.wallet.address.toLowerCase();
   const meta = JSON.parse(localStorage.getItem(key) || 'null');
@@ -212,9 +218,11 @@ async function ensureAgent() {
     try { State.agent = new ethers.Wallet(meta.pk); return; } catch (e) { /* تالف — أعد التفويض */ }
   }
 
-  showLoader(meta ? 'تجديد تفويض التداول (كل 30 يوم لحمايتك)...' : 'تفويض محفظة التداول (مرة واحدة فقط)...');
+  const agent = ethers.Wallet.createRandom();
+  await _showAgentApprovalModal(agent.address); /* يرفض (CANCELLED) لو ضغط المستخدم إلغاء */
+
+  showLoader('بانتظار توقيعك...');
   try {
-    const agent     = ethers.Wallet.createRandom();
     const nonce     = Date.now();
     const agentName = 'suyula-' + nonce;
     const action = {
@@ -246,7 +254,8 @@ async function ensureAgent() {
 }
 
 /* فحص دوري خفيف — لو التطبيق ضل مفتوح أسابيع بدون إعادة تحميل، يجدد
-   الوكيل تلقائياً (بتوقيع ظاهر واحد) قبل ما ينتهي بمنتصف صفقة */
+   الوكيل تلقائياً (بنفس شاشة المراجعة + توقيع ظاهر) قبل ما ينتهي
+   بمنتصف صفقة */
 setInterval(function () { if (State.wallet) ensureAgent().catch(function () {}); }, 6 * 3600000);
 
 /* ════ اقتراح تفعيل استرداد المحفظة — مرة واحدة فقط، لمحفظة البريد ════
@@ -258,6 +267,18 @@ function _maybePromptRecovery(walletObj) {
   if (localStorage.getItem(flag)) return;
   localStorage.setItem(flag, '1');
   setTimeout(function () { toast('🔐 فعّل استرداد المحفظة لحمايتها من فقدان الجهاز — الخيارات ⚙️', 'info', 8000); }, 2500);
+}
+
+/* ════ تفعيل التداول السريع يدوياً — لمن ألغى الموافقة أول مرة ════ */
+async function enableFastTrading() {
+  if (State.isGuest || !State.wallet) return toast('سجّل الدخول أولاً', 'err');
+  if (State.agent) return toast('التداول السريع مفعّل أصلاً ✅', 'info');
+  try {
+    await ensureAgent();
+    if (State.agent) toast('✅ تم تفعيل التداول السريع', 'ok');
+  } catch (e) {
+    if (e.message !== 'CANCELLED') toast('⚠️ ' + e.message.slice(0, 100), 'err');
+  }
 }
 
 /* ════ تصدير المفتاح الخاص / الـ seed phrase ════
@@ -458,33 +479,4 @@ function saveDisplayName() {
   closeModal('modalDisplayName');
 }
 
-/* ════════════════════════════════════════════════
-   مسار احتياطي/انتقالي: دخول بمفتاح خاص يدوي (النظام القديم)
-   غير موصول بأي زر افتراضياً بعد التحديث. لو احتجته مؤقتاً:
-     $('loginBtn').onclick = loginWithRawKey;
-   بـ app.js. احذف هذي الدالة كلياً بعد ما تتأكد إن الهجرة تمّت بأمان.
-════════════════════════════════════════════════ */
-async function loginWithRawKey() {
-  let key = $('privateKey').value.trim();
-  if (!key) return toast('أدخل المفتاح الخاص', 'err');
-  key = key.startsWith('0x') ? key : '0x' + key;
-  if (!/^0x[0-9a-fA-F]{64}$/.test(key)) return toast('المفتاح 64 حرف هكساديسيمال', 'err');
 
-  setBtnLoading('loginBtn', '⏳');
-  try {
-    const rawWallet = new ethers.Wallet(key);
-    await _onWalletConnected({
-      address: rawWallet.address,
-      walletClientType: 'raw-key',
-      walletName: 'مفتاح محلي',
-      signTypedData: function (domain, types, value) { return rawWallet.signTypedData(domain, types, value); },
-      getArbitrumSigner: async function () { return rawWallet.connect(new ethers.JsonRpcProvider(ARB_RPC)); },
-    });
-    localStorage.setItem(LS_KEY, key);
-  } catch (e) {
-    State.wallet  = null;
-    State.isGuest = true;
-    updateConnectBtn();
-    toast('خطأ: ' + e.message.slice(0, 80), 'err');
-  } finally { resetBtn('loginBtn'); }
-}

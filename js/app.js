@@ -133,19 +133,9 @@ document.addEventListener('DOMContentLoaded', () => {
   _initQtyInput();
   updateSoundOptionLabel();
 
-  /* ✅ مسار الدخول اليدوي القديم (#modalLogin) — احتياطي/انتقالي فقط.
-     الزر الرئيسي "اتصال" لا يفتح هذا المودال بعد الآن (راجع btnConnect
-     بالأسفل) — يبقى موجوداً فقط لو احتجت تستورد محفظتك الحالية مؤقتاً. */
-  $('loginBtn').onclick     = loginWithRawKey;
-  $('privateKey').onkeydown = e => e.key === 'Enter' && loginWithRawKey();
-  $('toggleKey').onclick    = () => {
-    const i = $('privateKey');
-    i.type = i.type === 'password' ? 'text' : 'password';
-    $('toggleKey').textContent = i.type === 'password' ? '👁' : '🙈';
-  };
-  $('createWalletBtn')?.addEventListener('click', createNewWallet);
   $('connectEmailBtn')?.addEventListener('click', connectEmail);
   $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
+  $('loaderClose')?.addEventListener('click', hideLoader);
 
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
     t.onclick = () => switchAsset(t.dataset.asset)
@@ -175,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ✅ جديد */
   $('optExportKey')?.addEventListener('click', () => { closeOptions(); exportPrivateKey(); });
   $('optWalletRecovery')?.addEventListener('click', () => { closeOptions(); openWalletRecovery(); });
+  $('optEnableAgent')?.addEventListener('click', () => { closeOptions(); enableFastTrading(); });
   $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
   $('btnBuy').onclick  = () => askTrade(true);
@@ -342,10 +333,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(w => { if (!w) throw new Error('no prior wallet authorization'); return _onWalletConnected(w); })
       .then(_startAuthedTimers)
       .catch(_fallbackToGuest);
-  } else if (localStorage.getItem(LS_KEY)) {
-    $('privateKey').value = localStorage.getItem(LS_KEY);
-    _showAppOptimistically();
-    loginWithRawKey().then(_startAuthedTimers).catch(_fallbackToGuest);
   } else {
     _fallbackToGuest();
   }

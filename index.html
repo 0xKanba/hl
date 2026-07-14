@@ -16,9 +16,9 @@
   <link rel="canonical" href="https://hl.kanba.pw/">
   <title>سيولة — تداول مباشر: ذهب، فضة، نفط، ناسداك</title>
 
-  <link rel="icon" href="/images/icon-512x512.png" type="image/png">
+  <link rel="icon" href="/images/btc21.png" type="image/png">
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/images/icon-512x512.png">
+  <link rel="apple-touch-icon" href="/icon-512x512.png">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -30,7 +30,7 @@
   <link rel="preload" as="image" href="/images/gold.svg">
   <link rel="preload" as="image" href="/images/silver.svg">
   <link rel="preload" as="image" href="/images/100.png">
-  <link rel="preload" as="image" href="/images/icon-512x512.png">
+  <link rel="preload" as="image" href="/images/btc21.png">
 
   <script type="application/ld+json">
   {
@@ -39,7 +39,7 @@
     "name": "سيولة",
     "alternateName": "Suyula",
     "url": "https://hl.kanba.pw/",
-    "image": "https://hl.kanba.pw/images/icon-512x512.png",
+    "image": "https://hl.kanba.pw/icon-512x512.png",
     "inLanguage": "ar",
     "applicationCategory": "FinanceApplication",
     "operatingSystem": "Any (Web/PWA)",
@@ -51,13 +51,13 @@
   <meta property="og:site_name" content="سيولة">
   <meta property="og:title" content="سيولة — تداول مباشر: ذهب، فضة، نفط، ناسداك">
   <meta property="og:description" content="منصة تداول لامركزية بلا خادم وسيط — ذهب، فضة، نفط خام، وناسداك 100 برافعة مالية على Hyperliquid.">
-  <meta property="og:image" content="https://hl.kanba.pw/images/icon-512x512.png">
+  <meta property="og:image" content="https://hl.kanba.pw/icon-512x512.png">
   <meta property="og:url" content="https://hl.kanba.pw/">
   <meta property="og:locale" content="ar_AR">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="سيولة — تداول مباشر: ذهب، فضة، نفط، ناسداك">
   <meta name="twitter:description" content="منصة تداول لامركزية بلا خادم وسيط — ذهب، فضة، نفط خام، وناسداك 100 برافعة مالية على Hyperliquid.">
-  <meta name="twitter:image" content="https://hl.kanba.pw/images/icon-512x512.png">
+  <meta name="twitter:image" content="https://hl.kanba.pw/icon-512x512.png">
   <meta property="og:type" content="website">
 
   <!-- Apply theme before paint — prevents flash of wrong theme -->
@@ -237,6 +237,7 @@
     <button class="opts-item" id="optSound">🔊 صوت التنبيهات</button>
     <button class="opts-item" id="optExportKey">🔑 تصدير المفتاح الخاص</button>
     <button class="opts-item" id="optWalletRecovery">🔐 استرداد المحفظة</button>
+    <button class="opts-item" id="optEnableAgent">⚡ تفعيل التداول السريع</button>
     <button class="opts-item opts-item-logout" id="optLogout">تغيير المحفظة</button>
     <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
   </div>
@@ -261,32 +262,12 @@
       <div class="login-title">سيولة</div>
     </div>
 
-    <!-- ✅ جديد: بريد إلكتروني عبر Privy فقط -->
     <button class="login-btn" id="connectEmailBtn" style="margin-bottom:14px;">📧 الدخول بالبريد الإلكتروني ←</button>
 
-    <!-- ✅ جديد: محافظ Web3 مكتشَفة عبر wallets.js — بلا أي علاقة بـPrivy -->
-    <div class="login-header" style="text-align:center;margin:4px 0 10px;">أو اختر محفظتك</div>
-    <div id="extWalletList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;"></div>
+    <div class="login-header" style="text-align:center;margin:4px 0 10px;">أو</div>
+    <div id="extWalletList" style="display:flex;flex-direction:column;gap:8px;"></div>
 
-    <div class="login-header" style="text-align:center;margin-bottom:16px;">
-      تداول مباشر · ذهب · فضة · نفط · ناسداك
-    </div>
-    <div class="form-group">
-      <label class="field-label" for="privateKey">المفتاح الخاص للمحفظة (مسار قديم)</label>
-      <div class="key-wrapper">
-        <input class="key-input form-input" id="privateKey" type="password"
-               placeholder="0x4a3b..." autocomplete="off"
-               style="font-size:14px;padding:12px 44px 12px 12px;">
-        <button class="key-toggle" id="toggleKey" type="button">👁</button>
-      </div>
-    </div>
-    <button class="login-btn" id="loginBtn" style="margin-bottom:10px;">دخول وبدء التداول ←</button>
-    <div class="login-note" style="margin-bottom:10px;">
-      <strong>🔒 المفتاح يُحفظ في متصفحك فقط</strong><br>
-      لا خوادم · لا وسيط · توقيعاتك تتم محلياً
-    </div>
-    <button class="create-wallet-btn" id="createWalletBtn">إنشاء محفظة جديدة مجاناً ←</button>
-    <div class="modal-buttons modal-buttons-center" style="margin-top:14px;">
+    <div class="modal-buttons modal-buttons-center" style="margin-top:18px;">
       <button class="btn-modal btn-cancel" id="loginClose">إغلاق</button>
     </div>
   </div>
@@ -382,6 +363,24 @@
     <div class="confirm-details" id="posDetailBody"></div>
     <div class="modal-buttons modal-buttons-center">
       <button class="btn-modal btn-cancel" id="posDetailClose">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay overlay-fs" id="modalAgentApproval">
+  <div class="modal modal-fs">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">🔑 تفويض محفظة التداول</h3>
+    <p class="modal-subtitle">خطوة أمان لمرة واحدة (تتكرر كل 30 يوم) — بعدها تُنفَّذ صفقاتك فوراً بلا حاجة لتوقيع محفظتك في كل مرة</p>
+    <div class="confirm-details">
+      <div class="confirm-row"><span class="confirm-key">🕒 المدة</span><span class="confirm-val">30 يوم، تتجدد تلقائياً</span></div>
+      <div class="confirm-row"><span class="confirm-key">✅ الصلاحية</span><span class="confirm-val buy">تنفيذ الصفقات فقط</span></div>
+      <div class="confirm-row"><span class="confirm-key">⛔ السحب</span><span class="confirm-val sell">غير مسموح لهذه المحفظة إطلاقاً</span></div>
+      <div class="confirm-row"><span class="confirm-key">عنوان المحفظة المؤقتة</span><span class="confirm-val muted" id="agentAddrPreview" style="font-size:11px;direction:ltr;">—</span></div>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel" id="agentApprovalCancel">إلغاء ✕</button>
+      <button class="btn-modal btn-confirm btn-success" id="agentApprovalConfirm">✅ متابعة وتوقيع</button>
     </div>
   </div>
 </div>
@@ -574,7 +573,7 @@
 
 <div id="cornerStatus"></div>
 <div id="toast"></div>
-<div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div></div>
+<div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div><button class="loader-close" id="loaderClose" title="إخفاء">✕</button></div>
 
 <!-- Preload key scripts for faster parse -->
 <link rel="preload" as="script" href="/js/config.js">
