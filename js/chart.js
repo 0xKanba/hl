@@ -437,38 +437,29 @@ const ChartModule = (function () {
   }
 
   /* ══════════ BBO WebSocket ══════════ */
-  function _bboConn(sym) {
-    if (_bboSym===sym&&_bboWs?.readyState===WebSocket.OPEN) return;
-    _bboClose(); _bboSym=sym;
-    try {
-      _bboWs = new WebSocket(HL_WS);
-      _bboWs.onopen = () => {
-        _bboWs.send(JSON.stringify({method:'subscribe',subscription:{type:'bbo',coin:_hlCoin(sym)}}));
-        _dot('on');
-      };
-      _bboWs.onmessage = e => {
-        try {
-          const msg=JSON.parse(e.data);
-          if(msg.channel!=='bbo'||!msg.data) return;
-          const b=parseFloat(msg.data.bbo?.[0]?.px||0);
-          const a=parseFloat(msg.data.bbo?.[1]?.px||0);
-          const mid=b&&a?(b+a)/2:0; if(!mid) return;
-          const raw=(msg.data.coin||'').includes(':')?msg.data.coin.split(':')[1]:msg.data.coin;
-          _setPrice(_bboSym,_bboSym==='XAU'&&raw==='GOLD'?mid/TROY:mid);
-        } catch {}
-      };
-      _bboWs.onerror=()=>_dot('off');
-      _bboWs.onclose=()=>{
-        _dot('wait');
-        if(_visible&&_bboSym===sym) _bboTimer=setTimeout(()=>_bboConn(sym),4000);
-      };
-    } catch { _dot('off'); }
+function _bboConn(sym) {
+  if (_bboSym === sym && _bboUnsub) return;
+  _bboClose();
+  _bboSym = sym;
+  if (typeof HL === 'undefined' || !HL.isOpen()) { _dot('wait'); }
+  _bboUnsub = HL.subscribe({ type: 'bbo', coin: _hlCoin(sym) }, data => {
+    const b = parseFloat(data.bbo?.[0]?.px || 0);
+    const a = parseFloat(data.bbo?.[1]?.px || 0);
+    const mid = b && a ? (b + a) / 2 : 0;
+    if (!mid) return;
+    const raw = (data.coin || '').includes(':') ? data.coin.split(':')[1] : data.coin;
+    _setPrice(sym, sym === 'XAU' && raw === 'GOLD' ? mid / TROY : mid);
+    _dot('on');
+  });
+}
+
+function _bboClose() {
+  if (_bboUnsub) {
+    try { _bboUnsub(); } catch {}
+    _bboUnsub = null;
   }
-  function _bboClose() {
-    clearTimeout(_bboTimer);
-    if(_bboWs){try{_bboWs.close();}catch{}_bboWs=null;}
-    _bboSym='';
-  }
+  _bboSym = '';
+}
 
   /* ══════════════════════════════════════════
      DataFeed
