@@ -92,9 +92,28 @@ async function execTrade() {
 
 /* ════ Background poll after trade ════ */
 function _multiPoll() {
-  setTimeout(() => pollAccount().catch(() => {}), 3000);
-  setTimeout(() => pollAccount().catch(() => {}), 7000);
-  setTimeout(() => pollAccount().catch(() => {}), 13000);
+  setTimeout(async () => {
+    if (!State.wallet) return;
+    try {
+      const chs = await hlInfo({
+        type: 'clearinghouseState',
+        user: State.wallet.address,
+        dex: HL_DEX
+      });
+
+      const rawPos = (chs?.assetPositions || [])
+        .filter(p => parseFloat(p.position?.szi || 0) !== 0);
+
+      const inGuard =
+        (Date.now() - (State._lastOptimisticClose || 0)) < 20000;
+
+      if (!inGuard || rawPos.length || State.positions.length) {
+        _applyPositions(rawPos);
+      }
+    } catch {}
+
+    _refreshOpenOrders();
+  }, 2500);
 }
 
 /* ════ Register a coin as optimistically closed ════
