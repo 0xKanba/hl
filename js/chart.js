@@ -520,60 +520,42 @@ function _bboClose() {
     }
 
     /* ── WS حيّ ── */
-    function _cwConn(res, cb) {
-      _cwClose(); _ccb=cb;
-      const wsIv = res==='1W' ? '1d' : (IV_HL[res]||'1h');
-      try {
-        _cws = new WebSocket(HL_WS);
-        _cws.onopen = () => _cws.send(JSON.stringify({
-          method:'subscribe',
-          subscription:{type:'candle',coin:hlCoin,interval:wsIv}
-        }));
-        _cws.onmessage = e => {
-          try {
-            const msg=JSON.parse(e.data);
-            if(msg.channel!=='candle'||!msg.data||!_ccb) return;
-            const c=msg.data;
-            /* ✅ c.t = open time بالفعل — لا طرح، لا تعديل */
-            const tMs = c.t>1e12?c.t:c.t*1000;
-            if (tMs<MIN_2020) return;
-            const bar={
-              time:tMs,
-              open:isGr?+c.o/TROY:+c.o, high:isGr?+c.h/TROY:+c.h,
-              low:isGr?+c.l/TROY:+c.l,  close:isGr?+c.c/TROY:+c.c,
-              volume:+c.v||0,
-            };
-            if (bar.close<=0) return;
+function _cwConn(res, cb) {
+  _cwClose(); _ccb = cb;
+  const wsIv = res === '1W' ? '1d' : (IV_HL[res] || '1h');
+  if (typeof HL === 'undefined') return;
+  _cwUnsub = HL.subscribe({ type: 'candle', coin: hlCoin, interval: wsIv }, c => {
+    if (!_ccb) return;
+    const tMs = c.t > 1e12 ? c.t : c.t * 1000;
+    if (tMs < MIN_2020) return;
+    const bar = {
+      time: tMs,
+      open: isGr ? +c.o / TROY : +c.o, high: isGr ? +c.h / TROY : +c.h,
+      low: isGr ? +c.l / TROY : +c.l, close: isGr ? +c.c / TROY : +c.c,
+      volume: +c.v || 0,
+    };
+    if (bar.close <= 0) return;
+    if (res === '1W') {
+      const ws = _weekStartMs(bar.time);
+      for (const [k, v] of _curWeek) if (_weekStartMs(v.time) !== ws) _curWeek.delete(k);
+      _curWeek.set(_dayKeyMs(bar.time), bar);
+      const merged = _aggregateWeekly(Array.from(_curWeek.values()));
+      const weekBar = merged.find(w => w.time === ws);
+      if (!weekBar) return;
+      _ccb(weekBar);
+      _setPrice(_dfSym, weekBar.close);
+    } else {
+      _ccb(bar);
+      _setPrice(_dfSym, bar.close);
+    }
+    _scheduleLines();
+  });
+}
+function _cwClose() {
+  if (_cwUnsub) { try { _cwUnsub(); } catch {} _cwUnsub = null; }
+  _ccb = null;
+}
 
-            if (res==='1W') {
-              /* دمج التِك اليومي في الشمعة الأسبوعية الجارية (اثنين→الآن) */
-              const ws=_weekStartMs(bar.time);
-              for (const [k,v] of _curWeek) if (_weekStartMs(v.time)!==ws) _curWeek.delete(k);
-              _curWeek.set(_dayKeyMs(bar.time), bar);
-              const merged  = _aggregateWeekly(Array.from(_curWeek.values()));
-              const weekBar = merged.find(w=>w.time===ws);
-              if (!weekBar) return;
-              _ccb(weekBar);
-              _setPrice(_dfSym, weekBar.close);
-            } else {
-              _ccb(bar);
-              _setPrice(_dfSym, bar.close);
-            }
-            _scheduleLines();
-          } catch {}
-        };
-        _cws.onerror=()=>{};
-        _cws.onclose=()=>{
-          if(_ccb&&_visible&&_dfSym===_sym)
-            _ctm=setTimeout(()=>_cwConn(res,_ccb),5000);
-        };
-      } catch {}
-    }
-    function _cwClose() {
-      clearTimeout(_ctm);
-      if(_cws){try{_cws.close();}catch{}_cws=null;}
-      _ccb=null;
-    }
 
     return {
       onReady(cb){
