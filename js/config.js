@@ -10,6 +10,11 @@ const ARB_RPC = 'https://arb1.arbitrum.io/rpc';
 const USDC_CA = '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8';
 const BRDG_CA = '0x2Df1c51E09aECF9d2B5688B5c82A9bBDE18B9494';
 
+/* ✅ HIP-3 dex هذا المشروع يتداول عليه — كل الأصول مُعرَّفة بادئة `${HL_DEX}:`
+   تغيير هذا الثابت وحده كافٍ لتحويل التطبيق لأي HIP-3 dex آخر لاحقاً.
+   السلسلة الفارغة '' تعني "أول perp dex" (Main Perps) حسب توثيق Hyperliquid. */
+const HL_DEX = 'xyz';
+
 /* مفاتيح localStorage */
 const LS_KEY        = 'hl_trade_pk';
 const PIN_KEY       = 'hl_trade_pin';
@@ -19,8 +24,8 @@ const QSTATE_KEY    = 'hl_qstate_v1';
 const DISPNAME_KEY  = 'hl_display_name';
 const OPENTIME_KEY  = 'hl_position_opens';
 const SOUND_KEY     = 'hl_sound_enabled';
-const PRIVY_FLAG_KEY = 'hl_privy_connected'; /* ✅ جديد — علم استعادة جلسة Privy عند إعادة فتح التطبيق */
-const EXTWALLET_FLAG_KEY = 'hl_extwallet_connected'; /* ✅ جديد — علم محاولة إعادة اتصال صامتة بمحفظة خارجية (wallets.js) عند الإقلاع */
+const PRIVY_FLAG_KEY = 'hl_privy_connected';
+const EXTWALLET_FLAG_KEY = 'hl_extwallet_connected';
 
 /* تعريف الأصول */
 const ASSETS = {
