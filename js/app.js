@@ -1,3 +1,9 @@
+/* ═══════════════════════════════════════
+   app.js — تغييرات الإقلاع فقط:
+   HL.connect() + initPriceFeeds() فوراً (زائر ومتصل)،
+   initAccountFeeds() ينتقل داخل _onWalletConnected (auth.js)،
+   _startAuthedTimers أصبحت أخف (startSessionPolling فقط)
+═══════════════════════════════════════ */
 'use strict';
 
 const _AR_MONTHS = [
@@ -35,7 +41,6 @@ function _initMonthsPanel() {
   });
 }
 
-/* ════ Theme system ════ */
 function _applyTheme(theme, animate) {
   if (animate) {
     document.documentElement.classList.add('theme-transitioning');
@@ -62,27 +67,17 @@ function _toggleTheme() {
   _applyTheme(next, true);
 }
 
-/* ════ Qty input — sensible defaults ════ */
 function _initQtyInput() {
   const input = $('qtyInput');
   if (!input) return;
-
-  /* Set initial default based on current asset */
   const a = ASSETS[State.asset];
   const defaultVal = a?.presets?.[0] ?? 1;
   if (!input.value || +input.value <= 0) {
     input.value = defaultVal;
     State.qty   = defaultVal;
   }
-
-  /* Mobile: only show keyboard when user explicitly taps the field */
-  input.addEventListener('focus', () => {
-    /* Select all text on focus for easy replacement */
-    input.select?.();
-  });
-
+  input.addEventListener('focus', () => { input.select?.(); });
   input.addEventListener('blur', () => {
-    /* Restore default if user cleared field */
     if (!input.value || +input.value <= 0) {
       const asset = ASSETS[State.asset];
       const def   = asset?.presets?.[0] ?? 1;
@@ -90,13 +85,9 @@ function _initQtyInput() {
       State.qty   = def;
     }
   });
-
-  input.oninput = function () {
-    State.qty = parseFloat(this.value) || 0;
-  };
+  input.oninput = function () { State.qty = parseFloat(this.value) || 0; };
 }
 
-/* ════ Options menu ════ */
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
@@ -120,7 +111,6 @@ function _initOptsBackdrop() {
   ov.addEventListener('click', e => { if (e.target === ov) closeOptions(); });
 }
 
-/* ════ DOMContentLoaded ════ */
 document.addEventListener('DOMContentLoaded', () => {
 
   _initTheme();
@@ -146,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ChartModule.open(State.asset);
   };
 
-  /* ✅ اتصال — يفتح مودال Privy مباشرة (بريد أولاً، محفظة خارجية تحته) */
   $('btnConnect').onclick = () => {
     if (State.isGuest) connectWallet();
     else openOptions();
@@ -162,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
   $('optDisplayName').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openDisplayNameModal(); };
   $('optSound').onclick = () => { closeOptions(); toggleSound(); };
-  /* ✅ جديد */
   $('optExportKey')?.addEventListener('click', () => { closeOptions(); exportPrivateKey(); });
   $('optWalletRecovery')?.addEventListener('click', () => { closeOptions(); openWalletRecovery(); });
   $('optEnableAgent')?.addEventListener('click', () => { closeOptions(); enableFastTrading(); });
@@ -171,7 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btnBuy').onclick  = () => askTrade(true);
   $('btnSell').onclick = () => askTrade(false);
 
-  /* 100% button */
   $('qty100').onclick = () => {
     if (State.isGuest) return _promptConnect();
     const a   = ASSETS[State.asset];
@@ -292,20 +279,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ═══════════════════════════════════════
      Boot sequence
-     أولوية الاستعادة: جلسة Privy (بريد) → محفظة خارجية (صامت،
-     بدون نافذة موافقة) → مفتاح خاص قديم → وضع زائر.
+     ✅ اتصال WS واحد يُفتح فوراً، وبيانات السوق (bbo+activeAssetCtx)
+     تشتغل لكل من الزائر والمتصل من نفس المسار — بلا أي polling.
+     initAccountFeeds() ينفَّذ داخل _onWalletConnected (auth.js)، سواء
+     دخول جديد أو استرجاع جلسة سابقة أدناه.
   ═══════════════════════════════════════ */
-  startMainWs();
+  HL.connect();
+  initPriceFeeds();
 
   function _startAuthedTimers() {
-    State.timers.push(setInterval(pollAccount, 4000));
-    State.timers.push(setInterval(pollPrices,  3000));
     startSessionPolling();
-    startFundingTimer();
   }
   function _fallbackToGuest() {
     initGuestMode();
-    State.timers.push(setInterval(pollPrices, 3000));
   }
   function _showAppOptimistically() {
     $('loginScreen')?.classList.add('hidden');
