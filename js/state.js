@@ -4,14 +4,12 @@
 'use strict';
 
 const State = {
-  /* المحفظة والأصل الحالي */
   wallet: null,
-  agent:  null,   /* ✅ جديد — ethers.Wallet محلي، صلاحية تداول فقط، راجع ensureAgent() بـ auth.js */
+  agent:  null,
   asset:  'CL',
   qty:    0.1,
   isGuest: true,
 
-  /* أسعار الأصول */
   prices: {
     XAU:    { bid:0, ask:0, mid:0 },
     NQ:     { bid:0, ask:0, mid:0 },
@@ -21,51 +19,45 @@ const State = {
   },
   prevMid:    { XAU:0, NQ:0, GOLD:0, SILVER:0, CL:0 },
   prevDayPx:  { XAU:0, NQ:0, GOLD:0, SILVER:0, CL:0 },
+  /* ✅ جديد — PerpsAssetCtx كامل لكل رمز (funding/openInterest/markPx/oraclePx/midPx)
+     يُغذّى حياً من اشتراك activeAssetCtx — بديل metaAndAssetCtxs المتكرر كل 60 ثانية */
+  assetCtx: { XAU:null, NQ:null, GOLD:null, SILVER:null, CL:null },
 
   /* بيانات الحساب */
   fundingRates: {},
   positions:    [],
   openOrders:   [],
   balance:      null,
+  /* ✅ جديد — نسخة حية من آخر ~300 fill (WsUserFills) — مصدر وحيد لاشتقاق
+     وقت فتح الصفقة/آخر تنفيذ/Order ID/Trade ID/Hash — راجع positions.js:mergeFillData */
+  fillsCache:   [],
 
-  /* مؤقتات */
+  /* مؤقتات (ما تبقى بعد إزالة polling) */
   timers:        [],
   priceTimer:    null,
   _balTimer:     null,
   _clockTimer:   null,
-  _fundingTimer: null,
   _sessionTimer: null,
 
-  /* صفقات معلقة */
   pendingTrade: null,
   pendingClose: null,
   pendingTP:    null,
   pendingSL:    null,
 
-  /* PIN وقفل */
   lastPinTime:         0,
   pinCallback:         null,
   isLocked:            false,
   currentPinInput:     '',
   currentSetPinInput:  '',
 
-  /* إحالة */
   referrerSet: false,
 
-  /* إحصائيات الجلسة */
   sessionStats: { XAU:null, NQ:null, GOLD:null, SILVER:null, CL:null },
 
-  /* ✅ حماية الصفقات من الاختفاء
-     _lastOptimisticClose : timestamp آخر إغلاق — guard 20 ثانية
-     _emptyPosCount       : عداد استجابات API فارغة (يتطلب 2 متتاليتين)
-     _closedCoins         : ✅ FIX — قائمة الـ coins التي أُغلقت optimistically
-                            تُفلتر من rawPos أثناء نافذة الحماية
-                            لمنع إعادة ظهور الصفقة كـ "ghost position"
-  */
   _lastOptimisticClose: 0,
   _emptyPosCount:       0,
-  _closedCoins:         [],   /* coin strings e.g. ['xyz:CL', 'xyz:GOLD'] */
+  _closedCoins:         [],
 
-  /* اتصال Hyperliquid */
+  /* اتصال Hyperliquid (الآن اتصال واحد مشترك — راجع ws.js) */
   wsConnected: false
 };
