@@ -469,7 +469,7 @@ function _bboClose() {
     const hlCoin = _hlCoin(sym);
     const isGr   = _isGr(sym);
     const a      = _ai(sym);
-    let _cws=null, _ctm=null, _ccb=null;
+    let _ccb = null, _cwUnsub = null;
     /* أيام الأسبوع الجاري تجميعها لحظياً — لتحديث الشمعة الأسبوعية الحيّة */
     let _curWeek = new Map();   // dayKeyMs → daily bar
 
