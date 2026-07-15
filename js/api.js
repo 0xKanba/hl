@@ -1,10 +1,15 @@
 /* ═══════════════════════════════════════
    api.js — واجهة Hyperliquid API
+   ✅ WS Post Requests أولاً (عبر HL)، REST كبديل احتياطي فقط
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ════ REST Info ════ */
+/* ════ Info: WS post → REST fallback ════ */
 async function hlInfo(body) {
+  if (HL.isOpen()) {
+    try { return await HL.post(body, false); }
+    catch (_) { /* fall through to REST */ }
+  }
   const r = await fetch(HL_API + '/info', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -15,11 +20,9 @@ async function hlInfo(body) {
   return JSON.parse(text.replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"'));
 }
 
-/* ════ REST Exchange (توقيع EIP-712) ════
-   ✅ يوقّع بمحفظة الوكيل (State.agent) — مفتاح محلي مُفوَّض عبر
-   approveAgent، صلاحيته تداول فقط (Hyperliquid نفسه يمنعه من السحب).
-   بهذا كل صفقة تُنفَّذ فوراً بلا Privy وبلا نافذة تأكيد، سواء المحفظة
-   الرئيسية بريد أو خارجية — راجع ensureAgent() بـ auth.js. ════ */
+/* ════ Exchange (توقيع EIP-712 بمحفظة الوكيل) — WS post أولاً، REST كبديل ════
+   نفس نمط action الموقّع سواء عبر WS أو REST، الرد بنفس الشكل تماماً
+   ({status,response}) بفضل توحيد HL.post — hlExchange لا يحتاج يعرف الفرق. */
 async function hlExchange(action) {
   if (!State.agent) throw new Error('محفظة التداول غير مفوّضة بعد — أعد تسجيل الدخول');
   const nonce   = Date.now();
@@ -38,24 +41,31 @@ async function hlExchange(action) {
     { source:'a', connectionId:connId }
   );
   const { r, s, v } = ethers.Signature.from(sig);
+  const body = { action, nonce, signature:{ r, s, v }, vaultAddress: null };
 
-  const jb  = JSON.stringify(
-    { action, nonce, signature:{ r,s,v }, vaultAddress:null },
-    (k, val) => typeof val === 'bigint' ? `:BIGINT:${val}:` : val
-  );
-  const res  = await fetch(HL_API + '/exchange', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: jb.replace(/":BIGINT:(\d+):"/g, '$1')
-  });
-  const data = JSON.parse(
-    (await res.text()).replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"')
-  );
+  let data;
+  if (HL.isOpen()) {
+    try { data = await HL.post(body, true); }
+    catch (_) { data = await _restExchange(body); }
+  } else {
+    data = await _restExchange(body);
+  }
+
   if (data.status !== 'ok') {
     const err = data.response?.data?.statuses?.[0] || data.response || JSON.stringify(data).slice(0, 200);
     throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
   }
   return data;
+}
+
+async function _restExchange(body) {
+  const jb = HL.stringify(body);
+  const res = await fetch(HL_API + '/exchange', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: jb
+  });
+  return JSON.parse((await res.text()).replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"'));
 }
 
 /* ════ إحالة تلقائية ════ */
