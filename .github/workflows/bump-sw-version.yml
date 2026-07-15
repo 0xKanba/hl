@@ -4,6 +4,7 @@ name: Bump service worker cache version
 # committed back automatically. sw.js itself is excluded from the
 # trigger so this workflow can never re-trigger itself.
 "on":
+
   push:
     branches: [kanba]
     paths:
