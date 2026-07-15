@@ -95,7 +95,7 @@ const ChartModule = (function () {
   let _clockTimer  = null;
   let _saveTimer   = null;
   const _prices    = {};        // سعر لكل أصل
-  let _bboWs = null, _bboTimer = null, _bboSym = '';
+  let _bboUnsub = null, _bboSym = '';
   let _lines = [], _linesReady = false, _linesPending = false;
 
   /* ══════════════════════════════════════════
