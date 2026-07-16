@@ -1,6 +1,9 @@
 /* ═══════════════════════════════════════
    api.js — واجهة Hyperliquid API
    ✅ WS Post Requests أولاً (عبر HL)، REST كبديل احتياطي فقط
+   ✅ hlExchange يضمن وجود وكيل صالح ذاتياً (Agents.ensure) قبل التوقيع —
+      بدل الفشل الفوري لو انتهت صلاحية الوكيل أو أُلغيت الموافقة الأولى؛
+      يفتح نافذة تفويض عند الحاجة الفعلية فقط (أول صفقة تحتاجها).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -20,11 +23,20 @@ async function hlInfo(body) {
   return JSON.parse(text.replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"'));
 }
 
-/* ════ Exchange (توقيع EIP-712 بمحفظة الوكيل) — WS post أولاً، REST كبديل ════
-   نفس نمط action الموقّع سواء عبر WS أو REST، الرد بنفس الشكل تماماً
-   ({status,response}) بفضل توحيد HL.post — hlExchange لا يحتاج يعرف الفرق. */
+/* ════ Exchange (توقيع EIP-712 بمحفظة الوكيل) — WS post أولاً، REST كبديل ════ */
 async function hlExchange(action) {
-  if (!State.agent) throw new Error('محفظة التداول غير مفوّضة بعد — أعد تسجيل الدخول');
+  if (!State.agent) {
+    try {
+      await (typeof Agents !== 'undefined' ? Agents.ensure() : Promise.reject(new Error('NO_AGENTS_MODULE')));
+    } catch (e) {
+      const msg = e.message === 'CANCELLED' ? 'تم إلغاء تفويض محفظة التداول'
+                : e.message === 'NO_WALLET' ? 'سجّل الدخول أولاً'
+                : 'تعذّر تفويض محفظة التداول — راجع "الوكلاء" بالخيارات';
+      throw new Error(msg);
+    }
+  }
+  if (!State.agent) throw new Error('محفظة التداول غير مفوّضة — أعد المحاولة');
+
   const nonce   = Date.now();
   const encoded = MsgPack.encode(action);
   const nb      = new ArrayBuffer(8);

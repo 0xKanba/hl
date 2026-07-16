@@ -3,6 +3,14 @@
    HL.connect() + initPriceFeeds() فوراً (زائر ومتصل)،
    initAccountFeeds() ينتقل داخل _onWalletConnected (auth.js)،
    _startAuthedTimers أصبحت أخف (startSessionPolling فقط)
+   ✅ حذف كامل حقلي "اسم العرض" و"صوت التنبيهات" من الأسلاك.
+   ✅ "الوكلاء" تفتح Agents.openModal() بدل enableFastTrading القديمة.
+   ✅ نصوص رسوم السحب ومدة الوكيل تُملأ ديناميكياً من الثوابت المركزية —
+      بدل أرقام حرفية مكرَّرة تتضارب لو تغيّر أحدها بدون الباقي.
+   ✅ Wallets.reconnectSilently(rdns) الآن تستقبل rdns المحفوظ فعلاً —
+      كانت تُستدعى بلا وسيط فتتصل بأول محفظة بالقائمة بترتيب غير مضمون.
+   ✅ "نسيت PIN" يحذف الوكيل يدوياً قبل تسجيل الخروج (سيناريو أمان
+      أشد حساسية من الخروج العادي — راجع agents.js/auth.js).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -88,6 +96,30 @@ function _initQtyInput() {
   input.oninput = function () { State.qty = parseFloat(this.value) || 0; };
 }
 
+/* ✅ رسوم السحب ومدة الوكيل — تُملأ مرة واحدة من الثوابت المركزية بدل
+   أرقام حرفية مكررة بالـHTML (كان هذا تحديداً باغ تضارب حقيقي سابقاً:
+   $1 بـaccount.js مقابل $1 بـapp.js مقابل $1 بـindex.html — أي تغيير
+   بمكان واحد بدون الباقي يخلق تناقضاً فورياً بالواجهة). */
+function _initWithdrawFeeUI() {
+  const fee = WITHDRAW_FEE_USDC;
+  setTxt('wFeeAmt', `$${fee.toFixed(2)}`);
+  const exSend = fee + 20;
+  setTxt('wFeeExSend', `$${exSend.toFixed(2)}`);
+  setTxt('wFeeExNet',  `$${(exSend - fee).toFixed(2)}`);
+  const amtEl = $('withdrawAmount');
+  if (amtEl) {
+    amtEl.min = String(fee + 1);
+    amtEl.placeholder = String(exSend);
+  }
+}
+
+function _initAgentCopy() {
+  if (typeof Agents === 'undefined') return;
+  const days = Math.round(Agents.TTL_MS / 86400000);
+  setTxt('agentTtlTxt1', `${days} يوم`);
+  setTxt('agentTtlTxt2', `${days} يوم، ويُطلب توقيع جديد عند الحاجة`);
+}
+
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
@@ -121,7 +153,8 @@ document.addEventListener('DOMContentLoaded', () => {
   _initMonthsPanel();
   _initOptsBackdrop();
   _initQtyInput();
-  updateSoundOptionLabel();
+  _initWithdrawFeeUI();
+  _initAgentCopy();
 
   $('connectEmailBtn')?.addEventListener('click', connectEmail);
   $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
@@ -149,11 +182,9 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
   $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
-  $('optDisplayName').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openDisplayNameModal(); };
-  $('optSound').onclick = () => { closeOptions(); toggleSound(); };
-  $('optExportKey')?.addEventListener('click', () => { closeOptions(); exportPrivateKey(); });
+  $('optExportWallet')?.addEventListener('click', () => { closeOptions(); exportWallet(); });
   $('optWalletRecovery')?.addEventListener('click', () => { closeOptions(); openWalletRecovery(); });
-  $('optEnableAgent')?.addEventListener('click', () => { closeOptions(); enableFastTrading(); });
+  $('optAgents')?.addEventListener('click', () => { closeOptions(); if (typeof Agents !== 'undefined') Agents.openModal(); });
   $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
   $('btnBuy').onclick  = () => askTrade(true);
@@ -195,9 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('historyClose').onclick = () => closeModal('modalHistory');
 
   $('posDetailClose').onclick = () => closeModal('modalPosDetail');
-  $('displayNameCancel').onclick = () => closeModal('modalDisplayName');
-  $('displayNameSave').onclick = saveDisplayName;
-  $('displayNameInput').onkeydown = e => e.key === 'Enter' && saveDisplayName();
 
   $('depositCancel').onclick  = () => closeModal('modalDeposit');
   $('depositExecute').onclick = () => requirePin(doDeposit);
@@ -211,9 +239,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!prev) return;
     if (!amt || amt <= 0) { prev.classList.add('hidden'); return; }
     prev.classList.remove('hidden');
-    const sendEl = $('wpSend'), netEl = $('wpNet');
+    const sendEl = $('wpSend'), netEl = $('wpNet'), feeEl = $('wpFee');
     if (sendEl) sendEl.textContent = `$${amt.toFixed(2)}`;
-    if (netEl)  netEl.textContent  = `$${Math.max(0, amt - 1).toFixed(2)} USDC`;
+    if (feeEl)  feeEl.textContent  = `- $${WITHDRAW_FEE_USDC.toFixed(2)}`;
+    if (netEl)  netEl.textContent  = `$${Math.max(0, amt - WITHDRAW_FEE_USDC).toFixed(2)} USDC`;
   });
 
   $('withdrawAddress').addEventListener('click', function () { this.select(); });
@@ -250,7 +279,11 @@ document.addEventListener('DOMContentLoaded', () => {
     $('forgotStep1').classList.add('hidden');
     $('forgotStep2').classList.remove('hidden');
   };
-  $('forgotStep2').onclick = () => { closeModal('modalForgotPIN'); doLogout(); };
+  $('forgotStep2').onclick = () => {
+    closeModal('modalForgotPIN');
+    if (typeof Agents !== 'undefined') Agents.revoke(); /* سيناريو أمان أشد حساسية — حذف الوكيل فعلياً هنا */
+    doLogout();
+  };
 
   $('setPinCancel').onclick = () => {
     closeModal('modalSetPIN');
@@ -315,7 +348,12 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(_fallbackToGuest);
   } else if (localStorage.getItem(EXTWALLET_FLAG_KEY)) {
     _showAppOptimistically();
-    (typeof Wallets !== 'undefined' ? Wallets.reconnectSilently() : Promise.resolve(null))
+    let _extMeta = null;
+    try { _extMeta = JSON.parse(localStorage.getItem(EXTWALLET_FLAG_KEY)); } catch {}
+    /* ✅ تمرير rdns المحفوظ — بدونه كانت reconnectSilently تتصل بأول
+       محفظة بالقائمة (ترتيب إعلان EIP-6963 غير مضمون) بدل المحفظة
+       الحقيقية التي اختارها المستخدم، خطر ربط عنوان خاطئ بصمت. */
+    (typeof Wallets !== 'undefined' ? Wallets.reconnectSilently(_extMeta?.rdns) : Promise.resolve(null))
       .then(w => { if (!w) throw new Error('no prior wallet authorization'); return _onWalletConnected(w); })
       .then(_startAuthedTimers)
       .catch(_fallbackToGuest);

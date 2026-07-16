@@ -15,15 +15,20 @@ const BRDG_CA = '0x2Df1c51E09aECF9d2B5688B5c82A9bBDE18B9494';
    السلسلة الفارغة '' تعني "أول perp dex" (Main Perps) حسب توثيق Hyperliquid. */
 const HL_DEX = 'xyz';
 
+/* رسوم السحب — رسم بروتوكول Hyperliquid نفسه (يُخصم آلياً عند معالجة
+   withdraw3)، ليست رسوماً يجمعها هذا التطبيق. $1 مؤكَّد من توثيق
+   Hyperliquid الرسمي (exchange-endpoint، آخر تحديث يونيو 2026) —
+   راجع التوثيق دورياً بدل تغيير هذا الرقم يدوياً بلا تأكيد.
+   ثابت واحد فقط بدل تكراره بعدة ملفات — استخدمه دائماً، لا رقماً حرفياً. */
+const WITHDRAW_FEE_USDC = 1;
+
 /* مفاتيح localStorage */
 const LS_KEY        = 'hl_trade_pk';
 const PIN_KEY       = 'hl_trade_pin';
 const LOCKED_KEY    = 'hl_trade_locked';
 const LAST_PIN_KEY  = 'hl_last_pin_time';
 const QSTATE_KEY    = 'hl_qstate_v1';
-const DISPNAME_KEY  = 'hl_display_name';
 const OPENTIME_KEY  = 'hl_position_opens';
-const SOUND_KEY     = 'hl_sound_enabled';
 const PRIVY_FLAG_KEY = 'hl_privy_connected';
 const EXTWALLET_FLAG_KEY = 'hl_extwallet_connected';
 

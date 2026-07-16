@@ -4,6 +4,7 @@
       لقطة أولية عبر WS Post + اشتراكات حية:
       allDexsClearinghouseState / spotState / userFills / orderUpdates
    ✅ لا polling — كل تحديث دفعي (push) من الخادم
+   ✅ doWithdraw يستخدم WITHDRAW_FEE_USDC المركزي بدل رقم حرفي مكرَّر
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -350,12 +351,13 @@ async function doDeposit() {
   } finally { resetBtn('depositExecute'); hideLoader(); }
 }
 
-/* ════ Withdraw ════ (بدون تغيير وظيفي) */
+/* ════ Withdraw ════ ✅ الرسوم الآن من WITHDRAW_FEE_USDC المركزي */
 async function doWithdraw() {
-  const amt  = parseFloat($('withdrawAmount').value || 0);
-  const dest = $('withdrawAddress').value.trim();
+  const amt    = parseFloat($('withdrawAmount').value || 0);
+  const dest   = $('withdrawAddress').value.trim();
+  const minAmt = WITHDRAW_FEE_USDC + 1;
   if (!amt || amt <= 0)  return toast('أدخل المبلغ المراد سحبه', 'err');
-  if (amt < 2)           return toast('الحد الأدنى $2 (بعد رسوم $1)', 'err');
+  if (amt < minAmt)      return toast(`الحد الأدنى $${minAmt.toFixed(2)} (بعد رسوم $${WITHDRAW_FEE_USDC.toFixed(2)})`, 'err');
   if (!/^0x[0-9a-fA-F]{40}$/.test(dest)) return toast('عنوان المحفظة غير صحيح', 'err');
   if (!State.wallet)     return toast('يجب تسجيل الدخول أولاً', 'err');
   setBtnLoading('withdrawExecute', '⏳');
@@ -385,7 +387,7 @@ async function doWithdraw() {
     const d = HL.isOpen() ? await HL.post(body, true).catch(() => _restExchange(body)) : await _restExchange(body);
     if (d.status !== 'ok') throw new Error(JSON.stringify(d));
     closeModal('modalWithdraw');
-    toast(`✅ طلب السحب مقبول — سيصلك $${(amt - 1).toFixed(2)} USDC`, 'ok', 6000);
+    toast(`✅ طلب السحب مقبول — سيصلك $${(amt - WITHDRAW_FEE_USDC).toFixed(2)} USDC`, 'ok', 6000);
   } catch (e) {
     toast(`⚠️ ${_withdrawErr(e.message)}`, 'err', 5000);
   } finally { resetBtn('withdrawExecute'); hideLoader(); }

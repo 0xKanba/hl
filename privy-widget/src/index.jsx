@@ -6,6 +6,17 @@
    لا تعدّل هذا الملف مباشرة بالمتصفح — عدّل src/index.jsx وأعد البناء:
      cd privy-widget && npm run build
    الناتج ينسخ يدوياً إلى /js/privy-bridge.js بمشروع سيولة.
+
+   ✅ إصلاح: useEffect كان يُعيد إرسال privy:update عند أي تغيّر بمرجع
+      مصفوفة wallets حتى لو الحالة الفعلية (ready/authenticated/العنوان
+      النشط) لم تتغيّر إطلاقاً — بعض تطبيقات hooks لا تُثبِّت مرجع
+      المصفوفة بين كل تصيير. كان هذا يُشعِّل auth.js's listener بشكل
+      متكرر بلا داعٍ (محمي بفحص العنوان المتطابق هناك، فلا خلل وظيفي،
+      لكنه إهدار وسبب احتمالي لسباقات مستقبلية لو تغيّر ذاك الفحص).
+      الآن نقارن بصمة الحالة المؤثرة فعلياً فقط قبل الإرسال.
+   ✅ إصلاح: فشل تبديل الشبكة لـArbitrum بمحفظة Privy المدمجة كان
+      يُبتلع بصمت (catch فاضي) — أي فشل حقيقي هنا يجب أن يظهر بالسجل
+      بدل الاختفاء، لتسهيل تشخيص أي فشل إيداع لاحق ناتج عنه.
 ═══════════════════════════════════════════════════════════════ */
 import React, { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -34,6 +45,9 @@ function Bridge() {
   /* مرجع حي يتفادى الـ stale closures جوا window.PrivyBridge */
   const live = useRef({ ready, authenticated, wallets });
   live.current = { ready, authenticated, wallets };
+
+  /* ✅ بصمة آخر إرسال — تمنع privy:update المتكرر بلا فائدة (راجع تعليق الرأس) */
+  const lastDispatchSig = useRef('');
 
   useEffect(() => {
     function activeWallet() {
@@ -81,15 +95,24 @@ function Bridge() {
         const target = address || activeWallet()?.address;
         const w = live.current.wallets.find(x => x.address === target);
         if (!w) throw new Error('no wallet connected');
-        try { await w.switchChain(42161); } catch (_) {}
+        try {
+          await w.switchChain(42161);
+        } catch (err) {
+          console.warn('[Privy] switchChain(42161) failed:', err);
+        }
         const provider = await w.getEthereumProvider();
         const bp = new window.ethers.BrowserProvider(provider);
         return bp.getSigner();
       },
     };
 
+    const w = activeWallet();
+    const sig = `${ready}|${authenticated}|${w?.address || ''}|${w?.walletClientType || ''}`;
+    if (sig === lastDispatchSig.current) return;
+    lastDispatchSig.current = sig;
+
     window.dispatchEvent(new CustomEvent('privy:update', {
-      detail: { ready, authenticated, wallet: activeWallet() }
+      detail: { ready, authenticated, wallet: w }
     }));
   }, [ready, authenticated, wallets, login, logout, signTypedData, exportWallet, setWalletRecovery]);
 

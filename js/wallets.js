@@ -14,6 +14,13 @@
    ما يقدر يتصل بمحفظة منفصلة تماماً وانت فاتح Chrome عادي بدون
    علاقة بها — هذا يحتاج WalletConnect تحديداً (بروتوكول مختلف
    كلياً، تعمّدنا عدم استخدامه هنا).
+
+   ✅ جديد: مراقبة accountsChanged/قطع الصلاحية من نفس المزوّد بعد
+      الاتصال — لو بدّل المستخدم الحساب النشط من داخل تطبيق محفظته،
+      أو قطع صلاحية الموقع بالكامل، التطبيق يعرف فوراً بدل الاستمرار
+      بعنوان قديم غير مطابق لما يوقّعه الـsigner الفعلي (ثغرة حقيقية
+      سابقاً: كان يمكن أن يوقّع المستخدم بحساب مختلف عن العنوان الذي
+      يعرض التطبيق أرصدته وصفقاته).
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -59,7 +66,14 @@ const Wallets = (function () {
     _requestAnnouncements();
     const out = Array.from(_providers.values());
     const legacy = _legacyEntry();
-    if (legacy && !out.some(function (p) { return p.provider === legacy.provider; })) out.push(legacy);
+    /* ✅ استبعاد التكرار بمرجع provider نفسه، وأيضاً بالاسم احتياطياً —
+       بعض المحافظ تُنشئ غلاف (proxy) مختلف الشكل لـwindow.ethereum عن
+       الغلاف المُعلَن عبر EIP-6963 لنفس المحفظة الفعلية، فمقارنة المرجع
+       فقط قد تفشل باكتشاف التكرار وتُظهر نفس المحفظة مرتين بالقائمة. */
+    if (legacy && !out.some(function (p) {
+      return p.provider === legacy.provider ||
+             (p.info.name || '').toLowerCase() === legacy.info.name.toLowerCase();
+    })) out.push(legacy);
     return out;
   }
 
@@ -92,6 +106,21 @@ const Wallets = (function () {
     const signer = await bp.getSigner();
     const address = await signer.getAddress();
 
+    /* ✅ مراقبة تغيّر الحساب/قطع الصلاحية من نفس المزوّد بعد الاتصال.
+       eth_accounts (بعكس eth_requestAccounts) لا يفتح أي نافذة، لذا هذه
+       المراقبة سلبية بالكامل ولا تُقاطع المستخدم؛ فقط تُعلم auth.js
+       بحدث حقيقي ليتصرّف (إعادة اتصال نظيفة بدل الاستمرار بعنوان غير
+       مطابق لما يوقّعه المستخدم فعلياً في محفظته). */
+    const _onAccountsChanged = function (accounts) {
+      const next = accounts && accounts[0];
+      if (!next) {
+        window.dispatchEvent(new CustomEvent('wallet:externalDisconnect', { detail: { address } }));
+      } else if (next.toLowerCase() !== address.toLowerCase()) {
+        window.dispatchEvent(new CustomEvent('wallet:accountChanged', { detail: { oldAddress: address, newAddress: next } }));
+      }
+    };
+    try { provider.on?.('accountsChanged', _onAccountsChanged); } catch {}
+
     return {
       address: address,
       walletClientType: entry.info.rdns || 'injected',
@@ -121,13 +150,24 @@ const Wallets = (function () {
         }
         return new window.ethers.BrowserProvider(provider).getSigner();
       },
+
+      /* ✅ يُستدعى من doLogout لفكّ المراقبة أعلاه — بدونه يبقى الاستماع
+         معلَّقاً على provider القديم للأبد (تسريب ذاكرة + احتمال إطلاق
+         doLogout بلا داعٍ من محفظة لم تعد مرتبطة بالتطبيق أصلاً). */
+      _teardownListeners: function () {
+        try { provider.removeListener?.('accountsChanged', _onAccountsChanged); } catch {}
+      },
     };
   }
 
   /* محاولة اتصال صامتة (بلا نافذة موافقة) — تُستخدم عند إقلاع التطبيق
      لاسترجاع جلسة سابقة، فقط إذا كانت المحفظة أصلاً صرّحت للموقع من
      قبل. eth_accounts (بعكس eth_requestAccounts) لا يفتح أي نافذة —
-     يرجّع مصفوفة فاضية بصمت لو ما في تصريح سابق. */
+     يرجّع مصفوفة فاضية بصمت لو ما في تصريح سابق.
+     rdns مُمرَّر من app.js من EXTWALLET_FLAG_KEY المحفوظ — بدونه كان
+     يتصل بأول محفظة بالقائمة (ترتيب إعلان غير مضمون) بدل المحفظة
+     الحقيقية التي اختارها المستخدم، مما يعني احتمال ربط عنوان خاطئ
+     بصمت عند إعادة تحميل الصفحة إذا كان أكثر من محفظة مثبّتة. */
   async function reconnectSilently(rdns) {
     const entries = list();
     const target = rdns ? entries.find(function (e) { return (e.info.rdns || e.info.uuid) === rdns; }) : entries[0];

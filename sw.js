@@ -32,6 +32,7 @@ const APP_SHELL = [
   '/js/assets.js',
   '/js/pin.js',
   '/js/auth.js',
+  '/js/agents.js',
   '/js/chart.js',
   '/js/c.js',
   '/js/app.js',

@@ -101,7 +101,9 @@ function hideCornerStatus() {
   e.classList.remove('show');
 }
 
-/* ════ صوت خفيف عند تنفيذ الصفقة — WebAudio، بلا ملف خارجي ════ */
+/* ════ صوت خفيف عند تنفيذ الصفقة — WebAudio، بلا ملف خارجي ════
+   ✅ حُذف حقل "صوت التنبيهات" من الخيارات — الصوت يعمل دائماً الآن
+   بلا إمكانية تعطيل من الواجهة. */
 let _audioCtx = null;
 function _getAudioCtx() {
   if (!_audioCtx) {
@@ -110,19 +112,7 @@ function _getAudioCtx() {
   }
   return _audioCtx;
 }
-function isSoundEnabled() { return localStorage.getItem(SOUND_KEY) !== 'off'; }
-function toggleSound() {
-  const wasOn = isSoundEnabled();
-  localStorage.setItem(SOUND_KEY, wasOn ? 'off' : 'on');
-  toast(wasOn ? '🔇 تم إيقاف صوت التنبيهات' : '🔊 تم تفعيل صوت التنبيهات', 'info');
-  updateSoundOptionLabel();
-}
-function updateSoundOptionLabel() {
-  const btn = $('optSound');
-  if (btn) btn.textContent = isSoundEnabled() ? '🔊 صوت التنبيهات' : '🔇 صوت التنبيهات (متوقف)';
-}
 function playFillSound() {
-  if (!isSoundEnabled()) return;
   try {
     const ctx = _getAudioCtx();
     if (!ctx) return;
