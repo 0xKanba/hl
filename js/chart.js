@@ -305,7 +305,7 @@ const ChartModule = (function () {
           } else {
             w.lastBar.high = Math.max(w.lastBar.high, raw.high);
             w.lastBar.low  = Math.min(w.lastBar.low,  raw.low);
-            w.lastBar.close = raw.close;
+            w.lastBar.open = raw.open;
             w.lastBar.volume += raw.volume;
           }
 
@@ -325,7 +325,7 @@ const ChartModule = (function () {
           // Deduplicate: only emit if bar actually changed
           if (!sub.lastBar || emit.time!==sub.lastBar.time ||
               emit.open!==sub.lastBar.open || emit.high!==sub.lastBar.high ||
-              emit.low!==sub.lastBar.low || emit.close!==sub.lastBar.close ||
+              emit.low!==sub.lastBar.low || emit.open!==sub.lastBar.open ||
               emit.volume!==sub.lastBar.volume) {
             sub.callback(emit);
             sub.lastBar = emit;
