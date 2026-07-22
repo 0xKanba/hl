@@ -1,0 +1,72 @@
+name: Update sw.js cache version
+
+on:
+  push:
+    paths:
+      - "**.html"
+      - "css/**"
+      - "js/**"
+      - "manifest.json"
+      - "!sw.js"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: swjs-update-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  update-sw:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Build cache tag
+        id: tag
+        run: echo "value=$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Update sw.js and push safely
+        env:
+          BRANCH: ${{ github.ref_name }}
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          for i in 1 2 3 4 5 6; do
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            test -f sw.js || { echo "::error::sw.js not found"; exit 1; }
+
+            perl -0pi -e 's/(CACHE_APP\s*=\s*\x27)[^\x27]*(\x27)/$1 . "hltrade-app-$ENV{TAG}" . $2/eg; s/(CACHE_IMGS\s*=\s*\x27)[^\x27]*(\x27)/$1 . "hltrade-img-$ENV{TAG}" . $2/eg; s/(CACHE_FONTS\s*=\s*\x27)[^\x27]*(\x27)/$1 . "hltrade-fnt-$ENV{TAG}" . $2/eg;' sw.js
+
+            if git diff --quiet -- sw.js; then
+              echo "sw.js already up to date"
+              exit 0
+            fi
+
+            git add sw.js
+            git commit -m "chore: bump sw.js cache version to ${TAG}"
+
+            if git push origin "HEAD:${BRANCH}"; then
+              echo "Pushed on attempt $i"
+              exit 0
+            fi
+
+            echo "Push failed on attempt $i, retrying..."
+            sleep $((i * 2))
+          done
+
+          echo "::warning::Could not push sw.js after retries. The run will not fail."
+          exit 0
