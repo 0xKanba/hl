@@ -10,6 +10,14 @@
    2. Hyperliquid t is OPEN time in BOTH REST candleSnapshot AND
       WS candle updates. Removed all _ivMs subtraction logic.
    3. Realtime lastBar cache merges correctly without drift.
+   4. ✅ Liquidation price everywhere in this file now routes through
+      the single shared positions.js:calcLiqPrice (cross-aware, correct
+      formula) via crossEquityExcluding() — removed two separate
+      duplicated/incorrect inline reimplementations that had drifted
+      out of sync with the real math (one dead fallback in _execLines
+      that only ever ran if calcLiqPrice was somehow undefined, and one
+      always-isolated formula in _showCf's quick-trade sheet that was
+      wrong for every asset in this app, since all of them are cross).
 ═══════════════════════════════════════════════════════════════════ */
 const ChartModule = (function () {
   'use strict';
@@ -305,7 +313,7 @@ const ChartModule = (function () {
           } else {
             w.lastBar.high = Math.max(w.lastBar.high, raw.high);
             w.lastBar.low  = Math.min(w.lastBar.low,  raw.low);
-            w.lastBar.open = raw.open;
+            w.lastBar.close = raw.close;
             w.lastBar.volume += raw.volume;
           }
 
@@ -325,7 +333,7 @@ const ChartModule = (function () {
           // Deduplicate: only emit if bar actually changed
           if (!sub.lastBar || emit.time!==sub.lastBar.time ||
               emit.open!==sub.lastBar.open || emit.high!==sub.lastBar.high ||
-              emit.low!==sub.lastBar.low || emit.open!==sub.lastBar.open ||
+              emit.low!==sub.lastBar.low || emit.close!==sub.lastBar.close ||
               emit.volume!==sub.lastBar.volume) {
             sub.callback(emit);
             sub.lastBar = emit;
@@ -623,21 +631,12 @@ const ChartModule = (function () {
             .setBodyTextColor('#fff').setLineWidth(1).setLineStyle(2));
         } catch (e) { console.warn('[L]sl', e); }
       }
+      /* ✅ سعر التصفية: صيغة Cross الحقيقية المشتركة فقط (positions.js:
+         calcLiqPrice) — أُزيل النسخ المكرَّر/الميت الذي كان هنا سابقاً. */
       try {
-        const aL = isGr ? ((typeof ASSETS !== 'undefined' && ASSETS['GOLD']) || _asset('GOLD')) : _asset(_sym);
-        const bal = (State.balance?.total) || 0;
-        let liqOz = null;
-        if (typeof calcLiqPrice === 'function') {
-          liqOz = calcLiqPrice(entOz, sziOz, bal, aL.cross, aL.lev);
-        } else {
-          const mm = 0.5 / aL.lev, abs = Math.abs(sziOz), ntl = abs * entOz;
-          if (aL.cross) {
-            const b2 = bal > 0 ? bal : ntl / aL.lev, fr = b2 - ntl * mm;
-            liqOz = fr > 0 ? entOz - (isLong ? 1 : -1) * fr / abs : entOz * (isLong ? 0.99 : 1.01);
-          } else {
-            liqOz = isLong ? entOz * (1 - 1 / aL.lev + mm) : entOz * (1 + 1 / aL.lev - mm);
-          }
-        }
+        const aL   = isGr ? ((typeof ASSETS !== 'undefined' && ASSETS['GOLD']) || _asset('GOLD')) : _asset(_sym);
+        const eq   = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(pnl) : 0;
+        const liqOz = (typeof calcLiqPrice === 'function') ? calcLiqPrice(entOz, sziOz, eq, aL.cross, aL.lev) : null;
         if (liqOz && liqOz > 0) {
           _lines.push(chart.createOrderLine()
             .setPrice(_toDisp(_sym, liqOz)).setQuantity('⚡ تصفية')
@@ -882,9 +881,14 @@ const ChartModule = (function () {
     if (!mid) return typeof toast !== 'undefined' && toast('لا يوجد سعر', 'err');
     const midOz = _toOz(_sym, mid), qtyOz = isGr ? qty / TROY : qty;
     const usd = (midOz * qtyOz).toFixed(2), mgn = (midOz * qtyOz / a.lev).toFixed(2);
-    const mm = 0.5 / a.lev;
-    const liqOz = isBuy ? midOz * (1 - 1 / a.lev + mm) : midOz * (1 + 1 / a.lev - mm);
-    const liqD = _toDisp(_sym, liqOz).toFixed(a.pxDp);
+    /* ✅ صيغة Cross الحقيقية المشتركة (calcLiqPrice) بدل صيغة Isolated
+       ثابتة كانت تُستخدم هنا دائماً بلا فحص a.cross — بينما كل أصول
+       هذا المشروع Cross فعلياً، فكانت معاينة "التصفية" هنا خاطئة على
+       الدوام، مهما كان الأصل أو حالة الحساب. */
+    const sziLiqOz = isBuy ? qtyOz : -qtyOz;
+    const eq       = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(0) : 0;
+    const liqOz    = (typeof calcLiqPrice === 'function') ? calcLiqPrice(midOz, sziLiqOz, eq, a.cross, a.lev) : null;
+    const liqD     = liqOz ? _toDisp(_sym, liqOz).toFixed(a.pxDp) : null;
     _hideCf();
     const scr = document.getElementById('chartScreen'); if (!scr) return;
     const ov = document.createElement('div'); ov.id = '_tvcfOv'; ov.className = 'tvcf-ov';
@@ -898,7 +902,7 @@ const ChartModule = (function () {
           <div class="tvcf-row"><span class="tvcf-k">السعر</span><span class="tvcf-v">$${mid.toFixed(a.pxDp)}</span></div>
           <div class="tvcf-row"><span class="tvcf-k">القيمة</span><span class="tvcf-v">≈ $${usd}</span></div>
           <div class="tvcf-row"><span class="tvcf-k">الهامش</span><span class="tvcf-v w">≈ $${mgn}</span></div>
-          <div class="tvcf-row"><span class="tvcf-k">التصفية</span><span class="tvcf-v ${isBuy ? 'r' : 'g'}">≈ $${liqD}</span></div>
+          <div class="tvcf-row"><span class="tvcf-k">التصفية</span><span class="tvcf-v ${isBuy ? 'r' : 'g'}">${liqD ? '≈ $'+liqD : '—'}</span></div>
         </div>
         <div class="tvcf-btns">
           <button class="tvcf-cancel" id="_tvcfC">إلغاء ✕</button>

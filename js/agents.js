@@ -33,6 +33,13 @@
       الصلاحية، حتى لو المستخدم يقرأ الرسم البياني بهدوء. التجديد الآن
       يحدث فقط عند الحاجة الفعلية (أول صفقة بعد الانتهاء) عبر hlExchange
       بـapi.js. عدّاد الأيام بهذي الواجهة يتحدّث تلقائياً فقط أثناء فتحها.
+
+   ✅ حُذفت أزرار الإيداع/السحب من هذي النافذة — كانت مكرَّرة حرفياً مع
+      نفس الزرين بقائمة "⚙️ الخيارات" (نفس المودالين modalDeposit/
+      modalWithdraw بالضبط، بلا أي فرق وظيفي). الخيارات هي المكان
+      الوحيد الآن للإيداع/السحب؛ نافذة الوكلاء تركّز فقط على دورة حياة
+      مفتاح التوقيع (الحالة/التدوير/الحذف) + عرض عنوان الإيداع للنسخ
+      السريع، بلا تكرار أزرار فعل.
 ═══════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -285,16 +292,12 @@
           <span class="ag-addr-txt">${wAddr}</span>
           <button class="ag-copy-btn" id="agCopyWallet" title="نسخ">⧉</button>
         </div>
-        <div class="ag-actions">
-          <button class="ag-btn" id="agGoDeposit">💵 إيداع</button>
-          <button class="ag-btn" id="agGoWithdraw">📤 سحب</button>
-        </div>
       </div>
       <div class="ag-note">
-        💵 الإيداع عبر جسر Hyperliquid الرسمي — بدون رسوم من التطبيق، فقط غاز
-        Arbitrum الفعلي (عادة أقل من $0.10).<br>
-        📤 السحب: رسوم بروتوكول Hyperliquid الثابتة $${WITHDRAW_FEE_USDC.toFixed(2)}
-        تُخصم تلقائياً من المبلغ المُرسَل.
+        💵 الإيداع والسحب متاحان من ⚙️ الخيارات — بدون رسوم من التطبيق على
+        الإيداع (فقط غاز Arbitrum الفعلي، عادة أقل من $0.10)، ورسوم بروتوكول
+        Hyperliquid الثابتة $${WITHDRAW_FEE_USDC.toFixed(2)} على السحب تُخصم
+        تلقائياً من المبلغ المُرسَل.
       </div>`;
 
     _wireActions();
@@ -315,8 +318,6 @@
       'سيتوقف هذا الوكيل عن العمل فوراً من داخل التطبيق. صفقاتك المفتوحة تبقى كما هي على Hyperliquid — ستحتاج وكيلاً جديداً فقط عند صفقتك القادمة.',
       () => { revoke(); toast('🗑 تم حذف الوكيل', 'info'); _render(); }
     ));
-    document.getElementById('agGoDeposit')?.addEventListener('click', () => { _close(); openModal('modalDeposit'); });
-    document.getElementById('agGoWithdraw')?.addEventListener('click', () => { _close(); openModal('modalWithdraw'); });
   }
 
   function _copy(text) {

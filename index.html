@@ -226,16 +226,23 @@
   </div>
 </div>
 
+<!--
+  ✅ ترتيب القائمة يعكس الآن تدفق المشروع الفعلي بوضوح:
+     إيداع → سحب (حركة الأموال) ثم الرصيد/التأريخ/التقويم (متابعة)
+     ثم الوكلاء/تصدير المحفظة (أمان وتقني) ثم تغيير المحفظة/إلغاء.
+     "استرداد المحفظة" أُزيل نهائياً — تصدير المحفظة (يعرض المفتاح
+     الخاص/العبارة السرية مباشرة) هو المسار الوحيد الكافي للنسخ
+     الاحتياطي، فكان وجود الاثنين تكراراً بلا فائدة إضافية حقيقية.
+-->
 <div class="opts-overlay hidden" id="optsOverlay">
   <div class="opts-menu">
+    <button class="opts-item" id="optDeposit">💵 ايداع</button>
+    <button class="opts-item" id="optWithdraw">📤 سحب</button>
     <button class="opts-item" id="optBalance">💰 الرصيد</button>
     <button class="opts-item" id="optHistory">📜 التأريخ</button>
     <button class="opts-item" id="optCalendar">📅 التقويم الشهري</button>
-    <button class="opts-item" id="optDeposit">💵 ايداع</button>
-    <button class="opts-item" id="optWithdraw">📤 سحب</button>
-    <button class="opts-item" id="optExportWallet">🔑 تصدير المحفظة</button>
-    <button class="opts-item" id="optWalletRecovery">🔐 استرداد المحفظة</button>
     <button class="opts-item" id="optAgents">🤖 الوكلاء</button>
+    <button class="opts-item" id="optExportWallet">🔑 تصدير المحفظة</button>
     <button class="opts-item opts-item-logout" id="optLogout">تغيير المحفظة</button>
     <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
   </div>
@@ -417,7 +424,7 @@
       <label>المبلغ (USDC)</label>
       <input type="number" class="form-input" id="depositAmount" placeholder="10" min="5" inputmode="decimal">
     </div>
-    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال 1–3 دقائق.</p>
+    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال أقل من دقيقة.</p>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"              id="depositCancel">إلغاء</button>
       <button class="btn-modal btn-confirm btn-success" id="depositExecute">إيداع ✓</button>

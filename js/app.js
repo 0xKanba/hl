@@ -11,6 +11,14 @@
       كانت تُستدعى بلا وسيط فتتصل بأول محفظة بالقائمة بترتيب غير مضمون.
    ✅ "نسيت PIN" يحذف الوكيل يدوياً قبل تسجيل الخروج (سيناريو أمان
       أشد حساسية من الخروج العادي — راجع agents.js/auth.js).
+   ✅ حُذف زر/سلك "استرداد المحفظة" — "تصدير المحفظة" يكفي وحده كنسخة
+      احتياطية (يعرض المفتاح الخاص والعبارة السرية مباشرة)، فكان
+      الاثنان تكراراً بلا فائدة إضافية حقيقية.
+   ✅ FIX — إعادة الاتصال التلقائي بالبريد (Privy) عند إعادة تحميل
+      الصفحة كانت تفحص .authenticated فوراً بعد تحميل السكربت فقط، غالباً
+      قبل أن ينتهي Privy SDK داخلياً من فحص الجلسة (.ready لا يزال false)
+      — فيُسقِط المستخدم لوضع الزائر خطأً حتى لو جلسته الحقيقية صالحة.
+      الحل: انتظار .ready فعلياً (حتى 6 ثوان) قبل قراءة authenticated.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -183,7 +191,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
   $('optExportWallet')?.addEventListener('click', () => { closeOptions(); exportWallet(); });
-  $('optWalletRecovery')?.addEventListener('click', () => { closeOptions(); openWalletRecovery(); });
   $('optAgents')?.addEventListener('click', () => { closeOptions(); if (typeof Agents !== 'undefined') Agents.openModal(); });
   $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
@@ -331,11 +338,29 @@ document.addEventListener('DOMContentLoaded', () => {
     $('appScreen')?.classList.remove('hidden');
   }
 
+  /* ✅ Privy.ready يبدأ false دائماً ويتحوّل true فقط بعد أن ينتهي SDK
+     Privy داخلياً من فحص الجلسة (كوكيز/تخزين محلي خاص به) — عملية غير
+     متزامنة قد تأخذ وقتاً قصيراً. كان الكود يفحص .authenticated فوراً
+     بمجرد تحميل السكربت فقط، غالباً بينما ready لا يزال false، فيُسقِط
+     المستخدم لوضع الزائر خطأً حتى لو جلسته الحقيقية صالحة تماماً —
+     تماماً نفس فخّ السباق الزمني لمحافظ eip6963 (راجع wallets.js). */
+  function _waitPrivyReady(timeoutMs) {
+    return new Promise(resolve => {
+      const t0 = Date.now();
+      (function poll() {
+        if (window.PrivyBridge && window.PrivyBridge.ready) return resolve(true);
+        if (Date.now() - t0 > timeoutMs) return resolve(false);
+        setTimeout(poll, 80);
+      })();
+    });
+  }
+
   if (localStorage.getItem(PRIVY_FLAG_KEY)) {
     _showAppOptimistically();
     _loadPrivyBridge()
-      .then(() => {
-        const w = window.PrivyBridge.authenticated && window.PrivyBridge.getActiveWallet();
+      .then(() => _waitPrivyReady(6000))
+      .then((readyOk) => {
+        const w = readyOk && window.PrivyBridge.authenticated && window.PrivyBridge.getActiveWallet();
         if (!w) throw new Error('no active Privy session');
         return _onWalletConnected({
           address: w.address, walletClientType: w.walletClientType,

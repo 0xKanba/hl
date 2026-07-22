@@ -154,3 +154,17 @@ function shortCoin(c) {
   const raw = c.includes(':') ? c.split(':')[1] : c;
   return COIN_TO_SYM[raw] || raw;
 }
+
+/* ════ Cross-margin equity, EXCLUDING one position's own unrealized PnL ════
+   ✅ الإدخال الصحيح لحساب سعر التصفية التقريبي (راجع positions.js:
+   calcLiqPrice). كل صفقات هذا المشروع Cross (تشترك برصيد الحساب نفسه)،
+   لذا سعر تصفية أي صفقة يعتمد على "الوسادة" الكاملة: رصيد Spot USDC +
+   ربح/خسارة عائم من *كل* الصفقات الأخرى المفتوحة (لكن ليس هذه الصفقة
+   نفسها — ربحها/خسارتها العائم يُعاد حسابه داخل صيغة calcLiqPrice
+   كدالة للسعر المستهدف، فتضمينه هنا يُكرِّره مرتين). ownPnl=0 لصفقة لم
+   تُفتح بعد (معاينة قبل التنفيذ). */
+function crossEquityExcluding(ownPnl) {
+  const b = State.balance;
+  if (!b) return 0;
+  return (b.total || 0) + (b.floatPnl || 0) - (ownPnl || 0);
+}

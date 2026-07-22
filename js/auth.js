@@ -22,6 +22,11 @@
         يحتاج المستخدم توقيعاً جديداً كل مرة يُعيد الاتصال بنفس المحفظة.
         الحذف الكامل متاح يدوياً من "الوكلاء" أو تلقائياً عند "نسيت PIN"
         (سيناريو أمان أشد حساسية).
+   ✅ حُذف "استرداد المحفظة" (openWalletRecovery) — "تصدير المحفظة"
+      يكفي وحده كنسخة احتياطية حقيقية (يعرض المفتاح الخاص/العبارة
+      السرية مباشرة)؛ كان وجود الاثنين معاً تكراراً بلا فائدة إضافية.
+      التذكير الدوري بعد الدخول عبر البريد الآن يوجّه المستخدم لتصدير
+      مفتاحه بدل تفعيل استرداد منفصل — راجع _maybePromptExportBackup.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -206,7 +211,7 @@ async function _onWalletConnected(walletObj) {
     }
   }
 
-  _maybePromptRecovery(walletObj);
+  _maybePromptExportBackup(walletObj);
 
   await initAccountFeeds();
   updateConnectBtn();
@@ -216,12 +221,16 @@ async function _onWalletConnected(walletObj) {
     setTimeout(function () { if (State.wallet) lockApp(); }, 300);
 }
 
-function _maybePromptRecovery(walletObj) {
+/* ✅ تذكير لمرة واحدة لكل محفظة بريد (Privy embedded) بتصدير مفتاحها —
+   هذا الآن المسار الوحيد للنسخ الاحتياطي (بعد حذف "استرداد المحفظة"
+   المكرِّر). لا يظهر لمحافظ خارجية (Trust/Brave/...) لأن مفتاحها أصلاً
+   خارج هذا التطبيق بالكامل — النسخ الاحتياطي مسؤولية تطبيق المحفظة نفسه. */
+function _maybePromptExportBackup(walletObj) {
   if (walletObj.walletClientType !== 'privy') return;
-  const flag = 'hl_recovery_prompted_' + walletObj.address.toLowerCase();
+  const flag = 'hl_export_prompted_' + walletObj.address.toLowerCase();
   if (localStorage.getItem(flag)) return;
   localStorage.setItem(flag, '1');
-  setTimeout(function () { toast('🔐 فعّل استرداد المحفظة لحمايتها من فقدان الجهاز — الخيارات ⚙️', 'info', 8000); }, 2500);
+  setTimeout(function () { toast('🔑 صدّر مفتاح محفظتك واحفظه بمكان آمن كنسخة احتياطية — الخيارات ⚙️', 'info', 8000); }, 2500);
 }
 
 /* ✅ زر واحد فقط لتصدير المحفظة (كان "تصدير المفتاح الخاص" منفصلاً) —
@@ -237,18 +246,6 @@ async function exportWallet() {
     await window.PrivyBridge.exportWallet(State.wallet.address);
   } catch (e) {
     toast('⚠️ تعذّر فتح نافذة التصدير', 'err');
-  }
-}
-
-async function openWalletRecovery() {
-  if (State.isGuest || !State.wallet) return toast('سجّل الدخول أولاً', 'err');
-  if (State.wallet.walletClientType !== 'privy')
-    return toast('هذا خاص بمحفظة البريد — محفظتك الخارجية آمنة عندها هي', 'info', 5000);
-  try {
-    await _loadPrivyBridge();
-    await window.PrivyBridge.setupRecovery();
-  } catch (e) {
-    toast('⚠️ تعذّر فتح نافذة الاسترداد', 'err');
   }
 }
 

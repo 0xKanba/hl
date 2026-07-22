@@ -6,6 +6,8 @@
    لا تعدّل هذا الملف مباشرة بالمتصفح — عدّل src/index.jsx وأعد البناء:
      cd privy-widget && npm run build
    الناتج ينسخ يدوياً إلى /js/privy-bridge.js بمشروع سيولة.
+   (على Cloudflare Pages هذا يحدث تلقائياً عند كل push — لا حاجة لبناء
+   يدوي محلي في الاستخدام العادي.)
 
    ✅ إصلاح: useEffect كان يُعيد إرسال privy:update عند أي تغيّر بمرجع
       مصفوفة wallets حتى لو الحالة الفعلية (ready/authenticated/العنوان
@@ -17,6 +19,11 @@
    ✅ إصلاح: فشل تبديل الشبكة لـArbitrum بمحفظة Privy المدمجة كان
       يُبتلع بصمت (catch فاضي) — أي فشل حقيقي هنا يجب أن يظهر بالسجل
       بدل الاختفاء، لتسهيل تشخيص أي فشل إيداع لاحق ناتج عنه.
+   ✅ حُذف useSetWalletRecovery/setupRecovery بالكامل — "استرداد
+      المحفظة" أُزيل من التطبيق (راجع auth.js/index.html)، فـ"تصدير
+      المحفظة" (useExportWallet أدناه) يكفي وحده كنسخة احتياطية حقيقية
+      (يعرض المفتاح الخاص/العبارة السرية مباشرة)، وكان وجود الاثنين
+      تكراراً بلا فائدة إضافية حقيقية للمستخدم.
 ═══════════════════════════════════════════════════════════════ */
 import React, { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -26,7 +33,6 @@ import {
   useWallets,
   useSignTypedData,
   useExportWallet,
-  useSetWalletRecovery,
 } from '@privy-io/react-auth';
 
 /* App ID + Client ID يُحقنان وقت البناء من متغيّرات بيئة (راجع build.mjs) —
@@ -40,7 +46,6 @@ function Bridge() {
   const { wallets } = useWallets();
   const { signTypedData } = useSignTypedData();
   const { exportWallet } = useExportWallet();
-  const { setWalletRecovery } = useSetWalletRecovery();
 
   /* مرجع حي يتفادى الـ stale closures جوا window.PrivyBridge */
   const live = useRef({ ready, authenticated, wallets });
@@ -83,14 +88,11 @@ function Bridge() {
         return signature;
       },
 
-      /* يفتح مودال Privy الآمن لتصدير المفتاح/الـ seed phrase */
+      /* يفتح مودال Privy الآمن لتصدير المفتاح/الـ seed phrase —
+         المسار الوحيد الآن للنسخ الاحتياطي (راجع تعليق رأس الملف) */
       exportWallet: (address) => exportWallet(address ? { address } : undefined),
 
-      /* يفتح مودال Privy لتفعيل استرداد المحفظة (كلمة سر / Google Drive / iCloud) —
-         حماية إضافية ضد فقدان الجهاز لمحفظة embedded (بريد) تحديداً */
-      setupRecovery: () => setWalletRecovery(),
-
-      /* Signer متصل بـ Arbitrum جاهز لعقود USDC/الجسر (يستخدم doDeposit) */
+      /* Signer متصل بـArbitrum جاهز لعقود USDC/الجسر (يستخدم doDeposit) */
       getArbitrumSigner: async (address) => {
         const target = address || activeWallet()?.address;
         const w = live.current.wallets.find(x => x.address === target);
@@ -114,7 +116,7 @@ function Bridge() {
     window.dispatchEvent(new CustomEvent('privy:update', {
       detail: { ready, authenticated, wallet: w }
     }));
-  }, [ready, authenticated, wallets, login, logout, signTypedData, exportWallet, setWalletRecovery]);
+  }, [ready, authenticated, wallets, login, logout, signTypedData, exportWallet]);
 
   return null; /* headless تماماً — modalLogin بتاع سيولة يبقى هو الواجهة */
 }

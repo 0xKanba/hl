@@ -18,7 +18,11 @@ function askTrade(isBuy) {
   const feeOpen  = (tradeMid * ozQty * fr).toFixed(4);
   const feeTot   = (tradeMid * ozQty * fr * 2).toFixed(4);
   const sziLiq   = isBuy ? ozQty : -ozQty;
-  const liqInfo  = liqPriceDisplay(State.asset, tradeMid, sziLiq, State.balance?.total || 0);
+  /* ✅ صفقة جديدة لم تُفتح بعد → ربحها/خسارتها العائم = صفر، والوسادة
+     الكاملة المتاحة لها = رصيد الحساب + ربح/خسارة كل صفقة أخرى مفتوحة
+     حالياً (راجع crossEquityExcluding بـutils.js وcalcLiqPrice بـ
+     positions.js لسبب هذا التغيير). */
+  const liqInfo  = liqPriceDisplay(State.asset, tradeMid, sziLiq, crossEquityExcluding(0));
 
   setTxt('confirmTitle',    `${a.icon} ${isBuy ? 'شراء ↑' : 'بيع ↓'} — ${a.name}`);
   setTxt('confirmSubtitle', `رافعة ${a.lev}x · تنفيذ فوري`);

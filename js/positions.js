@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════
    positions.js — حساب ودمج بيانات الصفقات
-   ✅ جديد: mergeFillData — يدمج userFills داخل كل صفقة
+   ✅ mergeFillData — يدمج userFills داخل كل صفقة
       (وقت الفتح، أول/آخر Fill، Order ID، Trade ID، Hash، الرسوم، التصفية)
+   ✅ calcLiqPrice (Cross) — أُعيدت صياغتها بالكامل، راجع التعليق أسفله
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -76,35 +77,58 @@ function mergeFillData(rawPos, fills) {
   });
 }
 
-function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
+/* ════════════════════════════════════════════════
+   سعر التصفية التقريبي — Cross margin
+   ════════════════════════════════════════════════
+   ✅ FIX (كان يُظهر سعر تصفية أبعد من الحقيقي كلما وُجد ربح/خسارة عائم
+   من صفقات Cross أخرى مفتوحة بنفس الوقت، أو عند الإضافة لصفقة رابحة):
+
+   شرط تصفية Hyperliquid الرسمي لصفقات Cross: "liquidated when the
+   account value (including unrealized pnl) is less than the maintenance
+   margin" — أي عند السعر P الذي يحقق:
+       equity(P) = mmFrac × sz × P
+   حيث equity(P) = W + side×sz×(P − entry)
+   و W = رصيد الحساب باستثناء ربح/خسارة *هذه* الصفقة تحديداً (لكن يشمل
+   ربح/خسارة أي صفقة Cross أخرى — راجع crossEquityExcluding بـutils.js).
+
+   حل المعادلة لـP مباشرة (بلا أي تقريب) يعطي:
+       Long:  P = (entry − W/sz) / (1 − mmFrac)
+       Short: P = (entry + W/sz) / (1 + mmFrac)
+
+   الصيغة القديمة كانت تحسب (entry − freeMargin/sz) بلا القاسم
+   (1∓mmFrac) إطلاقاً، وكانت تستقبل رصيد Spot الخام فقط (balance.total)
+   بدل "معادلة equity" الحقيقية — فتتجاهل أي ربح/خسارة عائم من صفقات
+   Cross أخرى، وتُخطئ الحساب أكثر كلما زاد ذلك الربح/الخسارة (بالضبط
+   سيناريو "أضفت لصفقة وهي رابحة" الذي كشف الفرق عن الموقع الرسمي).
+════════════════════════════════════════════════ */
+function calcLiqPrice(entryPxOz, sziOz, equityExclOwnPnl, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
   const side    = sziOz > 0 ? 1 : -1;
   const absSize = Math.abs(sziOz);
   const mmFrac  = 0.5 / maxLev;
-  const notional = absSize * entryPxOz;
   let liq;
   if (isCross) {
-    const bal        = balance > 0 ? balance : notional / maxLev;
-    const freeMargin = bal - notional * mmFrac;
-    if (freeMargin <= 0) {
-      liq = side > 0 ? entryPxOz * 0.99 : entryPxOz * 1.01;
-    } else {
-      liq = entryPxOz - side * freeMargin / absSize;
-    }
+    const cushionPerUnit = (equityExclOwnPnl || 0) / absSize;
+    liq = side > 0
+      ? (entryPxOz - cushionPerUnit) / (1 - mmFrac)
+      : (entryPxOz + cushionPerUnit) / (1 + mmFrac);
   } else {
     liq = side > 0
       ? entryPxOz * (1 - 1 / maxLev + mmFrac)
       : entryPxOz * (1 + 1 / maxLev - mmFrac);
   }
-  if (liq <= 0) return 0.01;
+  /* رصيد زائد جداً بالنسبة لحجم الصفقة → لا يوجد سعر تصفية واقعي ضمن
+     مدى أسعار معقول. نُرجع null (يعرضها الطرف الآخر كـ"—") بدل رقم
+     مُضلِّل قريب من الصفر يُوحي بخطر تصفية وشيك غير موجود فعلياً. */
+  if (!(liq > 0)) return null;
   if (side === -1 && liq > entryPxOz * 8) return null;
   return liq;
 }
 
-function liqPriceDisplay(sym, entryPxOz, sziOz, balance) {
+function liqPriceDisplay(sym, entryPxOz, sziOz, equityExclOwnPnl) {
   const a      = ASSETS[sym] || ASSETS['GOLD'] || { lev: 20, cross: false, pxDp: 2, gram: false };
   const isGram = !!a.gram;
-  const liqOz  = calcLiqPrice(entryPxOz, sziOz, balance, a.cross, a.lev);
+  const liqOz  = calcLiqPrice(entryPxOz, sziOz, equityExclOwnPnl, a.cross, a.lev);
   if (liqOz === null) return { text: '—', ounce: null };
   const liqDisp = isGram ? liqOz / TROY : liqOz;
   return { text: `$${fmt(liqDisp, a.pxDp)}`, ounce: liqOz };
@@ -150,8 +174,8 @@ window.openPosDetail = function (i) {
   const isLong  = sziOz > 0;
   const entryOz = parseFloat(pos.entryPx || 0);
   const fundUsd = State.fundingRates[sym] || State.fundingRates['GOLD'] || 0;
-  const bal     = State.balance?.total || 0;
-  const liqInfo = liqPriceDisplay(sym, entryOz, sziOz, bal);
+  const ownPnl  = parseFloat(pos.unrealizedPnl || 0);
+  const liqInfo = liqPriceDisplay(sym, entryOz, sziOz, crossEquityExcluding(ownPnl));
   const openStr = p.openTime
     ? new Date(p.openTime).toLocaleString('ar-EG', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
     : '—';

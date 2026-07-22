@@ -5,6 +5,15 @@
       allDexsClearinghouseState / spotState / userFills / orderUpdates
    ✅ لا polling — كل تحديث دفعي (push) من الخادم
    ✅ doWithdraw يستخدم WITHDRAW_FEE_USDC المركزي بدل رقم حرفي مكرَّر
+   ⚠️ CRITICAL FIX — doDeposit كان يستدعي approve()+bridge.deposit() على
+      عنوانَي عقد خاطئين تماماً (لا يطابقان USDC الحقيقي ولا Bridge2
+      الحقيقي على Arbitrum — راجع config.js). كذلك آلية deposit() نفسها
+      غير موجودة أصلاً بـBridge2 الحقيقي: توثيق Hyperliquid الرسمي يذكر
+      صراحة أن الإيداع هو تحويل ERC20 مباشر لعنوان الجسر ("The user sends
+      native USDC to the bridge, and it is credited to the account that
+      sent it in less than 1 minute") — لا يوجد approve ولا دالة deposit
+      منفصلة. أُصلح كلا الأمرين معاً: العناوين بconfig.js + آلية النقل
+      بالأسفل.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -323,7 +332,15 @@ async function showHistory() {
   }
 }
 
-/* ════ Deposit ════ (بدون تغيير وظيفي) */
+/* ════ Deposit ════
+   ⚠️ CRITICAL FIX: كانت النسخة السابقة تستدعي usdc.approve(bridge, raw)
+   ثم bridge.deposit(address, raw) — كلاهما خاطئ لسببين مستقلّين:
+   (1) عنوانا USDC_CA/BRDG_CA أنفسهما كانا خاطئين (راجع config.js)،
+   (2) Bridge2 الحقيقي لا يملك دالة deposit() أصلاً — الإيداع بحسب
+       توثيق Hyperliquid الرسمي هو تحويل ERC20 مباشر (transfer) من
+       محفظة المستخدم لعنوان الجسر، تتم تزكيته آلياً للمُرسِل خلال أقل
+       من دقيقة. لا حاجة لـapprove (ليس هناك عقد وسيط يسحب المبلغ نيابة
+       عنك) ولا لأي استدعاء عقد ثانٍ. ════ */
 async function doDeposit() {
   const amt = parseFloat($('depositAmount').value || 0);
   if (!amt || amt < 5) return toast('الحد الأدنى للإيداع $5', 'err');
@@ -333,25 +350,23 @@ async function doDeposit() {
   try {
     const w = await State.wallet.getArbitrumSigner();
     const usdc = new ethers.Contract(USDC_CA, [
-      'function approve(address,uint256) returns(bool)',
+      'function transfer(address,uint256) returns(bool)',
       'function balanceOf(address) view returns(uint256)'
     ], w);
-    const bridge = new ethers.Contract(BRDG_CA, ['function deposit(address,uint64) external'], w);
-    const raw    = ethers.parseUnits(amt.toString(), 6);
-    const bal    = await usdc.balanceOf(State.wallet.address);
+    const raw = ethers.parseUnits(amt.toString(), 6);
+    const bal = await usdc.balanceOf(State.wallet.address);
     if (bal < raw) throw new Error('رصيد USDC غير كافٍ على Arbitrum');
-    showLoader('انتظر موافقة المحفظة...');
-    await (await usdc.approve(BRDG_CA, raw)).wait();
-    showLoader('جارٍ إرسال USDC...');
-    await (await bridge.deposit(State.wallet.address, raw)).wait();
+    showLoader('جارٍ إرسال USDC إلى الجسر...');
+    await (await usdc.transfer(BRDG_CA, raw)).wait();
     closeModal('modalDeposit');
-    toast(`✅ تم إرسال $${amt} — يصل خلال 1-3 دقائق`, 'ok', 6000);
+    toast(`✅ تم إرسال $${amt} — يصل خلال أقل من دقيقة`, 'ok', 6000);
   } catch (e) {
     toast(`⚠️ ${_depositErr(e.message)}`, 'err', 5000);
   } finally { resetBtn('depositExecute'); hideLoader(); }
 }
 
-/* ════ Withdraw ════ ✅ الرسوم الآن من WITHDRAW_FEE_USDC المركزي */
+/* ════ Withdraw ════ ✅ الرسوم من WITHDRAW_FEE_USDC المركزي — signTypedData
+   يطابق حرفياً بنية WithdrawAction3 الموثّقة رسمياً (bridge2/exchange). ════ */
 async function doWithdraw() {
   const amt    = parseFloat($('withdrawAmount').value || 0);
   const dest   = $('withdrawAddress').value.trim();
