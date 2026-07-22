@@ -6,7 +6,7 @@ name: Bump service worker cache version
 "on":
 
   push:
-    branches: [kanba]
+    branches: [demo]
     paths:
       - '**.html'
       - 'css/**'
