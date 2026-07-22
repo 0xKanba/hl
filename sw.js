@@ -6,9 +6,9 @@
    cache tag didn't change"; it never blocks a real deploy, because
    the app shell below is network-first, not stale-while-revalidate. */
 
-const CACHE_APP   = 'hltrade-app-202607191807-fadf28e';
-const CACHE_IMGS  = 'hltrade-img-202607191807-fadf28e';
-const CACHE_FONTS = 'hltrade-fnt-202607191807-fadf28e';
+const CACHE_APP   = 'hltrade-app-202607220653-85fd9f1';
+const CACHE_IMGS  = 'hltrade-img-202607220653-85fd9f1';
+const CACHE_FONTS = 'hltrade-fnt-202607220653-85fd9f1';
 
 const APP_SHELL = [
   '/',
