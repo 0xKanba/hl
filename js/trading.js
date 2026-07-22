@@ -18,7 +18,11 @@ function askTrade(isBuy) {
   const feeOpen  = (tradeMid * ozQty * fr).toFixed(4);
   const feeTot   = (tradeMid * ozQty * fr * 2).toFixed(4);
   const sziLiq   = isBuy ? ozQty : -ozQty;
-  const liqInfo  = liqPriceDisplay(State.asset, tradeMid, sziLiq, State.balance?.total || 0);
+  /* ✅ صفقة جديدة لم تُفتح بعد → ربحها/خسارتها العائم = صفر، والوسادة
+     الكاملة المتاحة لها = رصيد الحساب + ربح/خسارة كل صفقة أخرى مفتوحة
+     حالياً (راجع crossEquityExcluding بـutils.js وcalcLiqPrice بـ
+     positions.js لسبب هذا التغيير). */
+  const liqInfo  = liqPriceDisplay(State.asset, tradeMid, sziLiq, crossEquityExcluding(0));
 
   setTxt('confirmTitle',    `${a.icon} ${isBuy ? 'شراء ↑' : 'بيع ↓'} — ${a.name}`);
   setTxt('confirmSubtitle', `رافعة ${a.lev}x · تنفيذ فوري`);
@@ -92,9 +96,28 @@ async function execTrade() {
 
 /* ════ Background poll after trade ════ */
 function _multiPoll() {
-  setTimeout(() => pollAccount().catch(() => {}), 3000);
-  setTimeout(() => pollAccount().catch(() => {}), 7000);
-  setTimeout(() => pollAccount().catch(() => {}), 13000);
+  setTimeout(async () => {
+    if (!State.wallet) return;
+    try {
+      const chs = await hlInfo({
+        type: 'clearinghouseState',
+        user: State.wallet.address,
+        dex: HL_DEX
+      });
+
+      const rawPos = (chs?.assetPositions || [])
+        .filter(p => parseFloat(p.position?.szi || 0) !== 0);
+
+      const inGuard =
+        (Date.now() - (State._lastOptimisticClose || 0)) < 20000;
+
+      if (!inGuard || rawPos.length || State.positions.length) {
+        _applyPositions(rawPos);
+      }
+    } catch {}
+
+    _refreshOpenOrders();
+  }, 2500);
 }
 
 /* ════ Register a coin as optimistically closed ════

@@ -1,0 +1,89 @@
+name: Bump service worker cache version
+
+# Any push that changes the app shell gets a fresh sw.js cache tag,
+# committed back automatically. sw.js itself is excluded from the
+# trigger so this workflow can never re-trigger itself.
+"on":
+
+  push:
+    branches: [kanba]
+    paths:
+      - '**.html'
+      - 'css/**'
+      - 'js/**'
+      - 'manifest.json'
+      - '!sw.js'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sw-version-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug trigger context
+        run: |
+          echo "ref: ${{ github.ref }}"
+          echo "ref_name: ${{ github.ref_name }}"
+          echo "actor: ${{ github.actor }}"
+          echo "sha: ${{ github.sha }}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+
+      - name: Compute version tag
+        id: ver
+        run: echo "tag=$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump cache version and push (retries against concurrent pushes)
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          bump() {
+            test -f sw.js || { echo "::error::sw.js not found at repo root"; exit 1; }
+            sed -i -E "s/(CACHE_APP[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-app-${TAG}\2/" sw.js
+            sed -i -E "s/(CACHE_IMGS[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-img-${TAG}\2/" sw.js
+            sed -i -E "s/(CACHE_FONTS[[:space:]]*=[[:space:]]*')[^']*(')/\1hltrade-fnt-${TAG}\2/" sw.js
+          }
+
+          # Another workflow in this repo (the tree/structure auto-updater)
+          # also commits straight to this branch, so the remote can move
+          # between our checkout and our push. Every retry resets to the
+          # LATEST remote tip and re-derives sw.js fresh from there — no
+          # merge, no rebase, nothing that can conflict — then tries again.
+          for i in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            bump
+
+            if git diff --quiet -- sw.js; then
+              echo "sw.js already carries this tag after sync — nothing to push"
+              exit 0
+            fi
+
+            git add sw.js
+            git commit -m "chore: bump sw.js cache version to ${TAG}"
+
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $i"
+              exit 0
+            fi
+
+            echo "Push rejected on attempt $i — remote moved again, retrying..."
+            sleep $((i * 3))
+          done
+
+          echo "::error::Failed to push after 5 attempts — something is pushing to $BRANCH faster than this workflow can land. Check the other workflow's schedule/trigger."
+          exit 1

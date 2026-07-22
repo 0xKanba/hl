@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════
-   base.css — سيولة (Suyula) · Design System Foundation
-   Reset · Typography · Spacing · Radius · Motion · A11y
-   No color values live here — see themes.css for all color tokens.
+   base.css — HL / سيولة · Foundation
+   Reset · Typography (كل النصوص font-weight: 900) · Spacing · Radius
+   · Motion · A11y · Scrollbars
+   لا قيم ألوان هنا — كل الألوان في themes.css
 ═══════════════════════════════════════════════════════════════ */
 @layer base, themes, components;
 
@@ -11,11 +12,9 @@
    CORE TOKENS — theme-agnostic
 ════════════════════════════════════ */
 :root {
-  /* Typography — Cairo carries the Arabic; Inter/system stack is the
-     Latin fallback for any stray non-Arabic run (numerals already
-     go through --font-mono instead). */
+  /* Typography */
   --font-ui:   'Cairo', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   --fs-2xs: 9px;  --fs-xs: 10px; --fs-sm: 11px; --fs-base: 12px;
   --fs-md:  14px; --fs-lg: 15px; --fs-xl: 16px; --fs-2xl: 18px;
@@ -25,31 +24,37 @@
   --lh-base:  1.45;
   --lh-loose: 1.75;
 
-  /* Regular/Medium/Bold carries most of the UI — black is reserved for
-     the numbers that should actually dominate (price, PnL). Calmer
-     hierarchy, fewer things shouting at once. */
-  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; --fw-black: 900;
+  /* ✅ كل الأوزان = 900 (نص عريض 100% كامل) */
+  --fw-regular:  900;
+  --fw-medium:   900;
+  --fw-semibold: 900;
+  --fw-bold:     900;
+  --fw-black:    900;
 
   /* Spacing — 4px system */
   --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
   --space-9: 48px;
 
-  /* Radius scale */
-  --r-xs: 8px; --r-sm: 12px; --r-md: 16px; --r-lg: 20px; --r-xl: 24px;
+  /* Radius scale — من hl.css */
+  --r-xs:   8px;
+  --r-sm:   12px;
+  --r-md:   16px;
+  --r-lg:   20px;
+  --r-xl:   24px;
   --r-pill: 999px;
 
-  /* Motion — premium easing set */
-  --ease-standard: cubic-bezier(.4,0,.2,1);   /* micro-interactions   */
-  --ease-out:      cubic-bezier(.22,1,.36,1); /* entrances / opens    */
-  --ease-in:       cubic-bezier(.64,0,.78,0); /* exits / collapses    */
-  --ease-bounce:   cubic-bezier(.34,1.56,.64,1); /* modal pop-in      */
+  /* Motion */
+  --ease-standard: cubic-bezier(.4,0,.2,1);
+  --ease-out:      cubic-bezier(.22,1,.36,1);
+  --ease-in:       cubic-bezier(.64,0,.78,0);
+  --ease-bounce:   cubic-bezier(.34,1.56,.64,1);
   --dur-fast:  120ms;
   --dur-base:  180ms;
   --dur-slow:  280ms;
   --dur-theme: 200ms;
 
-  /* Elevation / stacking order — single source of truth */
+  /* Z-index — طبقات هندسية 100% (من hl2.css) */
   --z-screen: 1;
   --z-chart:  50;
   --z-opts:   200;
@@ -60,8 +65,8 @@
 
 /* ════════════════════════════════════
    THEME-SWITCH SMOOTHING
-   Applied to <html> for the ~280ms window
-   while toggling data-theme.
+   يُطبَّق على <html> خلال ~200ms عند
+   تبديل data-theme عبر الزر الخارجي.
 ════════════════════════════════════ */
 html.theme-transitioning,
 html.theme-transitioning *,
@@ -84,7 +89,7 @@ html.theme-transitioning *::after {
   user-select: none;
 }
 
-/* Financial data stays selectable/copyable regardless of the reset above */
+/* البيانات المالية تبقى قابلة للتحديد */
 .pos-data-value, .price-value, .positions-pnl,
 .hist-val, .hist-pnl, .balance-value, .confirm-val,
 .tab-price, .nav-address, .pos-pnl, .pos-size,
@@ -105,13 +110,24 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  font-weight: var(--fw-semibold);
+  font-weight: 900;
 }
 
-input, button, select { font-family: inherit; font-size: inherit; color: inherit; }
+/* ✅ إجبار كل عنصر نصي على 900 */
+body, p, span, div, a, label, strong, em, b, i, small,
+h1, h2, h3, h4, h5, h6,
+button, input, select, textarea,
+li, td, th, figcaption {
+  font-weight: 900 !important;
+}
+
+input, button, select, textarea {
+  font-family: inherit; font-size: inherit; color: inherit;
+}
 
 button {
   cursor: pointer; border: none; background: none;
+  font-weight: 900;
   transition:
     transform var(--dur-fast) var(--ease-standard),
     filter    var(--dur-base) var(--ease-standard),
@@ -122,26 +138,25 @@ button:disabled { opacity: .45; pointer-events: none; }
 
 input {
   background: var(--bg-input);
-  border: 1.5px solid var(--border-strong);
+  border: 2px solid var(--border-strong);
   border-radius: var(--r-sm);
-  padding: var(--space-3) var(--space-4);
+  padding: 10px 14px;
   outline: none;
   transition:
     border-color var(--dur-base) var(--ease-standard),
     box-shadow   var(--dur-base) var(--ease-standard);
-  font-weight: var(--fw-bold);
+  font-weight: 900;
   color: var(--text-primary);
-  font-size: max(16px, 1em); /* prevents iOS auto-zoom on focus */
+  font-size: max(16px, 1em); /* منع zoom تلقائي على iOS */
 }
 input:focus {
   border-color: var(--ac);
-  box-shadow: 0 0 0 3px var(--ac-dim), var(--glow-ac);
+  box-shadow: 0 0 0 3px var(--ac-dim);
 }
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
 input[type="number"] { -moz-appearance: textfield; }
 
-/* Visible keyboard focus, silent for pointer interaction */
 :focus-visible {
   outline: 2px solid var(--ac);
   outline-offset: 2px;
@@ -150,7 +165,7 @@ input[type="number"] { -moz-appearance: textfield; }
 button:focus-visible { outline-offset: 3px; }
 
 /* ════════════════════════════════════
-   SCROLLBARS — thin, premium, theme-aware
+   SCROLLBARS — thin, theme-aware
 ════════════════════════════════════ */
 * {
   scrollbar-width: thin;
@@ -177,7 +192,7 @@ button:focus-visible { outline-offset: 3px; }
 .hidden { display: none !important; }
 
 /* ════════════════════════════════════
-   ACCESSIBILITY — motion
+   A11Y — motion
 ════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

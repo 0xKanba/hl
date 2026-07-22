@@ -1,3 +1,9 @@
+/* ═══════════════════════════════════════
+   positions.js — حساب ودمج بيانات الصفقات
+   ✅ mergeFillData — يدمج userFills داخل كل صفقة
+      (وقت الفتح، أول/آخر Fill، Order ID، Trade ID، Hash، الرسوم، التصفية)
+   ✅ calcLiqPrice (Cross) — أُعيدت صياغتها بالكامل، راجع التعليق أسفله
+═══════════════════════════════════════ */
 'use strict';
 
 function shortCoinPos(c) {
@@ -23,35 +29,106 @@ function parseTpslFromOrders(orders, coin) {
   return r;
 }
 
-function calcLiqPrice(entryPxOz, sziOz, balance, isCross, maxLev) {
+/* ════════════════════════════════════════════════
+   دمج Fills داخل الصفقة — يطابق طلب "الطبقة" حرفياً:
+   وقت فتح المركز = وقت أول Fill بـ startPosition == 0 (الأحدث زمنياً،
+   لأن نفس الـ coin قد يُفتح ويُغلق عدة مرات تاريخياً — نريد بداية
+   السلسلة المفتوحة حالياً فقط). آخر Fill = أحدث تنفيذ لنفس الـ coin
+   بغضّ النظر إن كان فتح/إضافة/تخفيض.
+════════════════════════════════════════════════ */
+function _findOpeningFill(coin, fills) {
+  let best = null;
+  for (const f of fills) {
+    if (f.coin !== coin) continue;
+    if (Math.abs(parseFloat(f.startPosition || 0)) < 1e-9) {
+      if (!best || f.time > best.time) best = f;
+    }
+  }
+  return best;
+}
+function _findLastFill(coin, fills) {
+  let best = null;
+  for (const f of fills) {
+    if (f.coin !== coin) continue;
+    if (!best || f.time > best.time) best = f;
+  }
+  return best;
+}
+
+function mergeFillData(rawPos, fills) {
+  const list = fills || [];
+  return rawPos.map(p => {
+    const coin    = p.position.coin;
+    const opening = _findOpeningFill(coin, list);
+    const last    = _findLastFill(coin, list);
+    return {
+      ...p,
+      openTime:     opening?.time ?? null,
+      openFill:     opening ?? null,
+      lastFill:     last ?? null,
+      lastOid:      last?.oid ?? null,
+      lastTid:      last?.tid ?? null,
+      lastHash:     last?.hash ?? null,
+      lastFee:      last?.fee ?? null,
+      lastFeeToken: last?.feeToken ?? null,
+      lastDir:      last?.dir ?? null,
+      liquidation:  last?.liquidation ?? null,
+    };
+  });
+}
+
+/* ════════════════════════════════════════════════
+   سعر التصفية التقريبي — Cross margin
+   ════════════════════════════════════════════════
+   ✅ FIX (كان يُظهر سعر تصفية أبعد من الحقيقي كلما وُجد ربح/خسارة عائم
+   من صفقات Cross أخرى مفتوحة بنفس الوقت، أو عند الإضافة لصفقة رابحة):
+
+   شرط تصفية Hyperliquid الرسمي لصفقات Cross: "liquidated when the
+   account value (including unrealized pnl) is less than the maintenance
+   margin" — أي عند السعر P الذي يحقق:
+       equity(P) = mmFrac × sz × P
+   حيث equity(P) = W + side×sz×(P − entry)
+   و W = رصيد الحساب باستثناء ربح/خسارة *هذه* الصفقة تحديداً (لكن يشمل
+   ربح/خسارة أي صفقة Cross أخرى — راجع crossEquityExcluding بـutils.js).
+
+   حل المعادلة لـP مباشرة (بلا أي تقريب) يعطي:
+       Long:  P = (entry − W/sz) / (1 − mmFrac)
+       Short: P = (entry + W/sz) / (1 + mmFrac)
+
+   الصيغة القديمة كانت تحسب (entry − freeMargin/sz) بلا القاسم
+   (1∓mmFrac) إطلاقاً، وكانت تستقبل رصيد Spot الخام فقط (balance.total)
+   بدل "معادلة equity" الحقيقية — فتتجاهل أي ربح/خسارة عائم من صفقات
+   Cross أخرى، وتُخطئ الحساب أكثر كلما زاد ذلك الربح/الخسارة (بالضبط
+   سيناريو "أضفت لصفقة وهي رابحة" الذي كشف الفرق عن الموقع الرسمي).
+════════════════════════════════════════════════ */
+function calcLiqPrice(entryPxOz, sziOz, equityExclOwnPnl, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
   const side    = sziOz > 0 ? 1 : -1;
   const absSize = Math.abs(sziOz);
   const mmFrac  = 0.5 / maxLev;
-  const notional = absSize * entryPxOz;
   let liq;
   if (isCross) {
-    const bal        = balance > 0 ? balance : notional / maxLev;
-    const freeMargin = bal - notional * mmFrac;
-    if (freeMargin <= 0) {
-      liq = side > 0 ? entryPxOz * 0.99 : entryPxOz * 1.01;
-    } else {
-      liq = entryPxOz - side * freeMargin / absSize;
-    }
+    const cushionPerUnit = (equityExclOwnPnl || 0) / absSize;
+    liq = side > 0
+      ? (entryPxOz - cushionPerUnit) / (1 - mmFrac)
+      : (entryPxOz + cushionPerUnit) / (1 + mmFrac);
   } else {
     liq = side > 0
       ? entryPxOz * (1 - 1 / maxLev + mmFrac)
       : entryPxOz * (1 + 1 / maxLev - mmFrac);
   }
-  if (liq <= 0) return 0.01;
+  /* رصيد زائد جداً بالنسبة لحجم الصفقة → لا يوجد سعر تصفية واقعي ضمن
+     مدى أسعار معقول. نُرجع null (يعرضها الطرف الآخر كـ"—") بدل رقم
+     مُضلِّل قريب من الصفر يُوحي بخطر تصفية وشيك غير موجود فعلياً. */
+  if (!(liq > 0)) return null;
   if (side === -1 && liq > entryPxOz * 8) return null;
   return liq;
 }
 
-function liqPriceDisplay(sym, entryPxOz, sziOz, balance) {
+function liqPriceDisplay(sym, entryPxOz, sziOz, equityExclOwnPnl) {
   const a      = ASSETS[sym] || ASSETS['GOLD'] || { lev: 20, cross: false, pxDp: 2, gram: false };
   const isGram = !!a.gram;
-  const liqOz  = calcLiqPrice(entryPxOz, sziOz, balance, a.cross, a.lev);
+  const liqOz  = calcLiqPrice(entryPxOz, sziOz, equityExclOwnPnl, a.cross, a.lev);
   if (liqOz === null) return { text: '—', ounce: null };
   const liqDisp = isGram ? liqOz / TROY : liqOz;
   return { text: `$${fmt(liqDisp, a.pxDp)}`, ounce: liqOz };
@@ -69,7 +146,7 @@ function calcSlPrice(ep, szi, sl) {
   return sz > 0 ? e - sl / sz : e + sl / Math.abs(sz);
 }
 
-/* ════ Funding ════ */
+/* ════ Funding — من نفس دفعة clearinghouseState الحية، بلا استعلام منفصل ════ */
 function updateFundingFromPositions(positions) {
   const acc = {};
   for (const p of positions || []) {
@@ -87,40 +164,23 @@ function updateFundingFromPositions(positions) {
   });
 }
 
-async function fetchFundingRates() {
-  if (!State.wallet) return;
-  try {
-    const xyz    = await hlInfo({ type: 'clearinghouseState', user: State.wallet.address, dex: 'xyz' }).catch(() => ({}));
-    const rawPos = (xyz?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
-    if (rawPos.length) updateFundingFromPositions(rawPos);
-  } catch {}
-}
-
-function startFundingTimer() {
-  clearInterval(State._fundingTimer);
-  fetchFundingRates();
-  State._fundingTimer = setInterval(fetchFundingRates, 60_000);
-}
-
-/* ════ تفاصيل الصفقة — عند النقر على اسم الأصل ════ */
+/* ════ تفاصيل الصفقة — مُغنّاة بمعلومات Fill/Order/Trade/Hash ════ */
 window.openPosDetail = function (i) {
   const p = State.positions[i]; if (!p) return;
   const pos     = p.position;
   const sziOz   = parseFloat(pos.szi);
   const sym     = shortCoinPos(pos.coin);
   const a       = ASSETS[sym] || { name: sym, unit: '', icon: '📊', pxDp: 2, lev: 10, cross: true };
-  const isGram  = !!a.gram;
   const isLong  = sziOz > 0;
   const entryOz = parseFloat(pos.entryPx || 0);
-  const entryDisp = isGram ? entryOz / TROY : entryOz;
-  const curPx   = State.prices[sym]?.mid;
   const fundUsd = State.fundingRates[sym] || State.fundingRates['GOLD'] || 0;
-  const bal     = State.balance?.total || 0;
-  const liqInfo = liqPriceDisplay(sym, entryOz, sziOz, bal);
-  const openTs  = State._openTimes?.[pos.coin];
-  const openStr = openTs
-    ? new Date(openTs).toLocaleString('ar-EG', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+  const ownPnl  = parseFloat(pos.unrealizedPnl || 0);
+  const liqInfo = liqPriceDisplay(sym, entryOz, sziOz, crossEquityExcluding(ownPnl));
+  const openStr = p.openTime
+    ? new Date(p.openTime).toLocaleString('ar-EG', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
     : '—';
+  const hashShort = p.lastHash ? `${p.lastHash.slice(0,8)}…${p.lastHash.slice(-6)}` : '—';
+  const liqTxt = p.liquidation ? `⚠️ ${p.liquidation.method === 'backstop' ? 'تصفية احتياطية' : 'تصفية سوقية'}` : null;
 
   setTxt('posDetailTitle', `${a.icon} ${a.name}`);
   $('posDetailBody').innerHTML = `
@@ -129,14 +189,18 @@ window.openPosDetail = function (i) {
     <div class="confirm-row"><span class="confirm-key">وقت الفتح</span><span class="confirm-val">${openStr}</span></div>
     <div class="confirm-row"><span class="confirm-key">رسوم التمويل</span><span class="confirm-val ${fundUsd>=0?'buy':'sell'}">${fundUsd>=0?'+':'-'}$${Math.abs(fundUsd).toFixed(4)}</span></div>
     <div class="confirm-row"><span class="confirm-key">⚡ سعر التصفية</span><span class="confirm-val warn">${liqInfo.text}</span></div>
+    <div class="confirm-row"><span class="confirm-key">آخر تنفيذ</span><span class="confirm-val muted">${p.lastDir || '—'}</span></div>
+    <div class="confirm-row"><span class="confirm-key">Order ID</span><span class="confirm-val muted" style="direction:ltr;">${p.lastOid ?? '—'}</span></div>
+    <div class="confirm-row"><span class="confirm-key">Trade ID</span><span class="confirm-val muted" style="direction:ltr;">${p.lastTid ?? '—'}</span></div>
+    <div class="confirm-row"><span class="confirm-key">Tx Hash</span><span class="confirm-val muted" style="direction:ltr;font-size:11px;">${hashShort}</span></div>
+    <div class="confirm-row"><span class="confirm-key">رسوم آخر تنفيذ</span><span class="confirm-val fee">${p.lastFee ? '$'+parseFloat(p.lastFee).toFixed(4) : '—'}</span></div>
+    ${liqTxt ? `<div class="confirm-row"><span class="confirm-key">حالة التصفية</span><span class="confirm-val sell">${liqTxt}</span></div>` : ''}
   `;
   openModal('modalPosDetail');
 };
 
 /* ════ Render ════ */
-/* ✅ null sentinel — empty string '' equals '' causing ghost cards bug */
 let _posFingerprint = null;
-
 function resetPosFingerprint() { _posFingerprint = null; }
 
 function _fmtOpenTime(ts) {
@@ -162,7 +226,6 @@ function renderPositions() {
 
   const totalPnl = State.positions.reduce((s, p) => s + parseFloat(p.position.unrealizedPnl || 0), 0);
 
-  /* Live-update existing DOM nodes without rebuild */
   State.positions.forEach((p, i) => {
     const pnl  = parseFloat(p.position.unrealizedPnl || 0);
     const pEl  = document.querySelector(`[data-pnl-idx="${i}"]`);
@@ -190,7 +253,7 @@ function renderPositions() {
     }
 
     const otEl = document.querySelector(`[data-opentime-idx="${i}"]`);
-    if (otEl) otEl.textContent = _fmtOpenTime(State._openTimes?.[p.position.coin]);
+    if (otEl) otEl.textContent = _fmtOpenTime(p.openTime);
   });
 
   const tEl = $('totalPnl');
@@ -199,7 +262,6 @@ function renderPositions() {
     tEl.className   = `positions-pnl ${totalPnl >= 0 ? 'pos' : 'neg'}`;
   }
 
-  /* ✅ Full DOM rebuild only when structure changes */
   if (fp === _posFingerprint) return;
   _posFingerprint = fp;
 
@@ -250,7 +312,7 @@ function renderPositions() {
         </div>
         <div class="pos-data-item">
           <span class="pos-data-label">وقت الفتح</span>
-          <span class="pos-data-value" data-opentime-idx="${i}">${_fmtOpenTime(State._openTimes?.[pos.coin])}</span>
+          <span class="pos-data-value" data-opentime-idx="${i}">${_fmtOpenTime(p.openTime)}</span>
         </div>
       </div>
       <div class="pos-tpsl-row">

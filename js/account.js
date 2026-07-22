@@ -1,6 +1,22 @@
+/* ═══════════════════════════════════════
+   account.js — بيانات الحساب حيّة بالكامل عبر WS
+   ✅ initAccountFeeds بديل pollAccount:
+      لقطة أولية عبر WS Post + اشتراكات حية:
+      allDexsClearinghouseState / spotState / userFills / orderUpdates
+   ✅ لا polling — كل تحديث دفعي (push) من الخادم
+   ✅ doWithdraw يستخدم WITHDRAW_FEE_USDC المركزي بدل رقم حرفي مكرَّر
+   ⚠️ CRITICAL FIX — doDeposit كان يستدعي approve()+bridge.deposit() على
+      عنوانَي عقد خاطئين تماماً (لا يطابقان USDC الحقيقي ولا Bridge2
+      الحقيقي على Arbitrum — راجع config.js). كذلك آلية deposit() نفسها
+      غير موجودة أصلاً بـBridge2 الحقيقي: توثيق Hyperliquid الرسمي يذكر
+      صراحة أن الإيداع هو تحويل ERC20 مباشر لعنوان الجسر ("The user sends
+      native USDC to the bridge, and it is credited to the account that
+      sent it in less than 1 minute") — لا يوجد approve ولا دالة deposit
+      منفصلة. أُصلح كلا الأمرين معاً: العناوين بconfig.js + آلية النقل
+      بالأسفل.
+═══════════════════════════════════════ */
 'use strict';
 
-/* ════ Error helpers ════ */
 function _depositErr(msg) {
   const m = (msg || '').toLowerCase();
   if (m.includes('insufficient') || m.includes('balance')) return 'رصيد USDC غير كافٍ في محفظة Arbitrum';
@@ -23,108 +39,155 @@ function _withdrawErr(msg) {
 }
 
 /* ════════════════════════════════════════════════
-   pollAccount
-   Balance = Spot USDC only (single source of truth)
-   margin used = xyz marginSummary.totalMarginUsed
-   unrealizedPnl = separate, never added to balance
+   initAccountFeeds — يُستدعى مرة واحدة فور ربط المحفظة (auth.js).
+   1) لقطة أولية بالتوازي عبر WS Post (REST fallback تلقائي عبر hlInfo)
+   2) اشتراكات حية تُبقي كل شيء متزامناً بلا أي polling بعدها
 ════════════════════════════════════════════════ */
-async function pollAccount() {
+let _acctUnsubs = [];
+let _reconnectUnsub = null;
+let _ordersRefreshTimer = null;
+
+async function initAccountFeeds() {
   if (!State.wallet) return;
+  teardownAccountFeeds();
+  const user = State.wallet.address;
 
-  const inGuard = (Date.now() - (State._lastOptimisticClose || 0)) < 20000;
+  const [spot, chs, fills, orders] = await Promise.all([
+    hlInfo({ type: 'spotClearinghouseState', user }).catch(() => ({})),
+    hlInfo({ type: 'clearinghouseState', user, dex: HL_DEX }).catch(() => ({})),
+    hlInfo({ type: 'userFills', user }).catch(() => []),
+    hlInfo({ type: 'frontendOpenOrders', user, dex: HL_DEX }).catch(() => []),
+  ]);
 
-  try {
-    const [spot, xyz, openOrders] = await Promise.all([
-      hlInfo({ type: 'spotClearinghouseState', user: State.wallet.address }).catch(() => ({})),
-      hlInfo({ type: 'clearinghouseState',     user: State.wallet.address, dex: 'xyz' }).catch(() => ({})),
-      hlInfo({ type: 'frontendOpenOrders',     user: State.wallet.address, dex: 'xyz' }).catch(() => [])
-    ]);
+  let spotUSDC = 0;
+  for (const b of spot?.balances || []) {
+    const coin = (b.coin || '').toUpperCase();
+    if (coin === 'USDC' || coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
+  }
+  const margin = parseFloat(chs?.marginSummary?.totalMarginUsed || 0);
+  State.balance = { total: spotUSDC, margin, floatPnl: 0, available: Math.max(0, spotUSDC - margin) };
+  State.fillsCache  = Array.isArray(fills) ? fills.slice(0, 300) : [];
+  State.openOrders  = Array.isArray(orders) ? orders : [];
 
-    State.openOrders = Array.isArray(openOrders) ? openOrders : [];
+  const rawPos = (chs?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
+  _applyPositions(rawPos);
 
-    /* ── Spot USDC balance — the ONLY source for "available balance" ── */
-    let spotUSDC = 0;
-    for (const b of spot?.balances || []) {
-      const coin = (b.coin || '').toUpperCase();
-      if (coin === 'USDC' || coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
-    }
+  _acctUnsubs.push(HL.subscribe({ type: 'allDexsClearinghouseState', user }, _onClearinghouseStatePush));
+  _acctUnsubs.push(HL.subscribe({ type: 'spotState', user }, _onSpotStatePush));
+  _acctUnsubs.push(HL.subscribe({ type: 'userFills', user }, _onUserFillsPush));
+  _acctUnsubs.push(HL.subscribe({ type: 'orderUpdates', user }, _onOrderUpdatesPush));
 
-    /* ── Perp account values — kept separate, never merged into spotUSDC ── */
-    const margin    = parseFloat(xyz?.marginSummary?.totalMarginUsed  || 0);
-    const rawPos    = (xyz?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
-    const floatPnl  = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
+  _reconnectUnsub = HL.onReconnect(() => { _refreshOpenOrders(); });
 
-    State.balance = {
-      total:     spotUSDC,
-      margin,
-      floatPnl,
-      available: Math.max(0, spotUSDC - margin)
-    };
-
-    /* ── Position update with guard ── */
-    if (inGuard) {
-      /*
-       * ✅ FIX for ghost-position bug (Issue 2).
-       *
-       * ROOT CAUSE: During the 20-second guard window, when rawPos.length > 0
-       * (API still shows the position because the IOC close hasn't settled yet),
-       * the original code called _applyPositions(rawPos) unconditionally — which
-       * RE-ADDED the already-optimistically-removed position to State.positions,
-       * causing it to reappear in the UI as a "ghost".
-       *
-       * FIX: Filter rawPos through State._closedCoins.
-       * State._closedCoins contains the coin strings of positions that were
-       * optimistically closed (set by execClose / execCloseAll in trading.js).
-       * Any rawPos entry whose coin is in _closedCoins is excluded from the
-       * update, preventing the ghost from reappearing.
-       * Entries self-expire from _closedCoins after 25 seconds (trading.js).
-       *
-       * This allows other open positions to still be updated during the guard,
-       * while the just-closed position stays removed.
-       */
-      const closedCoins = State._closedCoins || [];
-
-      if (rawPos.length > 0 || State.positions.length > 0) {
-        const filtered = closedCoins.length > 0
-          ? rawPos.filter(p => !closedCoins.includes(p.position.coin))
-          : rawPos;
-
-        State._emptyPosCount = 0;
-        _applyPositions(filtered);
-      }
-    } else {
-      /* Guard expired — normal sync with double-confirmation for clean UX */
-      if (State.positions.length > 0 && rawPos.length === 0) {
-        State._emptyPosCount = (State._emptyPosCount || 0) + 1;
-        if (State._emptyPosCount < 2) return;
-        State._emptyPosCount = 0;
-      } else {
-        State._emptyPosCount = 0;
-      }
-      _applyPositions(rawPos);
-    }
-
-    autoSetReferrer();
-  } catch (e) { console.warn('[pollAccount]', e.message); }
+  autoSetReferrer();
 }
 
+function teardownAccountFeeds() {
+  _acctUnsubs.forEach(u => { try { u(); } catch {} });
+  _acctUnsubs = [];
+  if (_reconnectUnsub) { try { _reconnectUnsub(); } catch {} _reconnectUnsub = null; }
+  clearTimeout(_ordersRefreshTimer);
+}
+
+/* ════ Push: positions (Main + كل HIP-3 dex في رسالة واحدة، نستخرج HL_DEX) ════ */
+function _onClearinghouseStatePush(data) {
+  const entry = (data.clearinghouseStates || []).find(([dex]) => dex === HL_DEX);
+  const inner = entry ? entry[1] : null;
+  const rawPos = inner ? (inner.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0) : [];
+
+  const margin   = parseFloat(inner?.marginSummary?.totalMarginUsed || 0);
+  const floatPnl = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
+  const total    = State.balance?.total || 0;
+  State.balance  = { total, margin, floatPnl, available: Math.max(0, total - margin) };
+
+  const inGuard = (Date.now() - (State._lastOptimisticClose || 0)) < 20000;
+  if (inGuard) {
+    const closedCoins = State._closedCoins || [];
+    if (rawPos.length > 0 || State.positions.length > 0) {
+      const filtered = closedCoins.length > 0 ? rawPos.filter(p => !closedCoins.includes(p.position.coin)) : rawPos;
+      State._emptyPosCount = 0;
+      _applyPositions(filtered);
+    }
+  } else {
+    if (State.positions.length > 0 && rawPos.length === 0) {
+      State._emptyPosCount = (State._emptyPosCount || 0) + 1;
+      if (State._emptyPosCount < 2) return;
+      State._emptyPosCount = 0;
+    } else {
+      State._emptyPosCount = 0;
+    }
+    _applyPositions(rawPos);
+  }
+  if ($('modalBalance')?.classList.contains('open')) _renderBalanceFromState();
+}
+
+/* ════ Push: رصيد USDC الفعلي (Spot — مصدر الرصيد الوحيد) ════ */
+function _onSpotStatePush(data) {
+  let spotUSDC = 0;
+  for (const b of data.spotState?.balances || []) {
+    const coin = (b.coin || '').toUpperCase();
+    if (coin === 'USDC' || coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
+  }
+  const margin   = State.balance?.margin || 0;
+  const floatPnl = State.balance?.floatPnl || 0;
+  State.balance  = { total: spotUSDC, margin, floatPnl, available: Math.max(0, spotUSDC - margin) };
+  if ($('modalBalance')?.classList.contains('open')) _renderBalanceFromState();
+}
+
+/* ════ Push: Fills حية — تُغذّي fillsCache + تُعيد دمج الصفقات فوراً ════ */
+function _onUserFillsPush(data) {
+  const incoming = data.fills || [];
+  State.fillsCache = data.isSnapshot
+    ? incoming.slice(0, 300)
+    : [...incoming, ...(State.fillsCache || [])].slice(0, 300);
+
+  if (State.positions.length) {
+    State.positions = mergeFillData(
+      State.positions.map(p => ({ position: p.position, type: p.type, tpsl: p.tpsl })),
+      State.fillsCache
+    );
+    renderPositions();
+  }
+}
+
+/* ════ Push: تغيّر حالة أمر (فتح/تنفيذ/إلغاء/تفعيل) — إشارة لإعادة جلب
+   frontendOpenOrders الغني (isTrigger/orderType/triggerPx) بدل polling أعمى ════ */
+function _onOrderUpdatesPush() {
+  clearTimeout(_ordersRefreshTimer);
+  _ordersRefreshTimer = setTimeout(_refreshOpenOrders, 400);
+}
+
+async function _refreshOpenOrders() {
+  if (!State.wallet) return;
+  try {
+    const ords = await hlInfo({ type: 'frontendOpenOrders', user: State.wallet.address, dex: HL_DEX });
+    State.openOrders = Array.isArray(ords) ? ords : [];
+    if (State.positions.length) {
+      State.positions = State.positions.map(p => ({ ...p, tpsl: parseTpslFromOrders(State.openOrders, p.position.coin) }));
+      renderPositions();
+    }
+    if (typeof ChartModule !== 'undefined') ChartModule.refreshLines();
+  } catch (e) { console.warn('[orders]', e.message); }
+}
+
+/* ════ دمج بيانات الصفقة (تُستدعى من كل نقاط تحديث clearinghouseState) ════ */
 function _applyPositions(rawPos) {
-  _trackOpenTimes(rawPos);
-  State.positions = rawPos.map(p => {
+  _trackOpenTimes(rawPos); // احتياطي محلي (localStorage) لصفقات أقدم من سجل الـ fills المتاح
+  const merged = mergeFillData(rawPos, State.fillsCache);
+  State.positions = merged.map(p => {
     const existing = State.positions.find(e => e.position.coin === p.position.coin);
     const tpsl     = parseTpslFromOrders(State.openOrders, p.position.coin);
-    if (existing && !tpsl.tp && !tpsl.sl && existing.tpsl) return { ...p, tpsl: existing.tpsl };
-    return { ...p, tpsl };
+    const openTime = p.openTime || State._openTimes?.[p.position.coin] || null;
+    const base     = { ...p, openTime };
+    if (existing && !tpsl.tp && !tpsl.sl && existing.tpsl) return { ...base, tpsl: existing.tpsl };
+    return { ...base, tpsl };
   });
   updateFundingFromPositions(rawPos);
   renderPositions();
 }
 
-/* ════ وقت فتح الصفقة ════
-   Hyperliquid لا يوفر "وقت فتح" لمركز صافٍ — نُسجّله محلياً أول
-   لحظة يظهر فيها الـ coin، ونحذفه عند إغلاق الصفقة. صفقات كانت
-   مفتوحة قبل هذا التحديث تظهر بلا وقت (—) بدل رقم مُختلَق.
-════ */
+/* ════ وقت فتح احتياطي (localStorage) — يُستخدم فقط لو لم تجد mergeFillData
+   Fill مطابقاً (صفقة أقدم من سجل الـ fills المُحمَّل) ════ */
 function _loadOpenTimes() {
   try { return JSON.parse(localStorage.getItem(OPENTIME_KEY) || '{}'); } catch { return {}; }
 }
@@ -138,77 +201,61 @@ function _trackOpenTimes(rawPos) {
   State._openTimes = times;
 }
 
-/* ════ Balance Modal ════ */
-async function showBalance() {
+/* ════ Balance Modal — يرسم من State الحي، بلا أي fetch أثناء الفتح ════ */
+function showBalance() {
   openModal('modalBalance');
-  await _renderBalance();
+  _renderBalanceFromState();
   clearInterval(State._balTimer);
-  State._balTimer = setInterval(async () => {
+  State._balTimer = setInterval(() => {
     if (!$('modalBalance')?.classList.contains('open')) { clearInterval(State._balTimer); return; }
-    await _renderBalance();
-  }, 3000);
+    _renderBalanceFromState();
+  }, 1000); // إعادة رسم محلية فقط (لا شبكة) — تحديث فوري أصلاً عبر spotState/clearinghouseState push
 }
 
-async function _renderBalance() {
-  if (!State.wallet) return;
+function _renderBalanceFromState() {
   const el = $('balanceContent'); if (!el) return;
-  try {
-    const [spot, xyz] = await Promise.all([
-      hlInfo({ type: 'spotClearinghouseState', user: State.wallet.address }).catch(() => ({})),
-      hlInfo({ type: 'clearinghouseState',     user: State.wallet.address, dex: 'xyz' }).catch(() => ({}))
-    ]);
-
-    let spotUSDC = 0;
-    for (const b of spot?.balances || []) {
-      const coin = (b.coin || '').toUpperCase();
-      if (coin === 'USDC' || coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
-    }
-
-    const margin   = parseFloat(xyz?.marginSummary?.totalMarginUsed || 0);
-    const floatPnl = (xyz?.assetPositions || [])
-      .reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
-    const available = Math.max(0, spotUSDC - margin);
-    const pCls = floatPnl >= 0 ? 'green' : 'red';
-
-    el.innerHTML = `
-      <div class="balance-grid">
-        <div class="balance-item">
-          <span class="balance-label">💰 رصيد Spot USDC</span>
-          <span class="balance-value blue">$${fmt(spotUSDC, 2)}</span>
-        </div>
-        <div class="balance-item">
-          <span class="balance-label">✅ المتاح للتداول</span>
-          <span class="balance-value green">$${fmt(available, 2)}</span>
-        </div>
-        <div class="balance-item">
-          <span class="balance-label">🔒 الهامش المستخدم</span>
-          <span class="balance-value warn">$${fmt(margin, 2)}</span>
-        </div>
-        <div class="balance-item">
-          <span class="balance-label">📊 ربح / خسارة عائمة</span>
-          <span class="balance-value ${pCls}">${floatPnl >= 0 ? '+' : ''}$${fmt(floatPnl, 2)}</span>
-        </div>
+  const b = State.balance;
+  if (!b) { el.innerHTML = '<div class="balance-loading">⏳ جاري جلب الرصيد...</div>'; return; }
+  const pCls = b.floatPnl >= 0 ? 'green' : 'red';
+  el.innerHTML = `
+    <div class="balance-grid">
+      <div class="balance-item">
+        <span class="balance-label">💰 رصيد Spot USDC</span>
+        <span class="balance-value blue">$${fmt(b.total, 2)}</span>
       </div>
-      <div class="balance-auto-note">↻ تحديث تلقائي كل 3 ثواني</div>`;
-  } catch {
-    el.innerHTML = `<div class="balance-loading" style="color:var(--hc-dn)">⚠️ تعذّر جلب الرصيد</div>`;
-  }
+      <div class="balance-item">
+        <span class="balance-label">✅ المتاح للتداول</span>
+        <span class="balance-value green">$${fmt(b.available, 2)}</span>
+      </div>
+      <div class="balance-item">
+        <span class="balance-label">🔒 الهامش المستخدم</span>
+        <span class="balance-value warn">$${fmt(b.margin, 2)}</span>
+      </div>
+      <div class="balance-item">
+        <span class="balance-label">📊 ربح / خسارة عائمة</span>
+        <span class="balance-value ${pCls}">${b.floatPnl >= 0 ? '+' : ''}$${fmt(b.floatPnl, 2)}</span>
+      </div>
+    </div>
+    <div class="balance-auto-note">↻ تحديث حي (WebSocket)</div>`;
 }
 
-/* ════ Trade History ════ */
+/* ════ Trade History — يستخدم fillsCache الحي أولاً (مصدر وحيد)، لا يُعيد
+   جلب الـ fills إلا لو الكاش غير كافٍ. userFunding (وليس userFundingHistory
+   — الاسم القديم غير موثّق ويفشل بصمت) للتمويل التاريخي. ════ */
 async function showHistory() {
   if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
   openModal('modalHistory');
   const list = $('historyList'), sub = $('historySubtitle');
   list.innerHTML = '<div class="balance-loading">⏳ جاري جلب السجل...</div>';
   try {
-    const [fillsXyz, ledger] = await Promise.all([
-      hlInfo({ type: 'userFills', user: State.wallet.address, dex: 'xyz' }).catch(() => []),
-      hlInfo({ type: 'userFundingHistory', user: State.wallet.address, dex: 'xyz',
+    const needFresh = !State.fillsCache || State.fillsCache.length < 30;
+    const [fillsRaw, ledger] = await Promise.all([
+      needFresh ? hlInfo({ type: 'userFills', user: State.wallet.address }).catch(() => []) : Promise.resolve(State.fillsCache),
+      hlInfo({ type: 'userFunding', user: State.wallet.address,
                startTime: Date.now() - 90 * 24 * 3600 * 1000 }).catch(() => [])
     ]);
 
-    const fills = (Array.isArray(fillsXyz) ? fillsXyz : []).sort((a, b) => b.time - a.time);
+    const fills = (Array.isArray(fillsRaw) ? fillsRaw : []).slice().sort((a, b) => b.time - a.time);
 
     if (!fills.length) {
       if (sub) sub.textContent = 'لا يوجد سجل تداول حتى الآن';
@@ -285,7 +332,15 @@ async function showHistory() {
   }
 }
 
-/* ════ Deposit ════ */
+/* ════ Deposit ════
+   ⚠️ CRITICAL FIX: كانت النسخة السابقة تستدعي usdc.approve(bridge, raw)
+   ثم bridge.deposit(address, raw) — كلاهما خاطئ لسببين مستقلّين:
+   (1) عنوانا USDC_CA/BRDG_CA أنفسهما كانا خاطئين (راجع config.js)،
+   (2) Bridge2 الحقيقي لا يملك دالة deposit() أصلاً — الإيداع بحسب
+       توثيق Hyperliquid الرسمي هو تحويل ERC20 مباشر (transfer) من
+       محفظة المستخدم لعنوان الجسر، تتم تزكيته آلياً للمُرسِل خلال أقل
+       من دقيقة. لا حاجة لـapprove (ليس هناك عقد وسيط يسحب المبلغ نيابة
+       عنك) ولا لأي استدعاء عقد ثانٍ. ════ */
 async function doDeposit() {
   const amt = parseFloat($('depositAmount').value || 0);
   if (!amt || amt < 5) return toast('الحد الأدنى للإيداع $5', 'err');
@@ -293,34 +348,31 @@ async function doDeposit() {
   setBtnLoading('depositExecute', '⏳');
   showLoader('جارٍ التحقق من رصيد USDC...');
   try {
-    const p    = new ethers.JsonRpcProvider(ARB_RPC);
-    const w    = new ethers.Wallet(State.wallet.privateKey, p);
+    const w = await State.wallet.getArbitrumSigner();
     const usdc = new ethers.Contract(USDC_CA, [
-      'function approve(address,uint256) returns(bool)',
+      'function transfer(address,uint256) returns(bool)',
       'function balanceOf(address) view returns(uint256)'
     ], w);
-    const bridge = new ethers.Contract(BRDG_CA, ['function deposit(address,uint64) external'], w);
-    const raw    = ethers.parseUnits(amt.toString(), 6);
-    const bal    = await usdc.balanceOf(w.address);
+    const raw = ethers.parseUnits(amt.toString(), 6);
+    const bal = await usdc.balanceOf(State.wallet.address);
     if (bal < raw) throw new Error('رصيد USDC غير كافٍ على Arbitrum');
-    showLoader('انتظر موافقة المحفظة...');
-    await (await usdc.approve(BRDG_CA, raw)).wait();
-    showLoader('جارٍ إرسال USDC...');
-    await (await bridge.deposit(w.address, raw)).wait();
+    showLoader('جارٍ إرسال USDC إلى الجسر...');
+    await (await usdc.transfer(BRDG_CA, raw)).wait();
     closeModal('modalDeposit');
-    toast(`✅ تم إرسال $${amt} — يصل خلال 1-3 دقائق`, 'ok', 6000);
-    setTimeout(pollAccount, 6000);
+    toast(`✅ تم إرسال $${amt} — يصل خلال أقل من دقيقة`, 'ok', 6000);
   } catch (e) {
     toast(`⚠️ ${_depositErr(e.message)}`, 'err', 5000);
   } finally { resetBtn('depositExecute'); hideLoader(); }
 }
 
-/* ════ Withdraw ════ */
+/* ════ Withdraw ════ ✅ الرسوم من WITHDRAW_FEE_USDC المركزي — signTypedData
+   يطابق حرفياً بنية WithdrawAction3 الموثّقة رسمياً (bridge2/exchange). ════ */
 async function doWithdraw() {
-  const amt  = parseFloat($('withdrawAmount').value || 0);
-  const dest = $('withdrawAddress').value.trim();
+  const amt    = parseFloat($('withdrawAmount').value || 0);
+  const dest   = $('withdrawAddress').value.trim();
+  const minAmt = WITHDRAW_FEE_USDC + 1;
   if (!amt || amt <= 0)  return toast('أدخل المبلغ المراد سحبه', 'err');
-  if (amt < 2)           return toast('الحد الأدنى $2 (بعد رسوم $1)', 'err');
+  if (amt < minAmt)      return toast(`الحد الأدنى $${minAmt.toFixed(2)} (بعد رسوم $${WITHDRAW_FEE_USDC.toFixed(2)})`, 'err');
   if (!/^0x[0-9a-fA-F]{40}$/.test(dest)) return toast('عنوان المحفظة غير صحيح', 'err');
   if (!State.wallet)     return toast('يجب تسجيل الدخول أولاً', 'err');
   setBtnLoading('withdrawExecute', '⏳');
@@ -346,15 +398,11 @@ async function doWithdraw() {
     );
     const { r, s, v } = ethers.Signature.from(sig);
     showLoader('جارٍ إرسال طلب السحب...');
-    const res = await fetch(HL_API + '/exchange', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, nonce, signature: { r, s, v } })
-    });
-    const d = await res.json();
+    const body = { action, nonce, signature: { r, s, v } };
+    const d = HL.isOpen() ? await HL.post(body, true).catch(() => _restExchange(body)) : await _restExchange(body);
     if (d.status !== 'ok') throw new Error(JSON.stringify(d));
     closeModal('modalWithdraw');
-    toast(`✅ طلب السحب مقبول — سيصلك $${(amt - 1).toFixed(2)} USDC`, 'ok', 6000);
-    setTimeout(pollAccount, 5000);
+    toast(`✅ طلب السحب مقبول — سيصلك $${(amt - WITHDRAW_FEE_USDC).toFixed(2)} USDC`, 'ok', 6000);
   } catch (e) {
     toast(`⚠️ ${_withdrawErr(e.message)}`, 'err', 5000);
   } finally { resetBtn('withdrawExecute'); hideLoader(); }

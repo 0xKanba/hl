@@ -1,10 +1,18 @@
 /* ═══════════════════════════════════════
    api.js — واجهة Hyperliquid API
+   ✅ WS Post Requests أولاً (عبر HL)، REST كبديل احتياطي فقط
+   ✅ hlExchange يضمن وجود وكيل صالح ذاتياً (Agents.ensure) قبل التوقيع —
+      بدل الفشل الفوري لو انتهت صلاحية الوكيل أو أُلغيت الموافقة الأولى؛
+      يفتح نافذة تفويض عند الحاجة الفعلية فقط (أول صفقة تحتاجها).
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ════ REST Info ════ */
+/* ════ Info: WS post → REST fallback ════ */
 async function hlInfo(body) {
+  if (HL.isOpen()) {
+    try { return await HL.post(body, false); }
+    catch (_) { /* fall through to REST */ }
+  }
   const r = await fetch(HL_API + '/info', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -15,9 +23,20 @@ async function hlInfo(body) {
   return JSON.parse(text.replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"'));
 }
 
-/* ════ REST Exchange (توقيع EIP-712) ════ */
+/* ════ Exchange (توقيع EIP-712 بمحفظة الوكيل) — WS post أولاً، REST كبديل ════ */
 async function hlExchange(action) {
-  if (!State.wallet) throw new Error('لا توجد محفظة');
+  if (!State.agent) {
+    try {
+      await (typeof Agents !== 'undefined' ? Agents.ensure() : Promise.reject(new Error('NO_AGENTS_MODULE')));
+    } catch (e) {
+      const msg = e.message === 'CANCELLED' ? 'تم إلغاء تفويض محفظة التداول'
+                : e.message === 'NO_WALLET' ? 'سجّل الدخول أولاً'
+                : 'تعذّر تفويض محفظة التداول — راجع "الوكلاء" بالخيارات';
+      throw new Error(msg);
+    }
+  }
+  if (!State.agent) throw new Error('محفظة التداول غير مفوّضة — أعد المحاولة');
+
   const nonce   = Date.now();
   const encoded = MsgPack.encode(action);
   const nb      = new ArrayBuffer(8);
@@ -28,30 +47,37 @@ async function hlExchange(action) {
   payload[encoded.length + 8] = 0x00;
 
   const connId = ethers.keccak256(payload);
-  const sig    = await State.wallet.signTypedData(
+  const sig    = await State.agent.signTypedData(
     { name:'Exchange', version:'1', chainId:1337, verifyingContract:'0x0000000000000000000000000000000000000000' },
     { Agent:[{ name:'source', type:'string' }, { name:'connectionId', type:'bytes32' }] },
     { source:'a', connectionId:connId }
   );
   const { r, s, v } = ethers.Signature.from(sig);
+  const body = { action, nonce, signature:{ r, s, v }, vaultAddress: null };
 
-  const jb  = JSON.stringify(
-    { action, nonce, signature:{ r,s,v }, vaultAddress:null },
-    (k, val) => typeof val === 'bigint' ? `:BIGINT:${val}:` : val
-  );
-  const res  = await fetch(HL_API + '/exchange', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: jb.replace(/":BIGINT:(\d+):"/g, '$1')
-  });
-  const data = JSON.parse(
-    (await res.text()).replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"')
-  );
+  let data;
+  if (HL.isOpen()) {
+    try { data = await HL.post(body, true); }
+    catch (_) { data = await _restExchange(body); }
+  } else {
+    data = await _restExchange(body);
+  }
+
   if (data.status !== 'ok') {
     const err = data.response?.data?.statuses?.[0] || data.response || JSON.stringify(data).slice(0, 200);
     throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
   }
   return data;
+}
+
+async function _restExchange(body) {
+  const jb = HL.stringify(body);
+  const res = await fetch(HL_API + '/exchange', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: jb
+  });
+  return JSON.parse((await res.text()).replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"'));
 }
 
 /* ════ إحالة تلقائية ════ */

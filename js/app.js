@@ -1,3 +1,25 @@
+/* ═══════════════════════════════════════
+   app.js — تغييرات الإقلاع فقط:
+   HL.connect() + initPriceFeeds() فوراً (زائر ومتصل)،
+   initAccountFeeds() ينتقل داخل _onWalletConnected (auth.js)،
+   _startAuthedTimers أصبحت أخف (startSessionPolling فقط)
+   ✅ حذف كامل حقلي "اسم العرض" و"صوت التنبيهات" من الأسلاك.
+   ✅ "الوكلاء" تفتح Agents.openModal() بدل enableFastTrading القديمة.
+   ✅ نصوص رسوم السحب ومدة الوكيل تُملأ ديناميكياً من الثوابت المركزية —
+      بدل أرقام حرفية مكرَّرة تتضارب لو تغيّر أحدها بدون الباقي.
+   ✅ Wallets.reconnectSilently(rdns) الآن تستقبل rdns المحفوظ فعلاً —
+      كانت تُستدعى بلا وسيط فتتصل بأول محفظة بالقائمة بترتيب غير مضمون.
+   ✅ "نسيت PIN" يحذف الوكيل يدوياً قبل تسجيل الخروج (سيناريو أمان
+      أشد حساسية من الخروج العادي — راجع agents.js/auth.js).
+   ✅ حُذف زر/سلك "استرداد المحفظة" — "تصدير المحفظة" يكفي وحده كنسخة
+      احتياطية (يعرض المفتاح الخاص والعبارة السرية مباشرة)، فكان
+      الاثنان تكراراً بلا فائدة إضافية حقيقية.
+   ✅ FIX — إعادة الاتصال التلقائي بالبريد (Privy) عند إعادة تحميل
+      الصفحة كانت تفحص .authenticated فوراً بعد تحميل السكربت فقط، غالباً
+      قبل أن ينتهي Privy SDK داخلياً من فحص الجلسة (.ready لا يزال false)
+      — فيُسقِط المستخدم لوضع الزائر خطأً حتى لو جلسته الحقيقية صالحة.
+      الحل: انتظار .ready فعلياً (حتى 6 ثوان) قبل قراءة authenticated.
+═══════════════════════════════════════ */
 'use strict';
 
 const _AR_MONTHS = [
@@ -35,7 +57,6 @@ function _initMonthsPanel() {
   });
 }
 
-/* ════ Theme system ════ */
 function _applyTheme(theme, animate) {
   if (animate) {
     document.documentElement.classList.add('theme-transitioning');
@@ -62,27 +83,17 @@ function _toggleTheme() {
   _applyTheme(next, true);
 }
 
-/* ════ Qty input — sensible defaults ════ */
 function _initQtyInput() {
   const input = $('qtyInput');
   if (!input) return;
-
-  /* Set initial default based on current asset */
   const a = ASSETS[State.asset];
   const defaultVal = a?.presets?.[0] ?? 1;
   if (!input.value || +input.value <= 0) {
     input.value = defaultVal;
     State.qty   = defaultVal;
   }
-
-  /* Mobile: only show keyboard when user explicitly taps the field */
-  input.addEventListener('focus', () => {
-    /* Select all text on focus for easy replacement */
-    input.select?.();
-  });
-
+  input.addEventListener('focus', () => { input.select?.(); });
   input.addEventListener('blur', () => {
-    /* Restore default if user cleared field */
     if (!input.value || +input.value <= 0) {
       const asset = ASSETS[State.asset];
       const def   = asset?.presets?.[0] ?? 1;
@@ -90,13 +101,33 @@ function _initQtyInput() {
       State.qty   = def;
     }
   });
-
-  input.oninput = function () {
-    State.qty = parseFloat(this.value) || 0;
-  };
+  input.oninput = function () { State.qty = parseFloat(this.value) || 0; };
 }
 
-/* ════ Options menu ════ */
+/* ✅ رسوم السحب ومدة الوكيل — تُملأ مرة واحدة من الثوابت المركزية بدل
+   أرقام حرفية مكررة بالـHTML (كان هذا تحديداً باغ تضارب حقيقي سابقاً:
+   $1 بـaccount.js مقابل $1 بـapp.js مقابل $1 بـindex.html — أي تغيير
+   بمكان واحد بدون الباقي يخلق تناقضاً فورياً بالواجهة). */
+function _initWithdrawFeeUI() {
+  const fee = WITHDRAW_FEE_USDC;
+  setTxt('wFeeAmt', `$${fee.toFixed(2)}`);
+  const exSend = fee + 20;
+  setTxt('wFeeExSend', `$${exSend.toFixed(2)}`);
+  setTxt('wFeeExNet',  `$${(exSend - fee).toFixed(2)}`);
+  const amtEl = $('withdrawAmount');
+  if (amtEl) {
+    amtEl.min = String(fee + 1);
+    amtEl.placeholder = String(exSend);
+  }
+}
+
+function _initAgentCopy() {
+  if (typeof Agents === 'undefined') return;
+  const days = Math.round(Agents.TTL_MS / 86400000);
+  setTxt('agentTtlTxt1', `${days} يوم`);
+  setTxt('agentTtlTxt2', `${days} يوم، ويُطلب توقيع جديد عند الحاجة`);
+}
+
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
@@ -120,7 +151,6 @@ function _initOptsBackdrop() {
   ov.addEventListener('click', e => { if (e.target === ov) closeOptions(); });
 }
 
-/* ════ DOMContentLoaded ════ */
 document.addEventListener('DOMContentLoaded', () => {
 
   _initTheme();
@@ -131,17 +161,12 @@ document.addEventListener('DOMContentLoaded', () => {
   _initMonthsPanel();
   _initOptsBackdrop();
   _initQtyInput();
-  updateSoundOptionLabel();
+  _initWithdrawFeeUI();
+  _initAgentCopy();
 
-  $('loginBtn').onclick     = login;
-  $('privateKey').onkeydown = e => e.key === 'Enter' && login();
-  $('toggleKey').onclick    = () => {
-    const i = $('privateKey');
-    i.type = i.type === 'password' ? 'text' : 'password';
-    $('toggleKey').textContent = i.type === 'password' ? '👁' : '🙈';
-  };
-  $('createWalletBtn')?.addEventListener('click', createNewWallet);
-  $('loginClose')?.addEventListener('click', () => closeModal('modalLogin'));
+  $('connectEmailBtn')?.addEventListener('click', connectEmail);
+  $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
+  $('loaderClose')?.addEventListener('click', hideLoader);
 
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
     t.onclick = () => switchAsset(t.dataset.asset)
@@ -153,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   $('btnConnect').onclick = () => {
-    if (State.isGuest) openLoginModal();
+    if (State.isGuest) connectWallet();
     else openOptions();
   };
 
@@ -165,14 +190,13 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
   $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
-  $('optDisplayName').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openDisplayNameModal(); };
-  $('optSound').onclick = () => { closeOptions(); toggleSound(); };
+  $('optExportWallet')?.addEventListener('click', () => { closeOptions(); exportWallet(); });
+  $('optAgents')?.addEventListener('click', () => { closeOptions(); if (typeof Agents !== 'undefined') Agents.openModal(); });
   $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
   $('btnBuy').onclick  = () => askTrade(true);
   $('btnSell').onclick = () => askTrade(false);
 
-  /* 100% button */
   $('qty100').onclick = () => {
     if (State.isGuest) return _promptConnect();
     const a   = ASSETS[State.asset];
@@ -209,9 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('historyClose').onclick = () => closeModal('modalHistory');
 
   $('posDetailClose').onclick = () => closeModal('modalPosDetail');
-  $('displayNameCancel').onclick = () => closeModal('modalDisplayName');
-  $('displayNameSave').onclick = saveDisplayName;
-  $('displayNameInput').onkeydown = e => e.key === 'Enter' && saveDisplayName();
 
   $('depositCancel').onclick  = () => closeModal('modalDeposit');
   $('depositExecute').onclick = () => requirePin(doDeposit);
@@ -225,9 +246,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!prev) return;
     if (!amt || amt <= 0) { prev.classList.add('hidden'); return; }
     prev.classList.remove('hidden');
-    const sendEl = $('wpSend'), netEl = $('wpNet');
+    const sendEl = $('wpSend'), netEl = $('wpNet'), feeEl = $('wpFee');
     if (sendEl) sendEl.textContent = `$${amt.toFixed(2)}`;
-    if (netEl)  netEl.textContent  = `$${Math.max(0, amt - 1).toFixed(2)} USDC`;
+    if (feeEl)  feeEl.textContent  = `- $${WITHDRAW_FEE_USDC.toFixed(2)}`;
+    if (netEl)  netEl.textContent  = `$${Math.max(0, amt - WITHDRAW_FEE_USDC).toFixed(2)} USDC`;
   });
 
   $('withdrawAddress').addEventListener('click', function () { this.select(); });
@@ -264,7 +286,11 @@ document.addEventListener('DOMContentLoaded', () => {
     $('forgotStep1').classList.add('hidden');
     $('forgotStep2').classList.remove('hidden');
   };
-  $('forgotStep2').onclick = () => { closeModal('modalForgotPIN'); doLogout(); };
+  $('forgotStep2').onclick = () => {
+    closeModal('modalForgotPIN');
+    if (typeof Agents !== 'undefined') Agents.revoke(); /* سيناريو أمان أشد حساسية — حذف الوكيل فعلياً هنا */
+    doLogout();
+  };
 
   $('setPinCancel').onclick = () => {
     closeModal('modalSetPIN');
@@ -293,23 +319,71 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ═══════════════════════════════════════
      Boot sequence
+     ✅ اتصال WS واحد يُفتح فوراً، وبيانات السوق (bbo+activeAssetCtx)
+     تشتغل لكل من الزائر والمتصل من نفس المسار — بلا أي polling.
+     initAccountFeeds() ينفَّذ داخل _onWalletConnected (auth.js)، سواء
+     دخول جديد أو استرجاع جلسة سابقة أدناه.
   ═══════════════════════════════════════ */
-  startMainWs();
+  HL.connect();
+  initPriceFeeds();
 
-  const saved = localStorage.getItem(LS_KEY);
-  if (saved) {
-    $('privateKey').value = saved;
+  function _startAuthedTimers() {
+    startSessionPolling();
+  }
+  function _fallbackToGuest() {
+    initGuestMode();
+  }
+  function _showAppOptimistically() {
     $('loginScreen')?.classList.add('hidden');
     $('appScreen')?.classList.remove('hidden');
-    login().then(() => {
-      State.timers.push(setInterval(pollAccount, 4000));
-      State.timers.push(setInterval(pollPrices,  3000));
-      startSessionPolling();
-      startFundingTimer();
-    }).catch(() => initGuestMode());
+  }
+
+  /* ✅ Privy.ready يبدأ false دائماً ويتحوّل true فقط بعد أن ينتهي SDK
+     Privy داخلياً من فحص الجلسة (كوكيز/تخزين محلي خاص به) — عملية غير
+     متزامنة قد تأخذ وقتاً قصيراً. كان الكود يفحص .authenticated فوراً
+     بمجرد تحميل السكربت فقط، غالباً بينما ready لا يزال false، فيُسقِط
+     المستخدم لوضع الزائر خطأً حتى لو جلسته الحقيقية صالحة تماماً —
+     تماماً نفس فخّ السباق الزمني لمحافظ eip6963 (راجع wallets.js). */
+  function _waitPrivyReady(timeoutMs) {
+    return new Promise(resolve => {
+      const t0 = Date.now();
+      (function poll() {
+        if (window.PrivyBridge && window.PrivyBridge.ready) return resolve(true);
+        if (Date.now() - t0 > timeoutMs) return resolve(false);
+        setTimeout(poll, 80);
+      })();
+    });
+  }
+
+  if (localStorage.getItem(PRIVY_FLAG_KEY)) {
+    _showAppOptimistically();
+    _loadPrivyBridge()
+      .then(() => _waitPrivyReady(6000))
+      .then((readyOk) => {
+        const w = readyOk && window.PrivyBridge.authenticated && window.PrivyBridge.getActiveWallet();
+        if (!w) throw new Error('no active Privy session');
+        return _onWalletConnected({
+          address: w.address, walletClientType: w.walletClientType,
+          walletName: w.name, walletIcon: w.icon,
+          signTypedData: (d, t, v) => window.PrivyBridge.signTypedData(d, t, v, w.address),
+          getArbitrumSigner: () => window.PrivyBridge.getArbitrumSigner(w.address),
+        });
+      })
+      .then(_startAuthedTimers)
+      .catch(_fallbackToGuest);
+  } else if (localStorage.getItem(EXTWALLET_FLAG_KEY)) {
+    _showAppOptimistically();
+    let _extMeta = null;
+    try { _extMeta = JSON.parse(localStorage.getItem(EXTWALLET_FLAG_KEY)); } catch {}
+    /* ✅ تمرير rdns المحفوظ — بدونه كانت reconnectSilently تتصل بأول
+       محفظة بالقائمة (ترتيب إعلان EIP-6963 غير مضمون) بدل المحفظة
+       الحقيقية التي اختارها المستخدم، خطر ربط عنوان خاطئ بصمت. */
+    (typeof Wallets !== 'undefined' ? Wallets.reconnectSilently(_extMeta?.rdns) : Promise.resolve(null))
+      .then(w => { if (!w) throw new Error('no prior wallet authorization'); return _onWalletConnected(w); })
+      .then(_startAuthedTimers)
+      .catch(_fallbackToGuest);
   } else {
-    initGuestMode();
-    State.timers.push(setInterval(pollPrices, 3000));
+    _fallbackToGuest();
   }
 
   if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')

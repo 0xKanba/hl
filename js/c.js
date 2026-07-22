@@ -1,4 +1,17 @@
-/* c.js — تقويم التداول v6 — ديسكتوب احترافي + موبايل مثالي */
+/* c.js — تقويم التداول v6 — ديسكتوب احترافي + موبايل مثالي
+   ✅ FIX: كان يستدعي 'userFundingHistory' (اسم قديم غير موثّق يفشل
+      بصمت عبر catch(()=>[]) — بالضبط نفس الباغ الذي أُصلح سابقاً
+      بـaccount.js:showHistory). النتيجة العملية: رسوم التمويل كانت
+      غائبة دائماً من كل رقم يومي/شهري بالتقويم رغم أن التصميم يدعمها
+      بالكامل — التقويم كان "يعمل" ظاهرياً لكن بأرقام ناقصة صامتة. الاسم
+      الصحيح 'userFunding'، يطابق نفس الاستدعاء الفعلي العامل بالضبط.
+   ✅ استبدال fetch الخاص المحلي بـhlInfo المشترك (api.js) — نفس مسار
+      WS-post أولاً/REST كبديل المستخدم بكل مكان آخر بالتطبيق، بدل
+      استدعاء REST مباشر منفصل هنا فقط.
+   ✅ حذف مسار احتياطي ميت كان يقرأ 'hl_trade_pk' (مفتاح خاص نصي واضح
+      من نظام الدخول القديم المُزال بالكامل من التطبيق — لا يُكتَب هذا
+      المفتاح بأي مكان بالنسخة الحالية، فالمسار كان بلا أي تأثير فعلي،
+      مجرّد بقايا كود من نظام أمان قديم). */
 (function(){
 'use strict';
 
@@ -357,14 +370,6 @@ function monStart(d){
 }
 function isDesktop(){return window.innerWidth>=768;}
 
-/* ══ API ══ */
-async function api(body){
-  const r=await fetch('https://api.hyperliquid.xyz/info',{
-    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
-  });return r.json();
-}
-
-
 function buildMaps(fills,funding){
   const dayMap={},fundMap={};
   fills.forEach(f=>{
@@ -551,10 +556,7 @@ function showMain(){
 
 /* ══ Load Data ══ */
 function getAddr(){
-  if(window.State?.wallet?.address)return window.State.wallet.address;
-  const pk=localStorage.getItem('hl_trade_pk');
-  if(pk){try{if(typeof ethers!=='undefined')return new ethers.Wallet(pk).address;}catch{}}
-  return null;
+  return window.State?.wallet?.address || null;
 }
 
 async function load(addr){
@@ -563,8 +565,9 @@ async function load(addr){
   $('calMain').style.display='none';
   try{
     const[fills,funding]=await Promise.all([
-      api({type:'userFills',user:addr,dex:'xyz'}),
-      api({type:'userFundingHistory',user:addr,dex:'xyz',startTime:Date.now()-365*86400000}).catch(()=>[])
+      hlInfo({type:'userFills',user:addr,dex:'xyz'}),
+      /* ✅ 'userFunding' الصحيح — راجع تعليق رأس الملف */
+      hlInfo({type:'userFunding',user:addr,startTime:Date.now()-365*86400000}).catch(()=>[])
     ]);
     _fills=Array.isArray(fills)?fills:[];
     const maps=buildMaps(_fills,Array.isArray(funding)?funding:[]);

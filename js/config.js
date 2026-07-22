@@ -7,18 +7,42 @@ const TROY = 31.1035;
 
 const HL_API  = 'https://api.hyperliquid.xyz';
 const ARB_RPC = 'https://arb1.arbitrum.io/rpc';
-const USDC_CA = '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8';
-const BRDG_CA = '0x2Df1c51E09aECF9d2B5688B5c82A9bBDE18B9494';
+
+/* ⚠️ CRITICAL FIX — كان العنوانان أدناه خاطئين تماماً (لا يطابقان أي
+   عقد حقيقي على Arbitrum) قبل هذا الإصلاح:
+   - USDC_CA يجب أن يكون عقد USDC الأصلي (native) على Arbitrum One.
+   - BRDG_CA يجب أن يكون عقد Bridge2 الرسمي لـHyperliquid.
+   تم التحقق من كليهما مقابل توثيق Hyperliquid الرسمي مباشرة
+   (hyperliquid-docs/for-developers/api/bridge2) وArbiscan:
+   https://arbiscan.io/address/0x2df1c51e09aecf9cacb7bc98cb1742757f163df7
+   راجع أيضاً doDeposit بـaccount.js — الإيداع أصبح تحويل ERC20 مباشر
+   لعنوان الجسر (لا يوجد approve ولا دالة deposit() منفصلة؛ Bridge2
+   يعتمد على مراقبة تحويلات USDC الواردة وتزكيتها للمُرسِل خلال دقيقة). */
+const USDC_CA = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
+const BRDG_CA = '0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7';
+
+/* ✅ HIP-3 dex هذا المشروع يتداول عليه — كل الأصول مُعرَّفة بادئة `${HL_DEX}:`
+   تغيير هذا الثابت وحده كافٍ لتحويل التطبيق لأي HIP-3 dex آخر لاحقاً.
+   السلسلة الفارغة '' تعني "أول perp dex" (Main Perps) حسب توثيق Hyperliquid. */
+const HL_DEX = 'xyz';
+
+/* رسوم السحب — رسم بروتوكول Hyperliquid نفسه (يُخصم آلياً عند معالجة
+   withdraw3)، ليست رسوماً يجمعها هذا التطبيق. $1 مؤكَّد من توثيق
+   Hyperliquid الرسمي (bridge2/exchange-endpoint، الحد الأدنى للسحب $2
+   يطابق "رسم $1 ثابت + $1 صافي على الأقل"). راجع التوثيق دورياً بدل
+   تغيير هذا الرقم يدوياً بلا تأكيد.
+   ثابت واحد فقط بدل تكراره بعدة ملفات — استخدمه دائماً، لا رقماً حرفياً. */
+const WITHDRAW_FEE_USDC = 1;
 
 /* مفاتيح localStorage */
-const LS_KEY       = 'hl_trade_pk';
-const PIN_KEY      = 'hl_trade_pin';
-const LOCKED_KEY   = 'hl_trade_locked';
-const LAST_PIN_KEY = 'hl_last_pin_time';
-const QSTATE_KEY   = 'hl_qstate_v1';
-const DISPNAME_KEY  = 'hl_display_name';
+const LS_KEY        = 'hl_trade_pk';
+const PIN_KEY       = 'hl_trade_pin';
+const LOCKED_KEY    = 'hl_trade_locked';
+const LAST_PIN_KEY  = 'hl_last_pin_time';
+const QSTATE_KEY    = 'hl_qstate_v1';
 const OPENTIME_KEY  = 'hl_position_opens';
-const SOUND_KEY      = 'hl_sound_enabled';
+const PRIVY_FLAG_KEY = 'hl_privy_connected';
+const EXTWALLET_FLAG_KEY = 'hl_extwallet_connected';
 
 /* تعريف الأصول */
 const ASSETS = {
