@@ -4,6 +4,20 @@
    ✅ hlExchange يضمن وجود وكيل صالح ذاتياً (Agents.ensure) قبل التوقيع —
       بدل الفشل الفوري لو انتهت صلاحية الوكيل أو أُلغيت الموافقة الأولى؛
       يفتح نافذة تفويض عند الحاجة الفعلية فقط (أول صفقة تحتاجها).
+   ✅ FIX — tradeErr(): المسار الافتراضي (لأي خطأ لا يطابق الكلمات
+      المفتاحية الأربع أدناه) كان يعرض msg.slice(0,150) بالإنجليزية
+      الخام مباشرة بالواجهة. الآن يمر عبر errToAr() المركزية (utils.js)
+      بدل تسريب النص الأجنبي.
+   ✅ FIX — autoSetReferrer(): كانت تستدعي hlExchange بلا أي شرط على
+      وجود وكيل مسبق، وhlExchange نفسها تحتوي مساراً كسولاً يفتح نافذة
+      "تفويض محفظة التداول" تلقائياً لو State.agent فارغ. النتيجة: على
+      حساب جديد غير ممول، auth.js يحاول Agents.ensure() صراحة أولاً
+      (يفشل لأن Hyperliquid يرفض approveAgent على حساب غير مموَّل) ثم
+      autoSetReferrer تُعيد نفس المحاولة تلقائياً وبصمت تام (catch فارغة)
+      خلال نفس اللحظة — نافذة توقيع ثانية غير متوقعة فوراً بعد فشل
+      الأولى. الآن autoSetReferrer لا تحاول إطلاقاً إنشاء وكيل جديد
+      بنفسها؛ فقط تضبط الإحالة لو وُجد وكيل صالح أصلاً (سواء من التخزين
+      المحلي أو من نجاح تفويض حقيقي بنفس الجلسة — راجع auth.js).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -80,9 +94,11 @@ async function _restExchange(body) {
   return JSON.parse((await res.text()).replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"'));
 }
 
-/* ════ إحالة تلقائية ════ */
+/* ════ إحالة تلقائية ════
+   ✅ لا تحاول إنشاء وكيل جديد بنفسها إطلاقاً (راجع تعليق رأس الملف) —
+   تكتفي بالتحقق والضبط لو وكيل صالح متوفر أصلاً. */
 async function autoSetReferrer() {
-  if (!State.wallet || State.referrerSet) return;
+  if (!State.wallet || State.referrerSet || !State.agent) return;
   try {
     const ref = await hlInfo({ type:'referral', user:State.wallet.address });
     if (ref.referredBy) { State.referrerSet = true; return; }
@@ -91,12 +107,12 @@ async function autoSetReferrer() {
   } catch {}
 }
 
-/* ════ ترجمة أخطاء API ════ */
+/* ════ ترجمة أخطاء API الخاصة بالتداول ════ */
 function tradeErr(msg) {
-  const m = msg.toLowerCase();
+  const m = (msg || '').toLowerCase();
   if (m.includes('does not exist') || m.includes('not found')) return '⚠️ الحساب غير مفعّل — أودع USDC أولاً';
   if (m.includes('insufficient')   || m.includes('margin'))    return '❌ رصيد غير كافٍ';
   if (m.includes('halted')         || m.includes('no fill'))   return '❌ السوق مغلق الآن';
   if (m.includes('reduce'))                                     return '❌ لا يوجد مركز مفتوح';
-  return `❌ ${msg.slice(0, 150)}`;
+  return `❌ ${typeof errToAr === 'function' ? errToAr(msg) : (msg || '').slice(0, 150)}`;
 }

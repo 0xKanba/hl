@@ -1,5 +1,19 @@
 /* ═══════════════════════════════════════
    utils.js — أدوات مساعدة عامة
+   ✅ جديد — errToAr(): مصدر ترجمة واحد لكل رسائل الخطأ بالمشروع.
+      كل مكان كان يُلحق e.message الخام بالإنجليزية مباشرة بواجهة
+      المستخدم (agents.js، auth.js، c.js، ومسار tradeErr الافتراضي
+      بـapi.js) أصبح يمر من هنا. أي رسالة غير معروفة → عبارة عربية
+      عامة ثابتة بدل تسريب النص الأجنبي؛ النص الأصلي يُطبع بالconsole
+      فقط للتشخيص، لا بالواجهة.
+   ✅ toast() الآن تفرض حداً أدنى أطول تلقائياً لأنواع 'err'/'warn' —
+      بمكان واحد، بدل الاعتماد على كل نداء بالمشروع ليتذكر تمرير مدة
+      طويلة يدوياً (كان هذا سبب رسائل تختفي خلال 3.5 ثانية فقط رغم
+      احتواءها معلومة مهمة). أي مدة أطول يمرّرها المستدعي صراحة تبقى
+      محترمة كما هي — الفرض فقط يرفع الحد الأدنى، لا يخفضه.
+   ✅ toast() تدعم نوعاً رابعاً 'warn' (تحذير مهم غير فاشل) — يستخدم
+      لون --warn الموجود أصلاً بthemes.css، بدل إعادة استخدام 'err'
+      لأشياء ليست فشلاً حقيقياً (مثل "أودع USDC أولاً").
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -58,13 +72,76 @@ const $ = id => document.getElementById(id);
 const openModal  = id => $(id)?.classList.add('open');
 const closeModal = id => $(id)?.classList.remove('open');
 
+/* ════ ترجمة الأخطاء إلى العربية — مصدر واحد لكل المشروع ════
+   استُدعيت سابقاً بأسماء مختلفة جزئياً بكل ملف (tradeErr بـapi.js،
+   _depositErr/_withdrawErr بـaccount.js) — هذه النسخة المركزية تغطي
+   حالات أوسع (رفض توقيع، محفظة غير ممولة، نوافذ منبثقة محظورة، حدود
+   معدل الطلبات...) ويُفترض أن تُستخدم كخط دفاع أخير من أي دالة أخرى
+   لا تعرف كيف تصنّف خطأ معيّن، بدل عرض النص الأجنبي الخام. */
+function errToAr(rawMsg) {
+  const msg = String(rawMsg == null ? '' : rawMsg);
+  const m = msg.toLowerCase();
+  if (msg) console.warn('[errToAr] رسالة أصلية:', msg);
+
+  if (m.includes('cancelled') || m.includes('canceled') || m.includes('rejected') ||
+      m.includes('denied') || m.includes('user rejected') || m.includes('4001'))
+    return 'تم إلغاء العملية من المحفظة';
+
+  if (m.includes('does not exist') || m.includes('not found') || m.includes('not activated') ||
+      (m.includes('must') && m.includes('deposit')) || (m.includes('positive') && m.includes('account')))
+    return 'الحساب غير مفعَّل على Hyperliquid — يجب الإيداع أولاً قبل هذا الإجراء';
+
+  if (m.includes('insufficient') || m.includes('margin') || m.includes('balance'))
+    return 'رصيد غير كافٍ لإتمام العملية';
+
+  if (m.includes('gas') || (m.includes('fee') && m.includes('eth')))
+    return 'رصيد ETH غير كافٍ لرسوم شبكة Arbitrum';
+
+  if (m.includes('timeout') || m.includes('timed out'))
+    return 'انتهت المهلة — تحقق من الاتصال وحاول مجدداً';
+
+  if (m.includes('network') || m.includes('fetch') || m.includes('offline') || m.includes('ws-'))
+    return 'انقطع الاتصال — تحقق من الشبكة وحاول مجدداً';
+
+  if (m.includes('nonce'))
+    return 'تعارض بترتيب العملية — انتظر لحظة وأعد المحاولة';
+
+  if (m.includes('revert'))
+    return 'رفضت الشبكة العملية — تحقق من الرصيد والبيانات المُدخلة';
+
+  if (m.includes('halted') || m.includes('no fill') || (m.includes('market') && m.includes('closed')))
+    return 'السوق مغلق حالياً — حاول لاحقاً';
+
+  if (m.includes('reduce'))
+    return 'لا يوجد مركز مفتوح لتنفيذ هذا الإجراء';
+
+  if (m.includes('popup') || m.includes('blocked'))
+    return 'المتصفح منع نافذة منبثقة — فعّل النوافذ المنبثقة لهذا الموقع وحاول مجدداً';
+
+  if (m.includes('rate limit') || m.includes('too many') || m.includes('429'))
+    return 'طلبات كثيرة جداً بوقت قصير — انتظر قليلاً وحاول مجدداً';
+
+  if (m.includes('signature') || m.includes('sign'))
+    return 'فشل التوقيع — تأكد من محفظتك وحاول مجدداً';
+
+  if (!msg) return 'حدث خطأ غير متوقع — حاول مجدداً';
+
+  return 'حدث خطأ غير متوقع — حاول مجدداً، وإن تكرر تواصل مع الدعم';
+}
+
+/* حد أدنى للمدة حسب النوع — يُطبَّق تلقائياً بلا حاجة لتذكّره بكل نداء.
+   أي مدة أطول يمرّرها المستدعي صراحة تبقى كما هي (Math.max لا يخفّضها). */
+const _TOAST_MIN_DUR = { err: 7000, warn: 6000 };
+
 function toast(msg, type = 'info', dur = 3500) {
   const e = $('toast');
   if (!e) return;
+  const floor = _TOAST_MIN_DUR[type] || 0;
+  const finalDur = Math.max(dur, floor);
   e.textContent = msg;
   e.className = `show ${type}`;
   clearTimeout(e._t);
-  e._t = setTimeout(() => e.className = '', dur);
+  e._t = setTimeout(() => e.className = '', finalDur);
 }
 
 function showLoader(t = 'جاري...') {
@@ -101,9 +178,7 @@ function hideCornerStatus() {
   e.classList.remove('show');
 }
 
-/* ════ صوت خفيف عند تنفيذ الصفقة — WebAudio، بلا ملف خارجي ════
-   ✅ حُذف حقل "صوت التنبيهات" من الخيارات — الصوت يعمل دائماً الآن
-   بلا إمكانية تعطيل من الواجهة. */
+/* ════ صوت خفيف عند تنفيذ الصفقة — WebAudio، بلا ملف خارجي ════ */
 let _audioCtx = null;
 function _getAudioCtx() {
   if (!_audioCtx) {
@@ -155,14 +230,7 @@ function shortCoin(c) {
   return COIN_TO_SYM[raw] || raw;
 }
 
-/* ════ Cross-margin equity, EXCLUDING one position's own unrealized PnL ════
-   ✅ الإدخال الصحيح لحساب سعر التصفية التقريبي (راجع positions.js:
-   calcLiqPrice). كل صفقات هذا المشروع Cross (تشترك برصيد الحساب نفسه)،
-   لذا سعر تصفية أي صفقة يعتمد على "الوسادة" الكاملة: رصيد Spot USDC +
-   ربح/خسارة عائم من *كل* الصفقات الأخرى المفتوحة (لكن ليس هذه الصفقة
-   نفسها — ربحها/خسارتها العائم يُعاد حسابه داخل صيغة calcLiqPrice
-   كدالة للسعر المستهدف، فتضمينه هنا يُكرِّره مرتين). ownPnl=0 لصفقة لم
-   تُفتح بعد (معاينة قبل التنفيذ). */
+/* ════ Cross-margin equity, EXCLUDING one position's own unrealized PnL ════ */
 function crossEquityExcluding(ownPnl) {
   const b = State.balance;
   if (!b) return 0;

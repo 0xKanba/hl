@@ -5,20 +5,33 @@
    _startAuthedTimers أصبحت أخف (startSessionPolling فقط)
    ✅ حذف كامل حقلي "اسم العرض" و"صوت التنبيهات" من الأسلاك.
    ✅ "الوكلاء" تفتح Agents.openModal() بدل enableFastTrading القديمة.
-   ✅ نصوص رسوم السحب ومدة الوكيل تُملأ ديناميكياً من الثوابت المركزية —
-      بدل أرقام حرفية مكرَّرة تتضارب لو تغيّر أحدها بدون الباقي.
-   ✅ Wallets.reconnectSilently(rdns) الآن تستقبل rdns المحفوظ فعلاً —
-      كانت تُستدعى بلا وسيط فتتصل بأول محفظة بالقائمة بترتيب غير مضمون.
-   ✅ "نسيت PIN" يحذف الوكيل يدوياً قبل تسجيل الخروج (سيناريو أمان
-      أشد حساسية من الخروج العادي — راجع agents.js/auth.js).
-   ✅ حُذف زر/سلك "استرداد المحفظة" — "تصدير المحفظة" يكفي وحده كنسخة
-      احتياطية (يعرض المفتاح الخاص والعبارة السرية مباشرة)، فكان
-      الاثنان تكراراً بلا فائدة إضافية حقيقية.
+   ✅ نصوص رسوم السحب ومدة الوكيل تُملأ ديناميكياً من الثوابت المركزية.
+   ✅ Wallets.reconnectSilently(rdns) تستقبل rdns المحفوظ فعلاً.
+   ✅ "نسيت PIN" يحذف الوكيل يدوياً قبل تسجيل الخروج.
+   ✅ حُذف زر/سلك "استرداد المحفظة".
    ✅ FIX — إعادة الاتصال التلقائي بالبريد (Privy) عند إعادة تحميل
-      الصفحة كانت تفحص .authenticated فوراً بعد تحميل السكربت فقط، غالباً
-      قبل أن ينتهي Privy SDK داخلياً من فحص الجلسة (.ready لا يزال false)
-      — فيُسقِط المستخدم لوضع الزائر خطأً حتى لو جلسته الحقيقية صالحة.
-      الحل: انتظار .ready فعلياً (حتى 6 ثوان) قبل قراءة authenticated.
+      الصفحة تنتظر .ready فعلياً (حتى 6 ثوان) قبل قراءة authenticated.
+
+   ✅ FIX — فتح الرسم البياني كان محظوراً على الزوّار (`if (State.isGuest)
+      return _promptConnect();`) رغم أن بيانات الشموع/الأسعار عامة
+      بالكامل بلا أي حاجة لتوقيع (candleSnapshot وBBO لا يتطلبان مصادقة
+      — راجع chart.js). القرار الوحيد الذي يحتاج فعلاً محفظة متصلة هو
+      محاولة تنفيذ صفقة من داخل الرسم، وهذا مُتحقَّق منه أصلاً وبشكل
+      صحيح داخل _showCf بـchart.js (تُظهر توست "سجّل الدخول أولاً" بدل
+      التنفيذ). إزالة الحظر هنا تتيح للزائر تصفّح الرسم البياني كاملاً
+      قبل أي التزام بربط محفظة — بلا أي خطر تقني.
+
+   ✅ FIX — زر "🔌 إلغاء الاتصال" انتقل من قائمة الخيارات إلى رأس الصفحة
+      (سابقاً "تغيير المحفظة" ضمن ⚙️ الخيارات، وهو فعلياً كان زر تسجيل
+      خروج فقط بلا أي تبديل حقيقي). الزر الجديد بالرأس يفتح نفس
+      modalLogout — نصّه الآن يشرح كل احتمالات النتيجة بوضوح (راجع
+      index.html). updateConnectBtn بـauth.js تتكفّل بإظهاره/إخفائه.
+
+   ✅ FIX — إغلاق modalLogin عبر النقر على الخلفية المعتمة (لا زر
+      "إغلاق" الصريح) لم يكن يستدعي _stopWalletListWatch()، فيبقى
+      مستمع Wallets.onListChanged معلَّقاً بلا فائدة يعيد بناء قائمة
+      داخل مودال مغلق كل مرة تُعلن محفظة جديدة نفسها لاحقاً. أُضيفت حالة
+      خاصة لـmodalLogin بمعالج نقر الخلفية العام أدناه.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -104,10 +117,6 @@ function _initQtyInput() {
   input.oninput = function () { State.qty = parseFloat(this.value) || 0; };
 }
 
-/* ✅ رسوم السحب ومدة الوكيل — تُملأ مرة واحدة من الثوابت المركزية بدل
-   أرقام حرفية مكررة بالـHTML (كان هذا تحديداً باغ تضارب حقيقي سابقاً:
-   $1 بـaccount.js مقابل $1 بـapp.js مقابل $1 بـindex.html — أي تغيير
-   بمكان واحد بدون الباقي يخلق تناقضاً فورياً بالواجهة). */
 function _initWithdrawFeeUI() {
   const fee = WITHDRAW_FEE_USDC;
   setTxt('wFeeAmt', `$${fee.toFixed(2)}`);
@@ -172,8 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
     t.onclick = () => switchAsset(t.dataset.asset)
   );
 
+  /* ✅ الرسم البياني يفتح للجميع الآن — زائر أو متصل، راجع تعليق رأس الملف */
   $('btnChart').onclick = () => {
-    if (State.isGuest) return _promptConnect();
     ChartModule.open(State.asset);
   };
 
@@ -185,6 +194,13 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btnOptions').onclick = openOptions;
   $('optsClose').onclick  = closeOptions;
 
+  /* ✅ زر إلغاء الاتصال — رأس الصفحة، ظهوره/اختفاؤه تتكفّل به
+     updateConnectBtn بـauth.js حسب حالة الاتصال الفعلية */
+  $('btnDisconnect')?.addEventListener('click', () => {
+    if (State.isGuest || !State.wallet) return;
+    openModal('modalLogout');
+  });
+
   $('optBalance').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showBalance(); };
   $('optHistory').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showHistory(); };
   $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
@@ -192,7 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
   $('optExportWallet')?.addEventListener('click', () => { closeOptions(); exportWallet(); });
   $('optAgents')?.addEventListener('click', () => { closeOptions(); if (typeof Agents !== 'undefined') Agents.openModal(); });
-  $('optLogout').onclick   = () => { closeOptions(); openModal('modalLogout'); };
 
   $('btnBuy').onclick  = () => askTrade(true);
   $('btnSell').onclick = () => askTrade(false);
@@ -288,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   $('forgotStep2').onclick = () => {
     closeModal('modalForgotPIN');
-    if (typeof Agents !== 'undefined') Agents.revoke(); /* سيناريو أمان أشد حساسية — حذف الوكيل فعلياً هنا */
+    if (typeof Agents !== 'undefined') Agents.revoke();
     doLogout();
   };
 
@@ -314,15 +329,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target !== o) return;
     if (o.id === 'modalPIN' && State.isLocked) return;
     if (o.id === 'modalSetPIN') { State.currentSetPinInput = ''; updateSetPinDots(); }
+    if (o.id === 'modalLogin') _stopWalletListWatch();
     o.classList.remove('open');
   });
 
   /* ═══════════════════════════════════════
      Boot sequence
-     ✅ اتصال WS واحد يُفتح فوراً، وبيانات السوق (bbo+activeAssetCtx)
-     تشتغل لكل من الزائر والمتصل من نفس المسار — بلا أي polling.
-     initAccountFeeds() ينفَّذ داخل _onWalletConnected (auth.js)، سواء
-     دخول جديد أو استرجاع جلسة سابقة أدناه.
   ═══════════════════════════════════════ */
   HL.connect();
   initPriceFeeds();
@@ -338,12 +350,6 @@ document.addEventListener('DOMContentLoaded', () => {
     $('appScreen')?.classList.remove('hidden');
   }
 
-  /* ✅ Privy.ready يبدأ false دائماً ويتحوّل true فقط بعد أن ينتهي SDK
-     Privy داخلياً من فحص الجلسة (كوكيز/تخزين محلي خاص به) — عملية غير
-     متزامنة قد تأخذ وقتاً قصيراً. كان الكود يفحص .authenticated فوراً
-     بمجرد تحميل السكربت فقط، غالباً بينما ready لا يزال false، فيُسقِط
-     المستخدم لوضع الزائر خطأً حتى لو جلسته الحقيقية صالحة تماماً —
-     تماماً نفس فخّ السباق الزمني لمحافظ eip6963 (راجع wallets.js). */
   function _waitPrivyReady(timeoutMs) {
     return new Promise(resolve => {
       const t0 = Date.now();
@@ -375,9 +381,6 @@ document.addEventListener('DOMContentLoaded', () => {
     _showAppOptimistically();
     let _extMeta = null;
     try { _extMeta = JSON.parse(localStorage.getItem(EXTWALLET_FLAG_KEY)); } catch {}
-    /* ✅ تمرير rdns المحفوظ — بدونه كانت reconnectSilently تتصل بأول
-       محفظة بالقائمة (ترتيب إعلان EIP-6963 غير مضمون) بدل المحفظة
-       الحقيقية التي اختارها المستخدم، خطر ربط عنوان خاطئ بصمت. */
     (typeof Wallets !== 'undefined' ? Wallets.reconnectSilently(_extMeta?.rdns) : Promise.resolve(null))
       .then(w => { if (!w) throw new Error('no prior wallet authorization'); return _onWalletConnected(w); })
       .then(_startAuthedTimers)

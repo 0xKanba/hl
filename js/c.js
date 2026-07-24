@@ -1,22 +1,35 @@
-/* c.js — تقويم التداول v6 — ديسكتوب احترافي + موبايل مثالي
-   ✅ FIX: كان يستدعي 'userFundingHistory' (اسم قديم غير موثّق يفشل
-      بصمت عبر catch(()=>[]) — بالضبط نفس الباغ الذي أُصلح سابقاً
-      بـaccount.js:showHistory). النتيجة العملية: رسوم التمويل كانت
-      غائبة دائماً من كل رقم يومي/شهري بالتقويم رغم أن التصميم يدعمها
-      بالكامل — التقويم كان "يعمل" ظاهرياً لكن بأرقام ناقصة صامتة. الاسم
-      الصحيح 'userFunding'، يطابق نفس الاستدعاء الفعلي العامل بالضبط.
-   ✅ استبدال fetch الخاص المحلي بـhlInfo المشترك (api.js) — نفس مسار
-      WS-post أولاً/REST كبديل المستخدم بكل مكان آخر بالتطبيق، بدل
-      استدعاء REST مباشر منفصل هنا فقط.
-   ✅ حذف مسار احتياطي ميت كان يقرأ 'hl_trade_pk' (مفتاح خاص نصي واضح
-      من نظام الدخول القديم المُزال بالكامل من التطبيق — لا يُكتَب هذا
-      المفتاح بأي مكان بالنسخة الحالية، فالمسار كان بلا أي تأثير فعلي،
-      مجرّد بقايا كود من نظام أمان قديم). */
+/* c.js — تقويم التداول v7 — تحميل تدريجي بالأولوية + هيكل تحميل أنيق
+   ✅ FIX جوهري — كانت getAddr() تقرأ window.State?.wallet?.address.
+      لكن state.js يُعرِّف `const State = {...}` أعلى مستوى سكربت
+      كلاسيكي — إعلانات const/let أعلى المستوى تُنشئ رابطاً بالنطاق
+      المعجمي المشترك بين كل سكربتات الصفحة (تماماً كما تقرأه app.js/
+      auth.js/trading.js/chart.js وكل ملف آخر بالمشروع عبر `State`
+      المباشرة، وتعمل بصحة تامة) — لكنها لا تُسجَّل أبداً كخاصية على
+      window (خلافاً لـvar). فـwindow.State كانت دائماً undefined، بصرف
+      النظر عن حالة الدخول الفعلية، فتُشغَّل رسالة "سجّل الدخول أولاً"
+      دائماً حتى وأنت متصل فعلياً وبصفقة مفتوحة. c.js كان الملف الوحيد
+      بالمشروع كله يستخدم window.State بدل State مباشرة.
+   ✅ FIX — استبدال hlInfo({type:'userFills',...}) بلا أي startTime
+      (يُرجع فقط أحدث ما يتوفر ضمن سقف Hyperliquid البالغ 2000 صفقة لكل
+      استدعاء، ولا يتوفر عبره سوى آخر 10,000 صفقة على الإطلاق — موثَّق
+      رسمياً) بترقيم فعلي عبر نوافذ زمنية متتالية من الأحدث للأقدم:
+      نافذة 30 يوماً فورية عند الفتح (تكفي لعرض الشهر الحالي وإحصائيات
+      24 ساعة/7 أيام/30 يوماً بدقة تامة منذ أول لحظة)، ثم زحف خلفي كل
+      5 ثوانٍ يجلب 30 يوماً أقدم في كل مرة حتى يبلغ سقف سنة كاملة أو
+      ينفد التاريخ، بلا حجب الواجهة وبلا إغراق الاتصال المشترك بطلبات
+      متلاحقة. أولوية التنقل اليدوي (calPrev/calNext) تتخطى الطابور
+      وتجلب الشهر المطلوب مباشرة لو لم يُغطَّ بعد.
+   ✅ FIX — 'xyz' كانت مكتوبة حرفياً بدل ثابت HL_DEX المشترك (config.js).
+   ✅ تحميل هيكلي (skeleton) بدل دوّار+نص فقط عند أول فتح — يعطي إحساساً
+      فورياً بالبنية قبل وصول البيانات الحقيقية، بنفس روح المنصات
+      الاحترافية. رقم "الكل" يحمل مؤشراً هادئاً (نقطة دوّارة صغيرة) طالما
+      السجل التاريخي ما زال يكتمل بالخلفية — بلا حجب أي شيء آخر.
+*/
 (function(){
 'use strict';
 
 /* ══════════════════════════════════════════════
-   CSS — ديناميكي: موبايل + ديسكتوب
+   CSS — ديناميكي: موبايل + ديسكتوب + هيكل التحميل الجديد
 ══════════════════════════════════════════════ */
 document.head.insertAdjacentHTML('beforeend',`<style>
 /* ── نافذة التقويم الرئيسية ── */
@@ -55,12 +68,16 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   background:var(--bg-card,#1e1c18);border-radius:10px;
   padding:10px 6px;text-align:center;
   border:1px solid rgba(255,255,255,.07);
-  transition:transform .15s;
+  transition:transform .15s, opacity .2s;
 }
 .cal-stat:hover{transform:translateY(-1px);}
 .cal-stat-l{font-size:10px;color:#8a8278;display:block;margin-bottom:3px;font-weight:700;letter-spacing:.5px;}
 .cal-stat-v{font-size:13px;font-weight:900;font-family:'IBM Plex Mono',monospace;}
 .cal-stat-v.up{color:#34c85a;} .cal-stat-v.dn{color:#f05248;} .cal-stat-v.dim{color:#8a8278;}
+.cal-stat-pending .cal-stat-v{opacity:.72;}
+.cal-mini-spin{display:inline-block;width:7px;height:7px;margin-right:3px;
+  border:1.5px solid rgba(224,114,72,.3);border-top-color:#e07248;border-radius:50%;
+  animation:cSpin .7s linear infinite;vertical-align:middle;}
 
 /* ── Nav ── */
 .cal-nav{
@@ -98,10 +115,21 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 ══════════════════════════════ */
 .cal-grid-wrap{
   flex:1;overflow-y:auto;padding:0 14px 14px;
-  -webkit-overflow-scrolling:touch;
+  -webkit-overflow-scrolling:touch;position:relative;
 }
 .cal-grid{
   display:grid;grid-template-columns:repeat(7,1fr);gap:3px;
+  transition:opacity .22s ease;
+}
+.cal-grid.cal-refreshing{opacity:.4;}
+
+/* تلميح "جاري تحميل هذا الشهر" — أولوية التنقل اليدوي */
+.cal-jump-hint{
+  position:absolute;inset:0 14px 14px;display:none;
+  align-items:center;justify-content:center;gap:8px;
+  background:color-mix(in srgb, var(--bg-app,#131210) 78%, transparent);
+  border-radius:12px;font-size:12.5px;font-weight:800;color:#8a8278;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:3;
 }
 
 /* ══════════════════════════════
@@ -148,11 +176,26 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 }
 .cal-dv.up{color:#34c85a;} .cal-dv.dn{color:#f05248;}
 
+/* ══════════════════════════════
+   HEADER SKELETON — أول تحميل فقط
+══════════════════════════════ */
+@keyframes calShimmer{0%{background-position:-135% 0}100%{background-position:135% 0}}
+.cal-skel-wrap{padding:10px 14px;flex:1;display:flex;flex-direction:column;min-height:0;}
+.cal-skel-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;flex-shrink:0;}
+.cal-skel-stat,.cal-skel-day{
+  background:linear-gradient(90deg, var(--bg-input,#302d28) 25%, var(--border-strong,#5a554c) 45%, var(--bg-input,#302d28) 65%);
+  background-size:300% 100%;animation:calShimmer 1.5s ease-in-out infinite;
+}
+.cal-skel-stat{height:50px;border-radius:10px;}
+.cal-skel-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;flex:1;min-height:0;}
+.cal-skel-day{border-radius:7px;aspect-ratio:1/.95;}
+.cal-skel-txt{text-align:center;color:#8a8278;font-size:12.5px;font-weight:700;
+  padding-top:12px;flex-shrink:0;}
+
 /* ══════════════════════════════════════════════
    DESKTOP — شاشة كبيرة: تصميم احترافي بالكامل
 ══════════════════════════════════════════════ */
 @media (min-width:768px){
-  /* نافذة محاذية للمنتصف */
   #calMod{
     align-items:center;justify-content:center;
     background:rgba(0,0,0,.75);
@@ -171,33 +214,27 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   }
   @keyframes calPop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
 
-  /* Header ديسكتوب */
   .cal-hdr{padding:18px 24px 14px;}
   .cal-title{font-size:20px;}
 
-  /* Stats ديسكتوب */
   .cal-stats{padding:12px 20px 10px;gap:10px;}
   .cal-stat{padding:12px 8px;border-radius:12px;}
   .cal-stat-l{font-size:11px;}
   .cal-stat-v{font-size:16px;}
 
-  /* Nav ديسكتوب */
   .cal-nav{padding:12px 20px 8px;}
   .cal-month{font-size:20px;min-width:200px;}
   .cal-nav-btn{width:38px;height:38px;font-size:20px;}
 
-  /* Grid header ديسكتوب */
   .cal-ghdr{padding:0 20px 6px;gap:5px;}
   .cal-ghdr span{
     font-size:12px;padding:7px 4px;border-radius:6px;
     font-weight:800;letter-spacing:.5px;
   }
 
-  /* Grid ديسكتوب */
   .cal-grid-wrap{padding:0 20px 20px;}
   .cal-grid{gap:5px;}
 
-  /* خلية ديسكتوب — ارتفاع ثابت يملأ بشكل متناسب */
   .cal-day{
     padding:8px 7px 6px;
     border-radius:10px;
@@ -206,13 +243,15 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   }
   .cal-dn{font-size:13px;font-weight:800;}
   .cal-dv{font-size:clamp(11px,1.1vw,15px);}
+
+  .cal-skel-wrap{padding:12px 20px 20px;}
 }
 
 /* ══════════════════════════════════════════════
    MOBILE — أرقام كبيرة، أيام كاملة
 ══════════════════════════════════════════════ */
 @media (max-width:767px){
-  .cal-inner{display:contents;} /* لا wrapper على موبايل */
+  .cal-inner{display:contents;}
   .cal-ghdr span{font-size:8px;padding:4px 1px;}
   .cal-day{padding:3px 2px 2px;border-radius:5px;aspect-ratio:1/.95;}
   .cal-dn{font-size:9px;}
@@ -227,9 +266,10 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   .cal-ghdr{padding:0 10px 3px;gap:2px;}
   .cal-grid-wrap{padding:0 10px 10px;}
   .cal-grid{gap:2px;}
+  .cal-jump-hint{inset:0 10px 10px;}
 }
 
-/* ── Loader ── */
+/* ── Loader (رسالة/خطأ بلا هيكل — تُستخدم فقط لو ما فيه عنوان محفظة) ── */
 .cal-load{
   flex:1;display:flex;flex-direction:column;
   align-items:center;justify-content:center;
@@ -305,22 +345,18 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 ══════════════════════════════════════════════ */
 document.body.insertAdjacentHTML('beforeend',`
 <div id="calMod">
-  <!-- wrapper: على ديسكتوب يصبح بطاقة مركزية، على موبايل contents -->
   <div class="cal-inner" style="position:relative;">
 
-    <!-- Header -->
     <div class="cal-hdr">
       <button class="cal-back" id="calBack">← رجوع</button>
       <span class="cal-title">📅 تقويم التداول</span>
       <span style="width:80px"></span>
     </div>
 
-    <!-- Loader -->
     <div class="cal-load" id="calLoad">
       <div class="cal-spin"></div><span>جاري التحميل...</span>
     </div>
 
-    <!-- Main -->
     <div id="calMain" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
       <div class="cal-stats" id="calStats"></div>
       <div class="cal-nav">
@@ -334,7 +370,6 @@ document.body.insertAdjacentHTML('beforeend',`
       </div>
     </div>
 
-    <!-- Day Detail -->
     <div class="cal-det" id="calDet">
       <div class="cal-det-hdr">
         <span id="calDetT" style="font-size:15px;font-weight:900;">—</span>
@@ -343,7 +378,7 @@ document.body.insertAdjacentHTML('beforeend',`
       <div class="cal-det-body" id="calDetB"></div>
     </div>
 
-  </div><!-- /.cal-inner -->
+  </div>
 </div>`);
 
 /* ══════════════════════════════════════════════
@@ -352,11 +387,23 @@ document.body.insertAdjacentHTML('beforeend',`
 const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو',
               'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 
-// أيام الأسبوع — كاملة للديسكتوب، مختصرة للموبايل
 const DAYS_FULL=['الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد'];
 const DAYS_SHORT=['إث','ث','أر','خ','ج','س','أح'];
 
+/* ✅ ترقيم تدريجي — راجع تعليق رأس الملف */
+const CHUNK_DAYS          = 30;
+const MAX_LOOKBACK_DAYS   = 365;
+const BG_INTERVAL_MS      = 5000;
+
 let _fills=[], _fundMap={}, _dayMap={}, _cur=new Date(), _ready=false;
+let _monthsCovered = new Set();
+let _crawlCoveredSinceMs = Date.now();
+let _historyComplete = false;
+let _bgTimer = null;
+let _navDebounce = null;
+const _seenFillIds = new Set();
+const _seenFundKeys = new Set();
+
 const $=id=>document.getElementById(id);
 
 /* ══ Helpers ══ */
@@ -369,56 +416,149 @@ function monStart(d){
   r.setDate(r.getDate()-(day===0?6:day-1));return r;
 }
 function isDesktop(){return window.innerWidth>=768;}
-
-function buildMaps(fills,funding){
-  const dayMap={},fundMap={};
-  fills.forEach(f=>{
-    const k=dayKey(new Date(f.time));
-    const pnl=parseFloat(f.closedPnl||0)-parseFloat(f.fee||0);
-    dayMap[k]=(dayMap[k]||0)+pnl;
-  });
-  (funding||[]).forEach(e=>{
-    if(e.delta?.type!=='funding')return;
-    const k=dayKey(new Date(e.time));
-    /* نعكس: API موجب = دفعت → عندنا سالب */
-    const usd=-parseFloat(e.delta.usdc||0);
-    fundMap[k]=(fundMap[k]||0)+usd;
-  });
-  return{dayMap,fundMap};
+function _monthKey(y,m){ return y+'-'+m; }
+function _monthsBackFromNow(y,m){
+  const now=new Date();
+  return (now.getFullYear()-y)*12+(now.getMonth()-m);
 }
- 
+function _isMonthCovered(y,m){
+  const monthStartMs = new Date(y,m,1).getTime();
+  if (monthStartMs >= _crawlCoveredSinceMs) return true;
+  return _monthsCovered.has(_monthKey(y,m));
+}
+
+/* ══ دمج إضافي (لا استبدال) — كل نافذة زمنية تُضاف لما سبق، بلا تكرار ══ */
+function _accumulate(fills, funding){
+  for (const f of fills){
+    const id = (f.hash ? f.hash : '') + ':' + (f.tid ?? f.oid ?? '') + ':' + f.time;
+    if (_seenFillIds.has(id)) continue;
+    _seenFillIds.add(id);
+    _fills.push(f);
+    const k = dayKey(new Date(f.time));
+    const pnl = parseFloat(f.closedPnl||0) - parseFloat(f.fee||0);
+    _dayMap[k] = (_dayMap[k]||0) + pnl;
+  }
+  for (const e of funding){
+    if (e.delta?.type !== 'funding') continue;
+    const fkey = e.time + ':' + (e.delta.coin||'') + ':' + e.delta.usdc;
+    if (_seenFundKeys.has(fkey)) continue;
+    _seenFundKeys.add(fkey);
+    const k = dayKey(new Date(e.time));
+    const usd = -parseFloat(e.delta.usdc||0);
+    _fundMap[k] = (_fundMap[k]||0) + usd;
+  }
+}
+
+/* ══ جلب نافذة زمنية مُطلَقة (للزحف الخلفي المتسلسل) ══ */
+async function _fetchChunk(addr, startMs, endMs){
+  try{
+    const [fills, funding] = await Promise.all([
+      hlInfo({type:'userFillsByTime', user:addr, startTime:startMs, endTime:endMs, dex:HL_DEX}).catch(()=>[]),
+      hlInfo({type:'userFunding', user:addr, startTime:startMs, endTime:endMs}).catch(()=>[])
+    ]);
+    _accumulate(Array.isArray(fills)?fills:[], Array.isArray(funding)?funding:[]);
+    return true;
+  }catch{ return false; }
+}
+
+/* ══ جلب شهر تقويمي كامل بعينه (للقفز اليدوي عبر calPrev/calNext) ══ */
+async function _fetchMonth(addr, y, m){
+  const key = _monthKey(y,m);
+  if (_monthsCovered.has(key) || _isMonthCovered(y,m)) return true;
+  const start = new Date(y,m,1).getTime();
+  const end   = new Date(y,m+1,1).getTime();
+  const ok = await _fetchChunk(addr, start, end);
+  if (ok) _monthsCovered.add(key);
+  return ok;
+}
+
+/* ══ الزحف الخلفي — كل 5 ثوانٍ، من الأحدث للأقدم، حتى سقف سنة كاملة ══ */
+function _startBgCrawl(addr){
+  _stopBgCrawl();
+  _bgTimer = setInterval(async () => {
+    if (_historyComplete) { _stopBgCrawl(); return; }
+    const now = Date.now();
+    const floor = now - MAX_LOOKBACK_DAYS*86400000;
+    if (_crawlCoveredSinceMs <= floor) { _historyComplete = true; _stopBgCrawl(); showStats(); return; }
+
+    const nextEnd   = _crawlCoveredSinceMs;
+    const rawStart  = nextEnd - CHUNK_DAYS*86400000;
+    const clampedStart = Math.max(rawStart, floor);
+
+    const ok = await _fetchChunk(addr, clampedStart, nextEnd);
+    if (ok) _crawlCoveredSinceMs = clampedStart;
+
+    showStats();
+    showCal();
+
+    if (_crawlCoveredSinceMs <= floor) { _historyComplete = true; _stopBgCrawl(); }
+  }, BG_INTERVAL_MS);
+}
+function _stopBgCrawl(){ clearInterval(_bgTimer); _bgTimer = null; }
+
+/* ══ أولوية التنقل اليدوي — يتخطى الطابور المتسلسل لو الشهر غير مُغطّى ══ */
+function _onNavChange(){
+  _renderJumpHint();
+  clearTimeout(_navDebounce);
+  _navDebounce = setTimeout(_ensureCurMonthLoaded, 150);
+}
+async function _ensureCurMonthLoaded(){
+  const addr = getAddr();
+  if (!addr || !_ready) return;
+  const y = _cur.getFullYear(), m = _cur.getMonth();
+  if (_isMonthCovered(y,m)) { _renderJumpHint(); return; }
+  const monthsBack = _monthsBackFromNow(y,m);
+  const horizonMonths = Math.ceil(MAX_LOOKBACK_DAYS/30) + 1;
+  if (monthsBack < 0 || monthsBack > horizonMonths) { _renderJumpHint(); return; }
+  await _fetchMonth(addr, y, m);
+  showStats();
+  if (_cur.getFullYear()===y && _cur.getMonth()===m) showCal();
+}
+function _renderJumpHint(){
+  const wrap = $('calGrid')?.parentElement;
+  if (!wrap) return;
+  let hint = wrap.querySelector('.cal-jump-hint');
+  const y=_cur.getFullYear(), m=_cur.getMonth();
+  const monthsBack = _monthsBackFromNow(y,m);
+  const horizonMonths = Math.ceil(MAX_LOOKBACK_DAYS/30) + 1;
+  const needsFetch = !_isMonthCovered(y,m) && monthsBack>=0 && monthsBack<=horizonMonths;
+  if (needsFetch){
+    if (!hint){ hint=document.createElement('div'); hint.className='cal-jump-hint'; wrap.appendChild(hint); }
+    hint.innerHTML='<span class="cal-spin" style="width:16px;height:16px;border-width:2px;"></span> جاري تحميل بيانات هذا الشهر...';
+    hint.style.display='flex';
+  } else if (hint){
+    hint.style.display='none';
+  }
+}
+
 /* ══ Stats ══ */
 function showStats(){
   const now=Date.now();
- 
-  /* ── جمع funding لفترة زمنية معينة ── */
+
   function sumFunding(ms){
     const cutoff=now-ms;
     return Object.entries(_fundMap).reduce((s,[k,v])=>{
-      /* k = 'YYYY-MM-DD' → نحوّل لـ timestamp */
-      const ts=new Date(k+'T12:00:00Z').getTime(); /* منتصف اليوم آمن */
+      const ts=new Date(k+'T12:00:00Z').getTime();
       return ts>=cutoff ? s+v : s;
     },0);
   }
   const allFunding=Object.values(_fundMap).reduce((s,v)=>s+v,0);
- 
-  /* ── ربح التداول لفترة زمنية ── */
+
   const tradePnl=ms=>_fills.filter(f=>f.time>=now-ms)
     .reduce((s,f)=>s+parseFloat(f.closedPnl||0)-parseFloat(f.fee||0),0);
   const allTrade=_fills.reduce((s,f)=>s+parseFloat(f.closedPnl||0)-parseFloat(f.fee||0),0);
- 
-  const row=(lbl,v)=>`<div class="cal-stat">
-    <span class="cal-stat-l">${lbl}</span>
+
+  const row=(lbl,v,pending)=>`<div class="cal-stat${pending?' cal-stat-pending':''}">
+    <span class="cal-stat-l">${pending?'<span class="cal-mini-spin"></span>':''}${lbl}</span>
     <span class="cal-stat-v ${v>=0?'up':'dn'}">${v>=0?'+':''}$${Math.abs(v).toFixed(2)}</span>
   </div>`;
- 
+
   $('calStats').innerHTML=
     row('24 ساعة',  tradePnl(86400000)   + sumFunding(86400000))+
     row('7 أيام',   tradePnl(604800000)  + sumFunding(604800000))+
     row('30 يوم',   tradePnl(2592000000) + sumFunding(2592000000))+
-    row('الكل',     allTrade + allFunding);
+    row('الكل',     allTrade + allFunding, !_historyComplete);
 }
- 
 
 /* ══ Day Names ══ */
 function renderDayHeaders(){
@@ -445,11 +585,15 @@ function showCal(){
   $('calMonth').textContent=MONTHS[m]+' '+y;
   renderDayHeaders();
 
+  const grid=$('calGrid');
+  grid.classList.add('cal-refreshing');
+  setTimeout(()=>grid.classList.remove('cal-refreshing'), 180);
+
   const first=new Date(y,m,1),last=new Date(y,m+1,0);
   const start=monStart(first);
   const end=addDays(last,last.getDay()===0?0:7-last.getDay());
   const todayK=dayKey(new Date());
-  const grid=$('calGrid');grid.innerHTML='';
+  grid.innerHTML='';
   const desktop=isDesktop();
 
   let d=new Date(start);
@@ -467,11 +611,9 @@ function showCal(){
     if(k===todayK) cls+=' today';
     box.className=cls;
 
-    // PnL text — حجم ديناميكي
     let pHtml='<span></span>';
     if(inM&&Math.abs(total)>0.005){
       const txt=(total>0?'':'-')+'$'+fmtPnl(total);
-      // حجم الخط يتكيف مع طول النص
       const fs=txt.length>8?'clamp(7px,1.6vw,11px)':txt.length>6?'clamp(8px,1.9vw,13px)':'clamp(9px,2.1vw,14px)';
       pHtml=`<span class="cal-dv ${total>0?'up':'dn'}" style="font-size:${fs}">${txt}</span>`;
     }
@@ -484,6 +626,8 @@ function showCal(){
     grid.appendChild(box);
     d=addDays(d,1);
   }
+
+  _renderJumpHint();
 }
 
 /* ══════════════════════════════
@@ -510,7 +654,6 @@ function showDay(date){
       ${total>=0?'+':'-'}$${Math.abs(total).toFixed(2)}
     </div>`);
 
-  // رسوم التمويل
   if(fund!==0){
     body.insertAdjacentHTML('beforeend',`
       <div class="cal-fund-card">
@@ -521,7 +664,6 @@ function showDay(date){
       </div>`);
   }
 
-  // الصفقات
   fills.forEach(f=>{
     const pnl=parseFloat(f.closedPnl||0)-parseFloat(f.fee||0);
     const t=new Date(f.time);
@@ -554,43 +696,60 @@ function showMain(){
   m.style.overflow='hidden';m.style.flex='1';m.style.minHeight='0';
 }
 
-/* ══ Load Data ══ */
+/* ══ هيكل التحميل الأول — شمشة بدل دوّار+نص فقط ══ */
+function _skeletonHtml(){
+  const dayCount = 35;
+  return `<div class="cal-skel-wrap">
+    <div class="cal-skel-stats">
+      <div class="cal-skel-stat"></div><div class="cal-skel-stat"></div>
+      <div class="cal-skel-stat"></div><div class="cal-skel-stat"></div>
+    </div>
+    <div class="cal-skel-grid">${'<div class="cal-skel-day"></div>'.repeat(dayCount)}</div>
+    <div class="cal-skel-txt">📥 جاري تحميل آخر 30 يوماً من سجلّك...</div>
+  </div>`;
+}
+
+/* ══ Load Data — الآن تدريجي: نافذة فورية + زحف خلفي ══ */
 function getAddr(){
-  return window.State?.wallet?.address || null;
+  /* ✅ FIX — كانت window.State (دائماً undefined)، الآن State مباشرة */
+  return (typeof State !== 'undefined' && State.wallet && State.wallet.address) || null;
 }
 
 async function load(addr){
+  _fills=[]; _fundMap={}; _dayMap={};
+  _monthsCovered=new Set(); _seenFillIds.clear(); _seenFundKeys.clear();
+  _historyComplete=false;
+  _stopBgCrawl();
+
   $('calLoad').style.display='flex';
-  $('calLoad').innerHTML='<div class="cal-spin"></div><span>جاري التحميل...</span>';
+  $('calLoad').innerHTML=_skeletonHtml();
   $('calMain').style.display='none';
-  try{
-    const[fills,funding]=await Promise.all([
-      hlInfo({type:'userFills',user:addr,dex:'xyz'}),
-      /* ✅ 'userFunding' الصحيح — راجع تعليق رأس الملف */
-      hlInfo({type:'userFunding',user:addr,startTime:Date.now()-365*86400000}).catch(()=>[])
-    ]);
-    _fills=Array.isArray(fills)?fills:[];
-    const maps=buildMaps(_fills,Array.isArray(funding)?funding:[]);
-    _dayMap=maps.dayMap;_fundMap=maps.fundMap;
-    _ready=true;
-    showStats();showCal();showMain();
-  }catch(e){
-    $('calLoad').innerHTML=`<span style="color:#f05248;font-size:14px">❌ ${e.message}</span>`;
+
+  const now=Date.now();
+  _crawlCoveredSinceMs = now;
+  const ok = await _fetchChunk(addr, now - CHUNK_DAYS*86400000, now);
+
+  if(!ok){
+    $('calLoad').innerHTML=`<div class="cal-load"><span style="color:#f05248;font-size:14px">❌ ${typeof errToAr==='function'?errToAr(''):'تعذّر جلب السجل'}</span></div>`;
+    return;
   }
+  _crawlCoveredSinceMs = now - CHUNK_DAYS*86400000;
+
+  _ready=true;
+  showStats();showCal();showMain();
+  _startBgCrawl(addr);
 }
 
 /* ══ Events ══ */
-$('calBack').onclick=()=>$('calMod').classList.remove('open');
+$('calBack').onclick=()=>{ $('calMod').classList.remove('open'); _stopBgCrawl(); };
 $('calDetClose').onclick=()=>$('calDet').classList.remove('open');
-$('calPrev').onclick=()=>{_cur=new Date(_cur.getFullYear(),_cur.getMonth()-1,1);showCal();};
-$('calNext').onclick=()=>{_cur=new Date(_cur.getFullYear(),_cur.getMonth()+1,1);showCal();};
+$('calPrev').onclick=()=>{_cur=new Date(_cur.getFullYear(),_cur.getMonth()-1,1);showCal();_onNavChange();};
+$('calNext').onclick=()=>{_cur=new Date(_cur.getFullYear(),_cur.getMonth()+1,1);showCal();_onNavChange();};
 
-// أعد رسم عناوين الأيام عند تغيير حجم النافذة
 window.addEventListener('resize',()=>{if(_ready)renderDayHeaders();});
 
-/* ══ Close on backdrop click (desktop) ══ */
 $('calMod').addEventListener('click',e=>{
-  if(isDesktop()&&e.target===$('calMod'))$('calMod').classList.remove('open');
+  if(isDesktop()&&e.target===$('calMod')){ $('calMod').classList.remove('open'); _stopBgCrawl(); }
 });
 
 /* ══ Public API ══ */
@@ -605,8 +764,12 @@ window.openCalendar=function(){
     $('calMain').style.display='none';
     return;
   }
-  if(_ready){showStats();showCal();showMain();}
-  else load(addr);
+  if(_ready){
+    showStats();showCal();showMain();
+    if(!_historyComplete) _startBgCrawl(addr);
+  } else {
+    load(addr);
+  }
 };
 
 function bind(){const b=$('btnCalendar');if(b)b.onclick=()=>window.openCalendar();}
