@@ -137,7 +137,7 @@ createRoot(mountNode).render(
       appearance: {
         theme: 'dark',
         accentColor: '#00ccff',
-        logo: 'https://hl.kanba.pw/icon-512x512.png',
+        logo: 'https://hl.kanba.pw/images/icon-192x192.png',
       },
     }}
   >
