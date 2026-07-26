@@ -2,7 +2,16 @@
    positions.js — حساب ودمج بيانات الصفقات
    ✅ mergeFillData — يدمج userFills داخل كل صفقة
       (وقت الفتح، أول/آخر Fill، Order ID، Trade ID، Hash، الرسوم، التصفية)
-   ✅ calcLiqPrice (Cross) — أُعيدت صياغتها بالكامل، راجع التعليق أسفله
+   ✅ calcLiqPrice (Cross) — تقدير محلي، يُستخدم فقط لمعاينة صفقة لم
+      تُفتح بعد (لا بيانات API عنها بعد) — راجع liqPriceFromPosition
+      أدناه للصفقات المفتوحة فعلاً.
+   ✅ جديد — liqPriceFromPosition: لأي صفقة مفتوحة فعلياً، assetPositions[].
+      position.liquidationPx موثّق رسمياً ضمن رد clearinghouseState (وبنفس
+      الحقل بالضبط داخل WsAllDexsClearinghouseState الحي) — محسوب من خادم
+      Hyperliquid نفسه بكامل تفاصيل الحساب (portfolio margin/unified
+      account/هوامش دقيقة)، فهو دائماً أدق من أي حساب محلي تقريبي. هذه
+      الدالة تقرأه مباشرة وتلجأ لـcalcLiqPrice فقط لو غاب الحقل نادراً.
+      openPosDetail بالأسفل الآن يستخدمها بدل الحساب المحلي المباشر.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -78,11 +87,8 @@ function mergeFillData(rawPos, fills) {
 }
 
 /* ════════════════════════════════════════════════
-   سعر التصفية التقريبي — Cross margin
+   سعر التصفية التقريبي — Cross margin (تقدير محلي، صفقة لم تُفتح بعد فقط)
    ════════════════════════════════════════════════
-   ✅ FIX (كان يُظهر سعر تصفية أبعد من الحقيقي كلما وُجد ربح/خسارة عائم
-   من صفقات Cross أخرى مفتوحة بنفس الوقت، أو عند الإضافة لصفقة رابحة):
-
    شرط تصفية Hyperliquid الرسمي لصفقات Cross: "liquidated when the
    account value (including unrealized pnl) is less than the maintenance
    margin" — أي عند السعر P الذي يحقق:
@@ -95,11 +101,10 @@ function mergeFillData(rawPos, fills) {
        Long:  P = (entry − W/sz) / (1 − mmFrac)
        Short: P = (entry + W/sz) / (1 + mmFrac)
 
-   الصيغة القديمة كانت تحسب (entry − freeMargin/sz) بلا القاسم
-   (1∓mmFrac) إطلاقاً، وكانت تستقبل رصيد Spot الخام فقط (balance.total)
-   بدل "معادلة equity" الحقيقية — فتتجاهل أي ربح/خسارة عائم من صفقات
-   Cross أخرى، وتُخطئ الحساب أكثر كلما زاد ذلك الربح/الخسارة (بالضبط
-   سيناريو "أضفت لصفقة وهي رابحة" الذي كشف الفرق عن الموقع الرسمي).
+   ⚠️ يُستخدم فقط حين لا توجد صفقة مفتوحة فعلياً بعد (معاينة قبل التنفيذ
+   بـtrading.js:askTrade وchart.js:_showCf) — لأي صفقة موجودة فعلاً بالحساب،
+   استخدم liqPriceFromPosition أدناه بدل هذه مباشرة (يقرأ رقم الخادم
+   الحقيقي، لا التقريب).
 ════════════════════════════════════════════════ */
 function calcLiqPrice(entryPxOz, sziOz, equityExclOwnPnl, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
@@ -117,9 +122,6 @@ function calcLiqPrice(entryPxOz, sziOz, equityExclOwnPnl, isCross, maxLev) {
       ? entryPxOz * (1 - 1 / maxLev + mmFrac)
       : entryPxOz * (1 + 1 / maxLev - mmFrac);
   }
-  /* رصيد زائد جداً بالنسبة لحجم الصفقة → لا يوجد سعر تصفية واقعي ضمن
-     مدى أسعار معقول. نُرجع null (يعرضها الطرف الآخر كـ"—") بدل رقم
-     مُضلِّل قريب من الصفر يُوحي بخطر تصفية وشيك غير موجود فعلياً. */
   if (!(liq > 0)) return null;
   if (side === -1 && liq > entryPxOz * 8) return null;
   return liq;
@@ -132,6 +134,25 @@ function liqPriceDisplay(sym, entryPxOz, sziOz, equityExclOwnPnl) {
   if (liqOz === null) return { text: '—', ounce: null };
   const liqDisp = isGram ? liqOz / TROY : liqOz;
   return { text: `$${fmt(liqDisp, a.pxDp)}`, ounce: liqOz };
+}
+
+/* ════════════════════════════════════════════════
+   ✅ جديد — سعر التصفية لصفقة مفتوحة فعلياً: يقرأ position.liquidationPx
+   القادم مباشرة من الخادم (clearinghouseState وWsAllDexsClearinghouseState
+   الحي، نفس الحقل بالضبط بعد mergeFillData أعلاه — لا يُفقد بالدمج).
+   يلجأ لـcalcLiqPrice فقط لو الحقل غائب/صفر نادراً (استجابة جزئية مثلاً).
+════════════════════════════════════════════════ */
+function liqPriceFromPosition(sym, pos, ownPnl) {
+  const a      = ASSETS[sym] || ASSETS['GOLD'] || { lev: 20, cross: false, pxDp: 2, gram: false };
+  const isGram = !!a.gram;
+  const apiLiq = parseFloat(pos.liquidationPx || 0);
+  if (apiLiq > 0) {
+    const liqDisp = isGram ? apiLiq / TROY : apiLiq;
+    return { text: `$${fmt(liqDisp, a.pxDp)}`, ounce: apiLiq };
+  }
+  const entryOz = parseFloat(pos.entryPx || 0);
+  const sziOz   = parseFloat(pos.szi || 0);
+  return liqPriceDisplay(sym, entryOz, sziOz, crossEquityExcluding(ownPnl));
 }
 
 function calcTpPrice(ep, szi, pnl) {
@@ -175,7 +196,7 @@ window.openPosDetail = function (i) {
   const entryOz = parseFloat(pos.entryPx || 0);
   const fundUsd = State.fundingRates[sym] || State.fundingRates['GOLD'] || 0;
   const ownPnl  = parseFloat(pos.unrealizedPnl || 0);
-  const liqInfo = liqPriceDisplay(sym, entryOz, sziOz, crossEquityExcluding(ownPnl));
+  const liqInfo = liqPriceFromPosition(sym, pos, ownPnl);
   const openStr = p.openTime
     ? new Date(p.openTime).toLocaleString('ar-EG', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
     : '—';
