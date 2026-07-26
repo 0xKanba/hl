@@ -135,6 +135,7 @@ createRoot(mountNode).render(
         createOnLogin: 'users-without-wallets',
       },
       appearance: {
+        name: 'سيولة مبسطة',
         theme: 'dark',
         accentColor: '#00ccff',
         logo: 'https://hl.kanba.pw/images/icon-192x192.png',
