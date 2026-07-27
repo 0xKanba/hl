@@ -7,13 +7,13 @@
    the app shell below is network-first, not stale-while-revalidate. */
 
 <<<<<<< HEAD
-const CACHE_APP   = 'hltrade-app-202607220932-9d29ed8';
-const CACHE_IMGS  = 'hltrade-img-202607220932-9d29ed8';
-const CACHE_FONTS = 'hltrade-fnt-202607220932-9d29ed8';
+const CACHE_APP   = 'hltrade-app-202607271151-a7f5fef';
+const CACHE_IMGS  = 'hltrade-img-202607271151-a7f5fef';
+const CACHE_FONTS = 'hltrade-fnt-202607271151-a7f5fef';
 =======
-const CACHE_APP   = 'hltrade-app-202607262220-2a52a52';
-const CACHE_IMGS  = 'hltrade-img-202607262220-2a52a52';
-const CACHE_FONTS = 'hltrade-fnt-202607262220-2a52a52';
+const CACHE_APP   = 'hltrade-app-202607271151-a7f5fef';
+const CACHE_IMGS  = 'hltrade-img-202607271151-a7f5fef';
+const CACHE_FONTS = 'hltrade-fnt-202607271151-a7f5fef';
 >>>>>>> kanba
 
 const APP_SHELL = [
