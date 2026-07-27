@@ -40,6 +40,11 @@
       الوحيد الآن للإيداع/السحب؛ نافذة الوكلاء تركّز فقط على دورة حياة
       مفتاح التوقيع (الحالة/التدوير/الحذف) + عرض عنوان الإيداع للنسخ
       السريع، بلا تكرار أزرار فعل.
+
+   ✅ FIX — أزرار "تفعيل"/"تدوير" كانت تعرض e.message.slice(0,100)
+      بالإنجليزية الخام مباشرة عند الفشل (هذا على الأرجح ما ظهر بالضبط
+      بعد تسجيل الدخول بالبريد وتوقيع تفويض الوكيل على حساب لم يُودَع
+      فيه شيء بعد). الآن تمر عبر errToAr() المركزية (utils.js).
 ═══════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -303,16 +308,21 @@
     _wireActions();
   }
 
+  /* ✅ FIX: e.message.slice(0,100) الخام بالإنجليزية → errToAr() المركزية.
+     هذا بالضبط المسار الأرجح وراء الرسالة الإنجليزية التي ظهرت بعد
+     التسجيل بالبريد وتوقيع تفويض الوكيل. */
   function _wireActions() {
     document.getElementById('agActivate')?.addEventListener('click', () => {
-      ensure(true).then(_render).catch(e => { if (e.message !== 'CANCELLED') toast('⚠️ ' + e.message.slice(0,100), 'err'); });
+      ensure(true).then(_render).catch(e => {
+        if (e.message !== 'CANCELLED') toast('⚠️ ' + errToAr(e.message), 'err');
+      });
     });
     document.getElementById('agCopyAgent')?.addEventListener('click', () => _copy(getInfo()?.address));
     document.getElementById('agCopyWallet')?.addEventListener('click', () => _copy(State.wallet?.address));
     document.getElementById('agRotate')?.addEventListener('click', () => _confirm(
       'سيتم إنشاء وكيل جديد ويحتاج توقيعاً واحداً — الوكيل الحالي يتوقف عن الاستخدام فوراً.',
       () => ensure(true).then(() => { toast('✅ تم تدوير الوكيل', 'ok'); _render(); })
-               .catch(e => { if (e.message !== 'CANCELLED') toast('⚠️ ' + e.message.slice(0,100), 'err'); })
+               .catch(e => { if (e.message !== 'CANCELLED') toast('⚠️ ' + errToAr(e.message), 'err'); })
     ));
     document.getElementById('agDelete')?.addEventListener('click', () => _confirm(
       'سيتوقف هذا الوكيل عن العمل فوراً من داخل التطبيق. صفقاتك المفتوحة تبقى كما هي على Hyperliquid — ستحتاج وكيلاً جديداً فقط عند صفقتك القادمة.',

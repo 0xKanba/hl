@@ -87,6 +87,13 @@
         <div class="nav-address" id="navAddress" title="انقر للنسخ">—</div>
         <button class="nav-copy-btn" id="navCopyBtn" title="نسخ العنوان">⧉</button>
       </div>
+      <!--
+        ✅ زر "إلغاء الاتصال" — انتقل إلى رأس الصفحة بدل الاختباء داخل
+        ⚙️ الخيارات (سابقاً "تغيير المحفظة"، وكان فعلياً زر تسجيل خروج
+        فقط بلا أي تبديل حقيقي). مخفي افتراضياً (.hidden) — updateConnectBtn
+        بـauth.js تتكفّل بإظهاره فقط عند وجود اتصال فعلي، وإخفائه للزائر.
+      -->
+      <button class="nav-disconnect-btn hidden" id="btnDisconnect" title="إلغاء الاتصال">🔌</button>
     </div>
   </nav>
 
@@ -227,12 +234,16 @@
 </div>
 
 <!--
-  ✅ ترتيب القائمة يعكس الآن تدفق المشروع الفعلي بوضوح:
+  ✅ ترتيب القائمة يعكس تدفق المشروع الفعلي بوضوح:
      إيداع → سحب (حركة الأموال) ثم الرصيد/التأريخ/التقويم (متابعة)
-     ثم الوكلاء/تصدير المحفظة (أمان وتقني) ثم تغيير المحفظة/إلغاء.
+     ثم الوكلاء/تصدير المحفظة (أمان وتقني).
      "استرداد المحفظة" أُزيل نهائياً — تصدير المحفظة (يعرض المفتاح
      الخاص/العبارة السرية مباشرة) هو المسار الوحيد الكافي للنسخ
      الاحتياطي، فكان وجود الاثنين تكراراً بلا فائدة إضافية حقيقية.
+     "تغيير المحفظة" (كانت هنا، آخر القائمة) انتقلت بالكامل إلى زر
+     "🔌 إلغاء الاتصال" برأس الصفحة — إجراء بهذا الوزن (يُنهي الجلسة)
+     يستحق وضوح وسرعة وصول لمسة واحدة، لا أن يكون مدفوناً بقائمة
+     خيارات ثانوية.
 -->
 <div class="opts-overlay hidden" id="optsOverlay">
   <div class="opts-menu">
@@ -243,7 +254,6 @@
     <button class="opts-item" id="optCalendar">📅 التقويم الشهري</button>
     <button class="opts-item" id="optAgents">🤖 الوكلاء</button>
     <button class="opts-item" id="optExportWallet">🔑 تصدير المحفظة</button>
-    <button class="opts-item opts-item-logout" id="optLogout">تغيير المحفظة</button>
     <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
   </div>
 </div>
@@ -460,18 +470,29 @@
   </div>
 </div>
 
+<!--
+  ✅ modalLogout — الآن "إلغاء الاتصال" (سابقاً "تسجيل الخروج"/"تغيير
+  المحفظة")، يُفتح من زر 🔌 برأس الصفحة بدل قائمة الخيارات. النص يشرح
+  كل احتمالات النتيجة بوضوح تام: ما يُحذف محلياً، ما يبقى آمناً على
+  Hyperliquid، ما يبقى صالحاً عند إعادة الاتصال، وما يُحذف فعلياً
+  (رمز PIN) — لا مفاجآت لاحقة.
+-->
 <div class="modal-overlay" id="modalLogout">
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="logout-content">
-      <div class="logout-icon">🔐</div>
-      <h3 class="modal-title">تسجيل الخروج</h3>
-      <p class="logout-text">سيُحذف المفتاح الخاص من ذاكرة المتصفح.<br>
-        صفقاتك المفتوحة <strong>تبقى نشطة</strong> على Hyperliquid.</p>
+      <div class="logout-icon">🔌</div>
+      <h3 class="modal-title">إلغاء الاتصال</h3>
+      <p class="logout-text">
+        سيُحذف مفتاح الجلسة من هذا الجهاز، وستحتاج لتسجيل الدخول مجدداً.<br><br>
+        ✅ صفقاتك المفتوحة <strong>تبقى نشطة وآمنة</strong> على Hyperliquid ولا تتأثر إطلاقاً.<br>
+        ✅ محفظة التنفيذ (الوكيل) تبقى صالحة لنفس العنوان عند إعادة الاتصال — بلا حاجة لتوقيع جديد.<br>
+        ⚠️ رمز PIN المحلي (إن كان مفعَّلاً) سيُحذف أيضاً — ستحتاج تعيين رمز جديد لاحقاً لو أردت القفل مجدداً.
+      </p>
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"             id="logoutCancel">إلغاء</button>
-      <button class="btn-modal btn-confirm btn-danger" id="logoutExecute">خروج 🔒</button>
+      <button class="btn-modal btn-confirm btn-danger" id="logoutExecute">🔌 قطع الاتصال</button>
     </div>
   </div>
 </div>

@@ -145,6 +145,22 @@
 }
 #btnLock:hover { color: var(--text-primary); }
 
+/* ✅ زر "🔌 إلغاء الاتصال" — رأس الصفحة، بدل بقائه دفيناً بقائمة
+   الخيارات كـ"تغيير المحفظة" سابقاً. نفس نمط #btnLock بصرياً، بتلميح
+   حمراء عند التمرير (--dn، نفس لغة الألوان الدلالية المستخدمة لكل
+   إجراء ذي عواقب بالتطبيق — بيع/إغلاق/حذف). ظهوره/اختفاؤه تتحكم به
+   updateConnectBtn بـauth.js عبر تبديل .hidden حسب حالة الاتصال. */
+.nav-disconnect-btn {
+  background: none; border: none;
+  color: var(--text-secondary); font-size: var(--fs-lg);
+  padding: 3px; cursor: pointer;
+  transition: color var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+  flex-shrink: 0;
+}
+.nav-disconnect-btn:hover  { color: var(--dn); }
+.nav-disconnect-btn:active { transform: scale(.85); }
+.nav-disconnect-btn.hidden { display: none; }
+
 .nav-address-wrap { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .nav-address {
   font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: var(--fw-bold);
@@ -787,13 +803,18 @@
 #toast.ok   { border-color: var(--up); color: var(--up); background: color-mix(in srgb,var(--up) 8%,var(--bg-card)); box-shadow: var(--glow-up); }
 #toast.err  { border-color: var(--dn); color: var(--dn); background: color-mix(in srgb,var(--dn) 8%,var(--bg-card)); box-shadow: var(--glow-dn); }
 #toast.info { border-color: var(--ac); color: var(--ac); box-shadow: var(--glow-ac); }
+/* ✅ نوع رابع 'warn' — لتحذيرات مهمة ليست فشلاً حقيقياً (مثل "أودع
+   USDC أولاً لتفعيل حسابك") — يستخدم --warn الموجود أصلاً بthemes.css،
+   بدل إعادة استخدام 'err' لأشياء ليست خطأً حقيقياً بالتطبيق نفسه. */
+#toast.warn {
+  border-color: var(--warn); color: var(--warn);
+  background: color-mix(in srgb,var(--warn) 10%,var(--bg-card));
+  box-shadow: 0 0 16px var(--warn-dim);
+  white-space: normal; max-width: min(92vw, 380px); line-height: var(--lh-base);
+}
 
 /* ════════════════════════════════════
-   LOADER — ✅ أُعيد تصميمه: بطاقة صغيرة بزاوية الشاشة بدل حجب
-   الشاشة كاملة، مع زر "✕" يُخفيها فوراً بدون ما يلغي العملية نفسها
-   (العملية تكمل بالخلفية — الزر بس يوقف إزعاج المشاهدة). هذا يحل
-   مشكلة "علقت الشاشة ولازم أعيد تحميل الصفحة" نهائياً — دايماً في
-   مخرج، حتى لو تعطّلت عملية ما لأي سبب.
+   LOADER — بطاقة صغيرة بزاوية الشاشة، زر "✕" يُخفيها فوراً بدون إلغاء العملية
 ════════════════════════════════════ */
 #loader {
   position: fixed;

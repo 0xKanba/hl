@@ -6,9 +6,15 @@
    cache tag didn't change"; it never blocks a real deploy, because
    the app shell below is network-first, not stale-while-revalidate. */
 
+<<<<<<< HEAD
 const CACHE_APP   = 'hltrade-app-202607220932-9d29ed8';
 const CACHE_IMGS  = 'hltrade-img-202607220932-9d29ed8';
 const CACHE_FONTS = 'hltrade-fnt-202607220932-9d29ed8';
+=======
+const CACHE_APP   = 'hltrade-app-202607262220-2a52a52';
+const CACHE_IMGS  = 'hltrade-img-202607262220-2a52a52';
+const CACHE_FONTS = 'hltrade-fnt-202607262220-2a52a52';
+>>>>>>> kanba
 
 const APP_SHELL = [
   '/',
