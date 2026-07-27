@@ -11,13 +11,26 @@
       WS candle updates. Removed all _ivMs subtraction logic.
    3. Realtime lastBar cache merges correctly without drift.
    4. ✅ Liquidation price everywhere in this file now routes through
-      the single shared positions.js:calcLiqPrice (cross-aware, correct
-      formula) via crossEquityExcluding() — removed two separate
-      duplicated/incorrect inline reimplementations that had drifted
-      out of sync with the real math (one dead fallback in _execLines
-      that only ever ran if calcLiqPrice was somehow undefined, and one
-      always-isolated formula in _showCf's quick-trade sheet that was
-      wrong for every asset in this app, since all of them are cross).
+      position.liquidationPx directly (موثّق رسمياً ضمن clearinghouseState)
+      عند وجود صفقة مفتوحة فعلاً، ويلجأ لـpositions.js:calcLiqPrice فقط
+      كاحتياط نادر أو لمعاينة صفقة لم تُفتح بعد (chart.js:_showCf).
+   5. ✅ إصلاح "الشاشة كلها تتجمّد عند تبديل الأصل" — شاشة التحميل
+      (_tvOvr) كانت child مباشر لـ#chartScreen كاملاً (الرأس+النافبار+
+      شريط التداول+الشارت)، والـCSS بتاعتها position:absolute;inset:0
+      كانت تتمدد لتغطي كل شيء لأن #chartScreen هو الجد المُموضَع. الآن
+      غلاف مستقل #_tvChartWrap يحتوي #_tvC فقط، وoverlay sibling له
+      بداخله — يغطي منطقة الشارت حصراً، الباقي يبقى حياً وتفاعلياً.
+   6. ✅ تبديل الأصل (switchAssetChart) يستخدم chart().setSymbol()
+      أولاً (لا هدم/بناء الودجت بالكامل) — يتراجع لـ_initChart الكاملة
+      فقط لو فشلت (try/catch)، فلا كسر صامت لو اختلف توقيع المكتبة.
+   7. ✅ إصلاح جوهري بالشمعة الأسبوعية الحيّة — dailyMap كانت تبدأ فارغة
+      بكل _openWs جديد ولا تُبذر من التاريخ المجلوب فعلاً، فأول تحديث حي
+      بعد الفتح يعيد حساب الأسبوع من يوم واحد فقط (يمحو الأيام الأسبق).
+      الآن تُبذر فوراً من أيام الأسبوع الحالي المنقضية، بالتوازي مع
+      الاشتراك الحي (لا تأخير عليه).
+   8. ✅ pollAccount (دالة محذوفة من المشروع منذ تحويل الحساب لـpush-
+      based) كانت مُستدعاة هنا بحماية typeof (غير فعّالة أصلاً) — صُححت
+      لـ_multiPoll الحقيقية (trading.js) لتناسق مع بقية المشروع.
 ═══════════════════════════════════════════════════════════════════ */
 const ChartModule = (function () {
   'use strict';
@@ -293,7 +306,10 @@ const ChartModule = (function () {
 
     _openWs(wsKey, coin, hlIv) {
       if (typeof HL === 'undefined') return;
-      const unsub = HL.subscribe({type:'candle', coin, interval:hlIv}, c => {
+      const entry = { unsub: null, lastBar: null, dailyMap: new Map() };
+      this._ws.set(wsKey, entry);
+
+      entry.unsub = HL.subscribe({type:'candle', coin, interval:hlIv}, c => {
         const w = this._ws.get(wsKey);
         if (!w) return;
 
@@ -340,7 +356,32 @@ const ChartModule = (function () {
           }
         }
       });
-      this._ws.set(wsKey, {unsub, lastBar:null, dailyMap:new Map()});
+
+      /* ✅ إصلاح جوهري — الشمعة الأسبوعية كانت تُعاد حسبتها من يوم واحد
+         فقط عند وصول أول تحديث حي بعد فتح/تبديل الرسم: dailyMap تبدأ
+         فارغة تماماً (Map جديدة بكل _openWs)، ولا تُبذر أبداً من التاريخ
+         المجلوب فعلاً بـgetBars — فقط تمتلئ لاحقاً من التحديثات الحيّة
+         توّاً. فأول تحديث حي كان يحسب open/high/low الأسبوع من ذلك اليوم
+         فقط، ماحياً الأيام الأسبق المرسومة أصلاً بالتاريخ — هذا بالضبط
+         سبب "الشمعة تُحتسب من إغلاق سابق عند فتح جديدة". الحل: نجلب أيام
+         الأسبوع الحالي المنقضية فوراً (بالتوازي مع الاشتراك أعلاه، لا
+         بعده — لا تأخير على البيانات الحيّة) ونضعها بـdailyMap قبل وصول
+         أي تحديث حي. مُقيَّدة بمشترك 1W فعلي فقط — لا تكلفة إضافية
+         لمشاهدي الرسم اليومي العادي. */
+      let needsWeekly = false;
+      for (const [,s] of this._subs) if (s.wsKey === wsKey && s.resolution === '1W') { needsWeekly = true; break; }
+      if (hlIv === '1d' && needsWeekly) {
+        const now = Date.now();
+        this._fetchRest(coin, '1d', now - 9 * 86400000, now).then(raw => {
+          const w = this._ws.get(wsKey);
+          if (!w) return; // أُلغي الاشتراك قبل اكتمال الجلب
+          const curWeekStart = _weekStart(now);
+          for (const d of raw) {
+            if (d.time >= curWeekStart && !w.dailyMap.has(d.time)) w.dailyMap.set(d.time, { ...d });
+          }
+          if (!w.lastBar && raw.length) w.lastBar = { ...raw[raw.length - 1] };
+        }).catch(() => {});
+      }
     }
 
     _calcWeek(map, start) {
@@ -426,19 +467,18 @@ const ChartModule = (function () {
 .tvt-qin{width:72px;font-family:'IBM Plex Mono',monospace;font-size:max(16px,18px);font-weight:700;text-align:center;direction:ltr;background:var(--bg-input,#181818);border:1.5px solid var(--border,#1e1e1e);border-radius:9px;padding:4px 5px;color:var(--text-primary,#f0f0f0);outline:none;transition:border-color .13s;}
 .tvt-qin:focus{border-color:var(--ac,#ff8c42);}
 .tvt-unit{font-size:10px;font-weight:800;color:var(--text-secondary,#666);white-space:nowrap;}
-#_tvC{flex:1;min-height:0;width:100%;direction:ltr!important;overflow:hidden;position:relative;background:#000;}
+#_tvChartWrap{flex:1;min-height:0;width:100%;position:relative;overflow:hidden;background:#000;}
+#_tvC{position:absolute;inset:0;direction:ltr!important;overflow:hidden;background:#000;}
 #_tvC>div{width:100%!important;height:100%!important;}
 #_tvC>iframe{width:100%!important;height:100%!important;display:block;}
-#_tvOvr{position:absolute;inset:0;z-index:200;background:var(--bg-app,#000);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .4s ease;pointer-events:all;}
+#_tvOvr{position:absolute;inset:0;z-index:20;background:var(--bg-app,#000);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .35s ease;pointer-events:all;padding:20px;}
 #_tvOvr.fading{opacity:0;pointer-events:none;}
 #_tvOvr.gone{display:none;}
-.tvovr-icon{font-size:38px;line-height:1;animation:_tvOvrP 2s ease-in-out infinite;}
-@keyframes _tvOvrP{0%,100%{opacity:.45;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
-.tvovr-name{font-family:'Cairo',sans-serif;font-size:15px;font-weight:900;color:var(--text-primary,#f0f0f0);}
-.tvovr-bar{width:100px;height:2px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden;}
-.tvovr-prog{height:100%;width:35%;background:linear-gradient(90deg,transparent,var(--ac,#ff8c42),transparent);animation:_tvOvrS 1.4s ease-in-out infinite;border-radius:999px;}
-@keyframes _tvOvrS{0%{transform:translateX(-120%)}100%{transform:translateX(400%)}}
-.tvovr-txt{font-family:'Cairo',sans-serif;font-size:11px;color:var(--text-muted,#444);font-weight:700;}
+.tvovr-icon{font-size:26px;line-height:1;opacity:.55;}
+.tvovr-skel{display:flex;align-items:flex-end;gap:4px;height:64px;width:min(78%,240px);}
+.tvovr-bar2{flex:1;border-radius:3px 3px 1px 1px;background:linear-gradient(90deg, rgba(255,140,66,.10) 25%, rgba(255,140,66,.32) 45%, rgba(255,140,66,.10) 65%);background-size:300% 100%;animation:_tvShimmer 1.4s ease-in-out infinite;}
+@keyframes _tvShimmer{0%{background-position:-135% 0}100%{background-position:135% 0}}
+.tvovr-txt{font-family:'Cairo',sans-serif;font-size:12px;font-weight:800;color:var(--text-secondary,#888);text-align:center;}
 .tvcf-ov{position:absolute;inset:0;z-index:99;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.65);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);direction:rtl;}
 .tvcf-card{background:var(--bg-card,#0d0d0d);border-top:1.5px solid var(--border-strong,#2a2a2a);border-radius:22px 22px 0 0;width:100%;max-width:520px;padding:14px 14px 30px;animation:_tvcfUp .22s cubic-bezier(.4,0,.2,1);}
 @keyframes _tvcfUp{from{transform:translateY(100%)}to{transform:none}}
@@ -512,22 +552,27 @@ const ChartModule = (function () {
     }
   }
 
-  /* ══════════ OVERLAY ══════════ */
+  /* ══════════ OVERLAY ══════════
+     ✅ الآن تُلحَق داخل #_tvChartWrap (غلاف يحتوي #_tvC فقط) بدل
+     #chartScreen كاملاً — تغطي منطقة الشارت حصراً، لا الرأس ولا شريط
+     الأصول ولا شريط التداول. أسلوب "شمشة" (shimmer) بروح c.js بدل
+     أيقونة+بار تحميل ثابت. */
   function _ovrShow(sym) {
-    const scr = document.getElementById('chartScreen');
-    if (!scr) return;
+    const wrap = document.getElementById('_tvChartWrap');
+    if (!wrap) return;
     let el = document.getElementById('_tvOvr');
     if (!el) {
       el = document.createElement('div');
       el.id = '_tvOvr';
-      scr.appendChild(el);
+      wrap.appendChild(el);
     }
     const a = _asset(sym);
+    const heights = [38,58,32,66,46,72,40,60,34,52];
+    const bars = heights.map(h => `<div class="tvovr-bar2" style="height:${h}%"></div>`).join('');
     el.innerHTML = `
       <span class="tvovr-icon">${a.icon}</span>
-      <span class="tvovr-name">${a.name}</span>
-      <div class="tvovr-bar"><div class="tvovr-prog"></div></div>
-      <span class="tvovr-txt">جاري التحميل...</span>`;
+      <div class="tvovr-skel">${bars}</div>
+      <span class="tvovr-txt">${a.name} — جاري تحميل الرسم البياني...</span>`;
     el.classList.remove('fading', 'gone');
     el.style.opacity = '1';
   }
@@ -631,12 +676,18 @@ const ChartModule = (function () {
             .setBodyTextColor('#fff').setLineWidth(1).setLineStyle(2));
         } catch (e) { console.warn('[L]sl', e); }
       }
-      /* ✅ سعر التصفية: صيغة Cross الحقيقية المشتركة فقط (positions.js:
-         calcLiqPrice) — أُزيل النسخ المكرَّر/الميت الذي كان هنا سابقاً. */
+      /* ✅ سعر التصفية: يقرأ position.liquidationPx مباشرة من الـAPI أولاً
+         (موثّق رسمياً ضمن clearinghouseState — أدق من أي حساب محلي لأنه
+         محسوب فعلياً من الخادم بكامل تفاصيل الحساب). calcLiqPrice المحلي
+         يبقى فقط احتياطاً نادراً لو غاب الحقل. */
       try {
-        const aL   = isGr ? ((typeof ASSETS !== 'undefined' && ASSETS['GOLD']) || _asset('GOLD')) : _asset(_sym);
-        const eq   = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(pnl) : 0;
-        const liqOz = (typeof calcLiqPrice === 'function') ? calcLiqPrice(entOz, sziOz, eq, aL.cross, aL.lev) : null;
+        const apiLiqOz = parseFloat(pos.liquidationPx || 0);
+        let liqOz = apiLiqOz > 0 ? apiLiqOz : null;
+        if (!liqOz) {
+          const aL = isGr ? ((typeof ASSETS !== 'undefined' && ASSETS['GOLD']) || _asset('GOLD')) : _asset(_sym);
+          const eq = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(pnl) : 0;
+          liqOz = (typeof calcLiqPrice === 'function') ? calcLiqPrice(entOz, sziOz, eq, aL.cross, aL.lev) : null;
+        }
         if (liqOz && liqOz > 0) {
           _lines.push(chart.createOrderLine()
             .setPrice(_toDisp(_sym, liqOz)).setQuantity('⚡ تصفية')
@@ -768,7 +819,12 @@ const ChartModule = (function () {
     return new window.TradingView.widget(cfg);
   }
 
-  /* ══════════ CHART INIT ══════════ */
+  /* ══════════ CHART INIT (full teardown+rebuild) ══════════
+     تُستدعى فقط: أول دخول للشارت (open())، فشل تبديل الفترة، أو فشل
+     chart().setSymbol() بتبديل الأصل (راجع switchAssetChart). ترتيب
+     العمليات مهم: _ovrShow أولاً (تُلحَق بـ#_tvChartWrap، sibling
+     لـ#_tvC)، ثم تفريغ #_tvC نفسها — لا تعارض بينهما أبداً لأنهما لم
+     يعودا نفس العنصر. */
   function _initChart(sym, iv, saved) {
     _ovrShow(sym);
     _linesReady = false; _linesPending = false;
@@ -810,7 +866,10 @@ const ChartModule = (function () {
     });
   }
 
-  /* ══════════ ASSET NAV ══════════ */
+  /* ══════════ ASSET NAV ══════════
+     ✅ الإدراج الآن نسبة لـ#_tvChartWrap (كان #_tvC مباشرة) — بعد
+     تغليف #_tvC داخل الغلاف الجديد، #_tvC لم يعد child مباشر لـ
+     #chartScreen، فـinsertBefore على المرجع القديم كان سيرمي خطأ. */
   function _buildNav() {
     document.getElementById('_tvNav')?.remove();
     const nav = document.createElement('div');
@@ -823,9 +882,9 @@ const ChartModule = (function () {
     ).join('');
     const scr = document.getElementById('chartScreen');
     const trd = document.getElementById('_tvTrade');
-    const tvC = document.getElementById('_tvC');
+    const wrap = document.getElementById('_tvChartWrap');
     if (scr && trd) scr.insertBefore(nav, trd);
-    else if (scr && tvC) scr.insertBefore(nav, tvC);
+    else if (scr && wrap) scr.insertBefore(nav, wrap);
     nav.querySelectorAll('.tvn-btn').forEach(b => b.onclick = () => {
       const s = b.dataset.sym;
       if (!s || s === _sym) return;
@@ -838,7 +897,8 @@ const ChartModule = (function () {
     document.querySelectorAll('.tvn-btn').forEach(b => b.classList.toggle('on', b.dataset.sym === sym));
   }
 
-  /* ══════════ TRADE BAR ══════════ */
+  /* ══════════ TRADE BAR ══════════
+     ✅ الإدراج الآن نسبة لـ#_tvChartWrap (نفس سبب _buildNav أعلاه). */
   function _buildTrade() {
     document.getElementById('_tvTrade')?.remove();
     const a = _asset(_sym), defQ = _lsGet('qty_' + _sym) || a.presets?.[0] || 1;
@@ -861,8 +921,8 @@ const ChartModule = (function () {
         <span class="tvt-px" id="_tvBuyPx">—</span>
       </button>`;
     const scr = document.getElementById('chartScreen');
-    const tvC = document.getElementById('_tvC');
-    if (scr && tvC) scr.insertBefore(bar, tvC);
+    const wrap = document.getElementById('_tvChartWrap');
+    if (scr && wrap) scr.insertBefore(bar, wrap);
     document.getElementById('_tvQty').addEventListener('change', function () {
       const v = parseFloat(this.value); if (v > 0) _lsSet('qty_' + _sym, v);
     });
@@ -881,10 +941,8 @@ const ChartModule = (function () {
     if (!mid) return typeof toast !== 'undefined' && toast('لا يوجد سعر', 'err');
     const midOz = _toOz(_sym, mid), qtyOz = isGr ? qty / TROY : qty;
     const usd = (midOz * qtyOz).toFixed(2), mgn = (midOz * qtyOz / a.lev).toFixed(2);
-    /* ✅ صيغة Cross الحقيقية المشتركة (calcLiqPrice) بدل صيغة Isolated
-       ثابتة كانت تُستخدم هنا دائماً بلا فحص a.cross — بينما كل أصول
-       هذا المشروع Cross فعلياً، فكانت معاينة "التصفية" هنا خاطئة على
-       الدوام، مهما كان الأصل أو حالة الحساب. */
+    /* ✅ صيغة Cross الحقيقية المشتركة (calcLiqPrice) — معاينة صفقة لم
+       تُفتح بعد، ما فيه position.liquidationPx حقيقي بعد لنقرأه. */
     const sziLiqOz = isBuy ? qtyOz : -qtyOz;
     const eq       = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(0) : 0;
     const liqOz    = (typeof calcLiqPrice === 'function') ? calcLiqPrice(midOz, sziLiqOz, eq, a.cross, a.lev) : null;
@@ -943,7 +1001,12 @@ const ChartModule = (function () {
       _hideCf();
       const disp = isGr ? qty.toFixed(2) + ' غرام' : qty.toFixed(aApi.szDp) + ' ' + (aApi.unit || '');
       if (typeof toast !== 'undefined') toast(`✅ ${aApi.icon} ${isBuy ? 'شراء' : 'بيع'} ${disp}`, 'ok', 4000);
-      if (typeof pollAccount !== 'undefined') setTimeout(pollAccount, 2000);
+      /* ✅ FIX — pollAccount محذوفة من المشروع منذ تحويل الحساب لـpush-
+         based (initAccountFeeds/_multiPoll). كانت هنا محمية بـtypeof
+         فما كسرت شيء، لكن صُححت لـ_multiPoll الحقيقية (trading.js)
+         لتناسق مع بقية المشروع — نفس الدالة اللي يستدعيها trading.js
+         بعد كل صفقة عادية. */
+      if (typeof _multiPoll !== 'undefined') setTimeout(_multiPoll, 2000);
     } catch (e) {
       if (typeof toast !== 'undefined')
         toast(typeof tradeErr !== 'undefined' ? tradeErr(e.message) : '❌ ' + e.message.slice(0, 100), 'err', 5000);
@@ -951,7 +1014,10 @@ const ChartModule = (function () {
     }
   }
 
-  /* ══════════ DOM ══════════ */
+  /* ══════════ DOM ══════════
+     ✅ #_tvChartWrap غلاف جديد يحتوي #_tvC فقط — TradingView يملك
+     محتوى #_tvC بالكامل (innerHTML يُفرَّغ ويُعاد بناؤه بكل _initChart)،
+     والـoverlay تعيش كـsibling له بنفس الغلاف، فلا تعارض بينهما أبداً. */
   function _ensureScreen() {
     const scr = document.getElementById('chartScreen');
     if (!scr || document.getElementById('_tvHdr')) return;
@@ -979,9 +1045,12 @@ const ChartModule = (function () {
       </div>`;
     scr.prepend(hdr);
 
+    const wrap = document.createElement('div');
+    wrap.id = '_tvChartWrap';
     const tvC = document.createElement('div');
     tvC.id = '_tvC';
-    scr.appendChild(tvC);
+    wrap.appendChild(tvC);
+    scr.appendChild(wrap);
 
     document.getElementById('_tvBack').onclick = () => ChartModule.close();
     document.getElementById('_tvFsBtn').onclick = () => {
@@ -1064,15 +1133,51 @@ const ChartModule = (function () {
     }
   }
 
+  /* ══════════ ✅ تبديل الأصل — بدون هدم/إعادة بناء الودجت ══════════
+     نفس فلسفة switchInterval أعلاه: chart().setSymbol() مدعومة رسمياً
+     بـTradingView Advanced Charts وتبدّل الرمز على نفس نسخة الودجت
+     الحيّة، بلا أي هدم لـiframe/canvas ولا "شاشة سوداء" تغطي الرأس/
+     شريط الأصول/شريط التداول — فقط #_tvChartWrap تُظهر حالة تحميل
+     قصيرة ريثما TradingView يجهّز بيانات الرمز الجديد.
+     ⚠️ ملف charting_library.d.ts غير متاح لي بنسخة المشروع الحالية
+     للتحقق من التوقيع الدقيق حرفياً من المصدر — استُخدم الشكل الأكثر
+     توثيقاً (symbol, callback) بثقة عالية، مع تراجع تلقائي كامل
+     (_initChart) لو فشلت لأي سبب. لا كسر صامت ممكن — راقب الـconsole
+     أول استخدام: أي "setSymbol failed" يعني رجع للطريقة القديمة تلقائياً. */
   function switchAssetChart(sym) {
     if (!_visible || sym === _sym) return;
     _doAutoSave();
     _sym = sym;
     _setHdr(sym); _setNavOn(sym); _buildTrade(); _bboConn(sym);
+
     const saved = _loadLayout();
     const useSaved = saved && saved.sym === sym && saved.content;
     const savedIv = _lsGet('iv_' + sym);
-    _interval = useSaved && saved.interval ? saved.interval : (savedIv && TV_TO_HL[savedIv] ? savedIv : '60');
+    const nextIv = useSaved && saved.interval ? saved.interval : (savedIv && TV_TO_HL[savedIv] ? savedIv : '60');
+
+    if (_widget && _linesReady) {
+      try {
+        const ch = _widget.chart();
+        if (ch && typeof ch.setSymbol === 'function') {
+          _ovrShow(sym);
+          ch.setSymbol(sym, () => {
+            try {
+              if (nextIv !== _interval && typeof ch.setResolution === 'function') ch.setResolution(nextIv);
+            } catch {}
+            _interval = nextIv;
+            _lsSet('iv_' + sym, nextIv);
+            _linesReady = true;
+            setTimeout(_ovrHide, 150);
+            _execLines();
+          });
+          return;
+        }
+      } catch (e) {
+        console.warn('[chart] setSymbol failed, falling back to full reinit', e);
+      }
+    }
+
+    _interval = nextIv;
     requestAnimationFrame(() => { _initChart(sym, _interval, useSaved ? saved.content : null); });
   }
 

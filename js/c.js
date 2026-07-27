@@ -1,35 +1,32 @@
-/* c.js — تقويم التداول v7 — تحميل تدريجي بالأولوية + هيكل تحميل أنيق
+/* c.js — تقويم التداول v8 — تخزين تاريخي محلي + تحميل تدريجي بالأولوية
+   ✅ جديد — تخزين محلي (localStorage) لكل Fills/Funding مُجمَّعة، مفتاح
+      لكل عنوان محفظة (hl_cal_cache_<address>). عند فتح التقويم:
+        1. لو موجود عنوان بالكاش → عرض فوري (بلا أي هيكل تحميل) من آخر
+           حالة معروفة، ثم جلب خلفي "لحاق" (catch-up) يغطي فقط الفجوة
+           من آخر نقطة معروفة حتى الآن — لا إعادة تحميل السنة كاملة.
+        2. لا يوجد كاش (أول اتصال إطلاقاً بهذا العنوان) → نفس التسلسل
+           التدريجي القديم (نافذة 30 يوماً فورية + زحف خلفي).
+      التقدّم يُحفَظ تدريجياً (بعد كل قطعة زحف ناجحة، وبعد كل جلسة لحاق)
+      فلا يبدأ من الصفر لو أُغلق التطبيق أثناء الزحف.
+   ✅ انتقال أنيق — #calMain يدخل بتلاشي+انزلاق خفيف عند أول ظهور بكل
+      جلسة (سواء من كاش فوري أو تحميل جديد)، بدل ظهور مفاجئ.
    ✅ FIX جوهري — كانت getAddr() تقرأ window.State?.wallet?.address.
       لكن state.js يُعرِّف `const State = {...}` أعلى مستوى سكربت
       كلاسيكي — إعلانات const/let أعلى المستوى تُنشئ رابطاً بالنطاق
-      المعجمي المشترك بين كل سكربتات الصفحة (تماماً كما تقرأه app.js/
-      auth.js/trading.js/chart.js وكل ملف آخر بالمشروع عبر `State`
-      المباشرة، وتعمل بصحة تامة) — لكنها لا تُسجَّل أبداً كخاصية على
-      window (خلافاً لـvar). فـwindow.State كانت دائماً undefined، بصرف
-      النظر عن حالة الدخول الفعلية، فتُشغَّل رسالة "سجّل الدخول أولاً"
-      دائماً حتى وأنت متصل فعلياً وبصفقة مفتوحة. c.js كان الملف الوحيد
-      بالمشروع كله يستخدم window.State بدل State مباشرة.
-   ✅ FIX — استبدال hlInfo({type:'userFills',...}) بلا أي startTime
-      (يُرجع فقط أحدث ما يتوفر ضمن سقف Hyperliquid البالغ 2000 صفقة لكل
-      استدعاء، ولا يتوفر عبره سوى آخر 10,000 صفقة على الإطلاق — موثَّق
-      رسمياً) بترقيم فعلي عبر نوافذ زمنية متتالية من الأحدث للأقدم:
-      نافذة 30 يوماً فورية عند الفتح (تكفي لعرض الشهر الحالي وإحصائيات
-      24 ساعة/7 أيام/30 يوماً بدقة تامة منذ أول لحظة)، ثم زحف خلفي كل
-      5 ثوانٍ يجلب 30 يوماً أقدم في كل مرة حتى يبلغ سقف سنة كاملة أو
-      ينفد التاريخ، بلا حجب الواجهة وبلا إغراق الاتصال المشترك بطلبات
-      متلاحقة. أولوية التنقل اليدوي (calPrev/calNext) تتخطى الطابور
-      وتجلب الشهر المطلوب مباشرة لو لم يُغطَّ بعد.
-   ✅ FIX — 'xyz' كانت مكتوبة حرفياً بدل ثابت HL_DEX المشترك (config.js).
-   ✅ تحميل هيكلي (skeleton) بدل دوّار+نص فقط عند أول فتح — يعطي إحساساً
-      فورياً بالبنية قبل وصول البيانات الحقيقية، بنفس روح المنصات
-      الاحترافية. رقم "الكل" يحمل مؤشراً هادئاً (نقطة دوّارة صغيرة) طالما
-      السجل التاريخي ما زال يكتمل بالخلفية — بلا حجب أي شيء آخر.
+      المعجمي المشترك بين كل سكربتات الصفحة، لكنها لا تُسجَّل أبداً
+      كخاصية على window. الآن State مباشرة.
+   ✅ FIX — ترقيم فعلي عبر نوافذ زمنية متتالية (userFillsByTime) بدل
+      hlInfo({type:'userFills'}) بلا startTime (يُرجع فقط أحدث ما يتوفر
+      ضمن سقف Hyperliquid). نافذة 30 يوماً فورية + زحف خلفي كل 5 ثوانٍ.
+   ✅ 'xyz' ثابت HL_DEX المشترك (config.js) بدل حرفياً بكل مكان.
+   ✅ تحميل هيكلي (skeleton) بدل دوّار+نص فقط عند أول تحميل حقيقي فقط
+      (لا كاش بعد لهذا العنوان).
 */
 (function(){
 'use strict';
 
 /* ══════════════════════════════════════════════
-   CSS — ديناميكي: موبايل + ديسكتوب + هيكل التحميل الجديد
+   CSS — ديناميكي: موبايل + ديسكتوب + هيكل التحميل + انتقال دخول أنيق
 ══════════════════════════════════════════════ */
 document.head.insertAdjacentHTML('beforeend',`<style>
 /* ── نافذة التقويم الرئيسية ── */
@@ -177,7 +174,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .cal-dv.up{color:#34c85a;} .cal-dv.dn{color:#f05248;}
 
 /* ══════════════════════════════
-   HEADER SKELETON — أول تحميل فقط
+   HEADER SKELETON — أول تحميل حقيقي فقط (لا كاش بعد)
 ══════════════════════════════ */
 @keyframes calShimmer{0%{background-position:-135% 0}100%{background-position:135% 0}}
 .cal-skel-wrap{padding:10px 14px;flex:1;display:flex;flex-direction:column;min-height:0;}
@@ -191,6 +188,15 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .cal-skel-day{border-radius:7px;aspect-ratio:1/.95;}
 .cal-skel-txt{text-align:center;color:#8a8278;font-size:12.5px;font-weight:700;
   padding-top:12px;flex-shrink:0;}
+
+/* ══════════════════════════════
+   ✅ انتقال دخول أنيق — يتلاشى+ينزلق خفيف عند أول ظهور بكل جلسة
+   (سواء من كاش فوري أو تحميل جديد)، بدل ظهور مفاجئ.
+══════════════════════════════ */
+#calMain{opacity:0;transform:translateY(6px);
+  transition:opacity .28s var(--ease-out,cubic-bezier(.22,1,.36,1)),
+             transform .28s var(--ease-out,cubic-bezier(.22,1,.36,1));}
+#calMain.cal-shown{opacity:1;transform:translateY(0);}
 
 /* ══════════════════════════════════════════════
    DESKTOP — شاشة كبيرة: تصميم احترافي بالكامل
@@ -269,7 +275,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   .cal-jump-hint{inset:0 10px 10px;}
 }
 
-/* ── Loader (رسالة/خطأ بلا هيكل — تُستخدم فقط لو ما فيه عنوان محفظة) ── */
+/* ── Loader (رسالة/خطأ بلا هيكل — فقط لو ما فيه عنوان محفظة) ── */
 .cal-load{
   flex:1;display:flex;flex-direction:column;
   align-items:center;justify-content:center;
@@ -395,9 +401,14 @@ const CHUNK_DAYS          = 30;
 const MAX_LOOKBACK_DAYS   = 365;
 const BG_INTERVAL_MS      = 5000;
 
+/* ✅ جديد — تخزين محلي لكل عنوان محفظة */
+const CAL_CACHE_PREFIX    = 'hl_cal_cache_';
+const CAL_CACHE_MAX_FILLS = 4000; // سقف دفاعي لحجم localStorage
+
 let _fills=[], _fundMap={}, _dayMap={}, _cur=new Date(), _ready=false;
 let _monthsCovered = new Set();
 let _crawlCoveredSinceMs = Date.now();
+let _newestCachedMs = 0; // ✅ آخر نقطة "لحقنا بها فعلياً حتى الآن" — للّحاق التدريجي بين الجلسات
 let _historyComplete = false;
 let _bgTimer = null;
 let _navDebounce = null;
@@ -472,6 +483,84 @@ async function _fetchMonth(addr, y, m){
   return ok;
 }
 
+/* ══════════════════════════════════════════════
+   ✅ جديد — تخزين محلي محفوظ لكل عنوان (localStorage)
+══════════════════════════════════════════════ */
+function _calCacheKey(addr){ return CAL_CACHE_PREFIX + addr.toLowerCase(); }
+
+function _loadCalCache(addr){
+  try {
+    const raw = localStorage.getItem(_calCacheKey(addr));
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !Array.isArray(d.fills)) return null;
+    return d;
+  } catch { return null; }
+}
+
+function _saveCalCache(addr){
+  try {
+    const trimmed = _fills.length > CAL_CACHE_MAX_FILLS
+      ? _fills.slice().sort((a,b)=>b.time-a.time).slice(0, CAL_CACHE_MAX_FILLS)
+      : _fills;
+    localStorage.setItem(_calCacheKey(addr), JSON.stringify({
+      fills: trimmed,
+      fundMap: _fundMap,
+      crawlCoveredSinceMs: _crawlCoveredSinceMs,
+      newestMs: _newestCachedMs,
+      historyComplete: _historyComplete,
+      savedAt: Date.now()
+    }));
+  } catch {} /* تجاوز حصة التخزين أو أي خطأ آخر — تجاهل بصمت، لا يكسر شيء */
+}
+
+/* يُعيد بناء الحالة الداخلية (fills/dayMap/fundMap/حدود الزحف) من كاش
+   محفوظ — بلا أي استعلام شبكة، عرض فوري تام. */
+function _hydrateFromCache(cache){
+  _fills = cache.fills || [];
+  _fundMap = cache.fundMap || {};
+  _dayMap = {};
+  _seenFillIds.clear(); _seenFundKeys.clear();
+  for (const f of _fills) {
+    const id = (f.hash ? f.hash : '') + ':' + (f.tid ?? f.oid ?? '') + ':' + f.time;
+    _seenFillIds.add(id);
+    const k = dayKey(new Date(f.time));
+    const pnl = parseFloat(f.closedPnl||0) - parseFloat(f.fee||0);
+    _dayMap[k] = (_dayMap[k]||0) + pnl;
+  }
+  _crawlCoveredSinceMs = cache.crawlCoveredSinceMs || Date.now();
+  _historyComplete = !!cache.historyComplete;
+  _newestCachedMs = cache.newestMs || 0;
+}
+
+/* جلسة جديدة، عنوان له كاش سابق — يجلب فقط الفجوة (newestMs → الآن)،
+   ويُكمل الزحف الخلفي القديم من حيث توقف بالضبط (لا إعادة من الصفر). */
+async function _catchUpSinceCache(addr, cache){
+  const now = Date.now();
+  const floor = now - MAX_LOOKBACK_DAYS * 86400000;
+  const since = Math.max(cache.newestMs || 0, floor);
+
+  if (since < now) {
+    try {
+      const [fills, funding] = await Promise.all([
+        hlInfo({type:'userFillsByTime', user:addr, startTime:since, endTime:now, dex:HL_DEX}).catch(()=>[]),
+        hlInfo({type:'userFunding', user:addr, startTime:since, endTime:now}).catch(()=>[])
+      ]);
+      _accumulate(
+        Array.isArray(fills)?fills:[],
+        (Array.isArray(funding)?funding:[]).filter(e => e.time > (cache.newestMs || 0))
+      );
+    } catch {}
+  }
+  _newestCachedMs = now;
+  _crawlCoveredSinceMs = Math.min(cache.crawlCoveredSinceMs || now, since);
+  _historyComplete = _crawlCoveredSinceMs <= floor;
+
+  showStats(); showCal();
+  _saveCalCache(addr);
+  if (!_historyComplete) _startBgCrawl(addr);
+}
+
 /* ══ الزحف الخلفي — كل 5 ثوانٍ، من الأحدث للأقدم، حتى سقف سنة كاملة ══ */
 function _startBgCrawl(addr){
   _stopBgCrawl();
@@ -479,7 +568,7 @@ function _startBgCrawl(addr){
     if (_historyComplete) { _stopBgCrawl(); return; }
     const now = Date.now();
     const floor = now - MAX_LOOKBACK_DAYS*86400000;
-    if (_crawlCoveredSinceMs <= floor) { _historyComplete = true; _stopBgCrawl(); showStats(); return; }
+    if (_crawlCoveredSinceMs <= floor) { _historyComplete = true; _stopBgCrawl(); showStats(); _saveCalCache(addr); return; }
 
     const nextEnd   = _crawlCoveredSinceMs;
     const rawStart  = nextEnd - CHUNK_DAYS*86400000;
@@ -490,6 +579,7 @@ function _startBgCrawl(addr){
 
     showStats();
     showCal();
+    _saveCalCache(addr); // ✅ يحفظ التقدّم تدريجياً — لا يبدأ من الصفر لو أُغلق التطبيق أثناء الزحف
 
     if (_crawlCoveredSinceMs <= floor) { _historyComplete = true; _stopBgCrawl(); }
   }, BG_INTERVAL_MS);
@@ -688,15 +778,16 @@ function showDay(date){
   $('calDet').classList.add('open');
 }
 
-/* ══ Show Main ══ */
+/* ══ Show Main — ✅ الآن يضيف الانتقال الأنيق (fade+slide) ══ */
 function showMain(){
   $('calLoad').style.display='none';
   const m=$('calMain');
   m.style.display='flex';m.style.flexDirection='column';
   m.style.overflow='hidden';m.style.flex='1';m.style.minHeight='0';
+  requestAnimationFrame(()=> m.classList.add('cal-shown'));
 }
 
-/* ══ هيكل التحميل الأول — شمشة بدل دوّار+نص فقط ══ */
+/* ══ هيكل التحميل الأول — شمشة بدل دوّار+نص فقط (لا كاش بعد) ══ */
 function _skeletonHtml(){
   const dayCount = 35;
   return `<div class="cal-skel-wrap">
@@ -709,9 +800,8 @@ function _skeletonHtml(){
   </div>`;
 }
 
-/* ══ Load Data — الآن تدريجي: نافذة فورية + زحف خلفي ══ */
+/* ══ Load Data — تدريجي: نافذة فورية + زحف خلفي (لا كاش بعد لهذا العنوان) ══ */
 function getAddr(){
-  /* ✅ FIX — كانت window.State (دائماً undefined)، الآن State مباشرة */
   return (typeof State !== 'undefined' && State.wallet && State.wallet.address) || null;
 }
 
@@ -724,6 +814,7 @@ async function load(addr){
   $('calLoad').style.display='flex';
   $('calLoad').innerHTML=_skeletonHtml();
   $('calMain').style.display='none';
+  $('calMain').classList.remove('cal-shown');
 
   const now=Date.now();
   _crawlCoveredSinceMs = now;
@@ -734,9 +825,11 @@ async function load(addr){
     return;
   }
   _crawlCoveredSinceMs = now - CHUNK_DAYS*86400000;
+  _newestCachedMs = now;
 
   _ready=true;
   showStats();showCal();showMain();
+  _saveCalCache(addr);
   _startBgCrawl(addr);
 }
 
@@ -767,8 +860,18 @@ window.openCalendar=function(){
   if(_ready){
     showStats();showCal();showMain();
     if(!_historyComplete) _startBgCrawl(addr);
+    return;
+  }
+
+  /* ✅ جديد — كاش محلي محفوظ من جلسة سابقة لهذا العنوان بالذات */
+  const cache = _loadCalCache(addr);
+  if (cache) {
+    _hydrateFromCache(cache);
+    _ready = true;
+    showStats(); showCal(); showMain(); /* فوري — بلا أي هيكل تحميل */
+    _catchUpSinceCache(addr, cache);      /* خلفية: يجلب فقط الفجوة الجديدة */
   } else {
-    load(addr);
+    load(addr); /* أول اتصال إطلاقاً بهذا العنوان — التسلسل القديم كاملاً */
   }
 };
 
