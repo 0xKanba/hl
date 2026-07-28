@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - kanba 
+      
 jobs:
   update-structure:
     runs-on: ubuntu-latest
