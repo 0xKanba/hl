@@ -19,13 +19,13 @@
   "dir": "rtl",
   "icons": [
     {
-      "src": "/https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-192x192.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-512x512.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
