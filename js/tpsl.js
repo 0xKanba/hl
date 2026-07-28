@@ -1,5 +1,12 @@
 /* ═══════════════════════════════════════
    tpsl.js — جني الربح ووقف الخسارة
+   ✅ FIX — pollAccount محذوفة من المشروع منذ تحويل الحساب لـpush-based
+      (initAccountFeeds/_multiPoll)، لكن بقيت مستدعاة هنا بـ4 مواضع
+      (execTP/deleteTP/execSL/deleteSL) بلا أي حماية typeof. النتيجة
+      الفعلية: كل عملية TP/SL ناجحة كانت تعرض توست نجاح ✅ ثم فوراً
+      ReferenceError يُلقَط بـcatch ويعرض توست خطأ ❌ متناقض تماماً —
+      مشكلة نشطة بالإنتاج. صُححت لـ_multiPoll الحقيقية (trading.js،
+      مُحمَّلة قبل هذا الملف بترتيب index.html).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -92,7 +99,7 @@ async function execTP() {
     await placeNativeTpsl(tp.sym, tp.szi, 'tp', tpPxOz);
     closeModal('modalTP');
     toast(`✅ هدف الربح = $${fmt(tpDisp, a.pxDp)}`, 'ok', 4000);
-    State.pendingTP = null; setTimeout(pollAccount, 2000);
+    State.pendingTP = null; setTimeout(_multiPoll, 2000);
   } catch (e) { toast(tradeErr(e.message), 'err', 5000); }
   finally { resetBtn('tpExecute'); hideLoader(); }
 }
@@ -111,7 +118,7 @@ async function deleteTP() {
   try {
     await hlExchange({ type:'cancel', cancels:[{ a:a.idx, o:BigInt(oid) }] });
     closeModal('modalTP'); toast('✅ تم إلغاء هدف الربح', 'ok', 3000);
-    State.pendingTP = null; setTimeout(pollAccount, 1500);
+    State.pendingTP = null; setTimeout(_multiPoll, 1500);
   } catch (e) { toast(tradeErr(e.message), 'err', 4000); }
   finally { hideLoader(); }
 }
@@ -200,7 +207,7 @@ async function execSL() {
     await placeNativeTpsl(sl.sym, sl.szi, 'sl', slPxOz);
     closeModal('modalSL');
     toast(`✅ وقف الخسارة = $${fmt(slDisp, a.pxDp)}`, 'ok', 4000);
-    State.pendingSL = null; setTimeout(pollAccount, 2000);
+    State.pendingSL = null; setTimeout(_multiPoll, 2000);
   } catch (e) { toast(tradeErr(e.message), 'err', 5000); }
   finally { resetBtn('slExecute'); hideLoader(); }
 }
@@ -219,7 +226,7 @@ async function deleteSL() {
   try {
     await hlExchange({ type:'cancel', cancels:[{ a:a.idx, o:BigInt(oid) }] });
     closeModal('modalSL'); toast('✅ تم إلغاء وقف الخسارة', 'ok', 3000);
-    State.pendingSL = null; setTimeout(pollAccount, 1500);
+    State.pendingSL = null; setTimeout(_multiPoll, 1500);
   } catch (e) { toast(tradeErr(e.message), 'err', 4000); }
   finally { hideLoader(); }
 }
