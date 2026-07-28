@@ -43,6 +43,37 @@
    11. ✅ NEW — getBars: أُزيل هامش +5000ms المستقبلي بحد toMs (كان
        Date.now()+5000) — الآن Date.now() الصارم فقط، بلا أي سماحية
        لطلب بيانات أبعد من اللحظة الحالية الفعلية من جهتنا نحن.
+   12. ✅ NEW — إصلاح جوهري: "الشمعة تظهر متقدمة" على intraday (1m..4h)
+       فقط — اليومي/الأسبوعي غير متأثرين إطلاقاً ولم يُمَسّا. السبب:
+       candle.t القادم من بث Hyperliquid قد يسبق ساعة جهاز المستخدم
+       الفعلية بجزء من ثانية (تأخير شبكة/معالجة، أو فارق طفيف بين ساعة
+       الخادم والجهاز) — فتُحسَب هوية bucket الشمعة التالية مبكراً،
+       فيبدو تبديل الشمعة "متقدماً" عن الساعة المعروضة فعلياً على شاشة
+       المستخدم (مثال مُبلَّغ حرفياً: الساعة تُظهر ٥٩ ثانية والشمعة
+       الدقيقة تبدّلت للتالية فعلاً). الحل: هوية bucket الشمعة الحيّة
+       (لا قيمها OHLCV) تُقيَّد دائماً بما تسمح به ساعة الجهاز الحقيقية
+       (Date.now() عبر _now()) — لا تُقبَل أبداً هوية bucket أحدث مما
+       تسمح به الساعة الفعلية. راجع _now() والتعليق داخل _openWs.
+   13. ✅ NEW — نبضة حيّة كل LIVE_TICK_MS (٢ ثانية، طلب صريح) لكل
+       اشتراك intraday نشط فقط: تكتشف عبور ساعة الجهاز لحد شمعة جديدة
+       قبل وصول أي بث حقيقي من المنصة لتلك اللحظة، فتُصدر شمعة "مسطّحة"
+       مؤقتة (سعر الإغلاق الأخير، حجم صفر) بدل تجميد الرسم لحظياً حتى
+       يصل البث الحقيقي. أول بث حقيقي تالٍ لنفس الـbucket يدمج قيمه
+       الحقيقية فوق هذه الشمعة المؤقتة كتحديث عادي (لا كشمعة جديدة، لأن
+       bucket الزمني نفسه) — بلا أي قفزة بصرية. اليومي/الأسبوعي لا
+       يُشغَّلان هذه النبضة إطلاقاً (راجع _tickLiveBars).
+   14. ✅ NEW — "لا تحميل مزعج بكل مرة": open() كانت تهدم وتُعيد بناء
+       الودجت بالكامل (REST تاريخي جديد + إعادة بناء iframe/canvas)
+       في كل استدعاء، حتى لو المستخدم فقط أغلق شاشة الرسم وأعاد فتحها
+       فوراً لنفس الجلسة — رغم أن close() أصلاً لا تهدم الودجت، فقط
+       تُخفي الشاشة. الآن: لو الودجت حيّ وجاهز فعلاً (_widgetReady)،
+       open() تكتفي بإظهار الشاشة (ولو الرمز مختلف، تستخدم مسار
+       switchAssetChart السريع أدناه) — بلا أي إعادة تحميل. البناء
+       الكامل (_initChart) يبقى فقط لأول فتح إطلاقاً بهذه الجلسة، أو
+       كتراجع تلقائي لو فشل setSymbol. ⚠️ Trade-off واعٍ: اشتراك الشمعة
+       الحي (WS) يبقى نشطاً بالخلفية طالما الودجت حيّ، حتى والشاشة
+       مخفية — تكلفته ضئيلة جداً (اتصال واحد مشترك أصلاً عبر ws.js)،
+       وهذا بالضبط ثمن "إعادة فتح فورية بلا تحميل" المطلوبة صراحة.
 ═══════════════════════════════════════════════════════════════════ */
 const ChartModule = (function () {
   'use strict';
@@ -53,6 +84,10 @@ const ChartModule = (function () {
   const MIN_TIME    = 1577836800000;          // 2020-01-01 00:00 UTC
   const LS_PREFIX   = 'hl_tv_';
   const LAYOUT_KEY  = 'layout_v1';
+  /* ✅ جديد — نبضة الشموع الحيّة (راجع رأس الملف #12/#13): كل هذا العدد
+     من المللي ثانية تُفحص حدود الشمعة الحالية محلياً لكل اشتراك
+     intraday نشط. طلب صريح: تحديث كل ٢ ثانية. */
+  const LIVE_TICK_MS = 2000;
 
   const TV_RESOLUTIONS = ['1','3','5','15','30','60','120','240','1D','1W'];
 
@@ -72,6 +107,13 @@ const ChartModule = (function () {
   /* ══════════ HELPERS ══════════ */
   const _lsGet = k => { try { return JSON.parse(localStorage.getItem(LS_PREFIX+k)); } catch { return null; } };
   const _lsSet = (k,v) => { try { localStorage.setItem(LS_PREFIX+k, JSON.stringify(v)); } catch {} };
+
+  /* ✅ جديد — ساعة الجهاز الفعلية (Date.now()) هي المرجع الوحيد لحساب
+     حدود الشموع الحيّة (intraday) — بلا أي تصحيح خادم/NTP، بناءً على
+     طلب صريح: التزامن يجب أن يطابق ساعة جهاز المستخدم كما يراها بعينه،
+     لا أي وقت آخر. اليومي/الأسبوعي لا يستخدمان هذه الدالة إطلاقاً
+     (يبقيان على Date.UTC المباشر كما كانا — راجع رأس الملف #12). */
+  const _now = () => Date.now();
 
   const _asset = s =>
     (typeof ASSETS !== 'undefined' && ASSETS[s]) ||
@@ -147,6 +189,10 @@ const ChartModule = (function () {
     constructor() {
       this._subs = new Map();      // uid  → {sym,res,callback,wsKey,lastBar}
       this._ws   = new Map();      // wsKey → {unsub,lastBar,dailyMap}
+      /* ✅ جديد — نبضة حيّة كل LIVE_TICK_MS (راجع رأس الملف #13). تُعاد
+         لكل نسخة datafeed جديدة (تطابق دورة حياة _ws/_subs)، وتُلغى في
+         destroy() أدناه. */
+      this._liveTick = setInterval(() => this._tickLiveBars(), LIVE_TICK_MS);
     }
 
     onReady(cb) {
@@ -242,6 +288,7 @@ const ChartModule = (function () {
     }
 
     destroy() {
+      clearInterval(this._liveTick);
       for (const [,w] of this._ws) { try { w.unsub(); } catch {} }
       this._ws.clear();
       this._subs.clear();
@@ -338,6 +385,20 @@ const ChartModule = (function () {
           const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
           const raw = this._bar(c, sub.sym, normRes);
 
+          /* ✅ FIX جوهري — منع "قفز الشمعة قبل أوانها" (راجع رأس الملف
+             #12). candle.t القادم من Hyperliquid قد يسبق ساعة الجهاز
+             الفعلية بجزء من ثانية (تأخير شبكة/معالجة أو فارق طفيف بين
+             ساعة الخادم والجهاز) — فيُحسَب bucket الشمعة التالية مبكراً،
+             فيظهر التبديل "متقدماً" عن الساعة المعروضة فعلياً. القيد هنا
+             على هوية bucket فقط (لا على قيم OHLCV): لا تُقبَل أبداً هوية
+             bucket أحدث مما تسمح به ساعة الجهاز الحقيقية. غير مُطبَّق
+             على اليومي/الأسبوعي (normRes === '1D') — تلك الفترات غير
+             متأثرة بفارق جزء الثانية هذا ولا تحتاج أي تعديل. */
+          if (normRes !== '1D') {
+            const localBucket = _normTime(_now(), normRes);
+            if (raw.time > localBucket) raw.time = localBucket;
+          }
+
           // Guard against stale historical ticks after reconnect
           if (w.lastBar && raw.time < w.lastBar.time) continue;
 
@@ -354,27 +415,7 @@ const ChartModule = (function () {
             w.lastBar.volume = raw.volume;
           }
 
-          let emit;
-          if (sub.resolution === '1W') {
-            const dk = _normTime(w.lastBar.time, '1D');
-            w.dailyMap.set(dk, {...w.lastBar});
-            // prune old weeks to prevent unbounded growth
-            const curW = _weekStart(w.lastBar.time);
-            for (const [k] of w.dailyMap) if (k < curW - 7*86400000) w.dailyMap.delete(k);
-            emit = this._calcWeek(w.dailyMap, curW);
-            if (!emit) continue;
-          } else {
-            emit = {...w.lastBar};
-          }
-
-          // Deduplicate: only emit if bar actually changed
-          if (!sub.lastBar || emit.time!==sub.lastBar.time ||
-              emit.open!==sub.lastBar.open || emit.high!==sub.lastBar.high ||
-              emit.low!==sub.lastBar.low || emit.close!==sub.lastBar.close ||
-              emit.volume!==sub.lastBar.volume) {
-            sub.callback(emit);
-            sub.lastBar = emit;
-          }
+          this._emitForSub(sub, w);
         }
       });
 
@@ -400,6 +441,62 @@ const ChartModule = (function () {
           }
           if (!w.lastBar && raw.length) w.lastBar = { ...raw[raw.length - 1] };
         }).catch(() => {});
+      }
+    }
+
+    /* ✅ جديد — تجميع منطق الإصدار (weekly aggregation + dedup + callback)
+       بدالة واحدة تُستدعى من مسارين: رسالة WS حقيقية أعلاه، والنبضة
+       الحيّة _tickLiveBars أدناه (لشمعة مصطنعة عند تأخر بث المنصة). */
+    _emitForSub(sub, w) {
+      let emit;
+      if (sub.resolution === '1W') {
+        const dk = _normTime(w.lastBar.time, '1D');
+        w.dailyMap.set(dk, {...w.lastBar});
+        const curW = _weekStart(w.lastBar.time);
+        for (const [k] of w.dailyMap) if (k < curW - 7*86400000) w.dailyMap.delete(k);
+        emit = this._calcWeek(w.dailyMap, curW);
+        if (!emit) return;
+      } else {
+        emit = {...w.lastBar};
+      }
+
+      // Deduplicate: only emit if bar actually changed
+      if (!sub.lastBar || emit.time!==sub.lastBar.time ||
+          emit.open!==sub.lastBar.open || emit.high!==sub.lastBar.high ||
+          emit.low!==sub.lastBar.low || emit.close!==sub.lastBar.close ||
+          emit.volume!==sub.lastBar.volume) {
+        sub.callback(emit);
+        sub.lastBar = emit;
+      }
+    }
+
+    /* ✅ جديد — نبضة كل LIVE_TICK_MS (راجع رأس الملف #13): تكتشف عبور
+       ساعة الجهاز لحد شمعة جديدة (intraday فقط) قبل وصول أي بث حقيقي
+       من المنصة لتلك الفترة، فتُصدر شمعة "مسطّحة" مؤقتة بسعر الإغلاق
+       الأخير (بلا حجم) بدل تجميد الرسم لحظياً. أول بث حقيقي تالٍ لنفس
+       الـbucket يدمج قيمه الحقيقية فوق هذه الشمعة المؤقتة كتحديث عادي
+       (لا كشمعة جديدة، لأن bucket الزمني نفسه بعد القيد بالأعلى) — بلا
+       أي قفزة بصرية. لا تُشغَّل لليومي/الأسبوعي (normRes === '1D') —
+       غير متأثرين بهذا التأخير أصلاً ولا حاجة لأي شمعة مصطنعة لهما. */
+    _tickLiveBars() {
+      for (const [wsKey, w] of this._ws) {
+        if (!w.lastBar) continue;
+        for (const [,sub] of this._subs) {
+          if (sub.wsKey !== wsKey) continue;
+          const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
+          if (normRes === '1D') continue;
+
+          const localBucket = _normTime(_now(), normRes);
+          if (localBucket > w.lastBar.time) {
+            w.lastBar = {
+              time: localBucket,
+              open: w.lastBar.close, high: w.lastBar.close,
+              low: w.lastBar.close, close: w.lastBar.close,
+              volume: 0
+            };
+            this._emitForSub(sub, w);
+          }
+        }
       }
     }
 
@@ -433,6 +530,11 @@ const ChartModule = (function () {
   let _lines       = [];
   let _linesReady  = false;
   let _linesPending = false;
+  /* ✅ جديد — راجع رأس الملف #14: يبقى true طالما الودجت حيّ فعلياً
+     (لا يُصفَّر بـclose()، بعكس _linesReady المؤقت الذي يتحكم فقط بإعادة
+     رسم الخطوط أثناء الإخفاء). يُصفَّر فقط عند هدم حقيقي للودجت داخل
+     _initChart، ويُرفَع مجدداً بعد onChartReady. */
+  let _widgetReady = false;
 
   /* ══════════ CSS ══════════ */
   (function _injectCSS() {
@@ -841,14 +943,14 @@ const ChartModule = (function () {
   }
 
   /* ══════════ CHART INIT (full teardown+rebuild) ══════════
-     تُستدعى فقط: أول دخول للشارت (open())، فشل تبديل الفترة، أو فشل
-     chart().setSymbol() بتبديل الأصل (راجع switchAssetChart). ترتيب
-     العمليات مهم: _ovrShow أولاً (تُلحَق بـ#_tvChartWrap، sibling
-     لـ#_tvC)، ثم تفريغ #_tvC نفسها — لا تعارض بينهما أبداً لأنهما لم
-     يعودا نفس العنصر. */
+     تُستدعى فقط: أول دخول للشارت إطلاقاً بهذه الجلسة (open() لا تجد
+     ودجت حياً)، فشل تبديل الفترة، أو فشل chart().setSymbol() بتبديل
+     الأصل (راجع switchAssetChart). ترتيب العمليات مهم: _ovrShow أولاً
+     (تُلحَق بـ#_tvChartWrap، sibling لـ#_tvC)، ثم تفريغ #_tvC نفسها —
+     لا تعارض بينهما أبداً لأنهما لم يعودا نفس العنصر. */
   function _initChart(sym, iv, saved) {
     _ovrShow(sym);
-    _linesReady = false; _linesPending = false;
+    _linesReady = false; _linesPending = false; _widgetReady = false;
 
     if (_widget) {
       _clearLines();
@@ -868,7 +970,7 @@ const ChartModule = (function () {
     if (!_widget) { _ovrHide(); return; }
 
     _widget.onChartReady(() => {
-      _linesReady = true;
+      _linesReady = true; _widgetReady = true;
       setTimeout(_ovrHide, 200);
       _execLines();
       if (_linesPending) { _linesPending = false; _execLines(); }
@@ -1098,15 +1200,38 @@ const ChartModule = (function () {
 
   /* ══════════ PUBLIC API ══════════ */
   function open(sym) {
-    _sym = sym || (typeof State !== 'undefined' ? State.asset : 'CL') || 'CL';
+    const targetSym = sym || (typeof State !== 'undefined' ? State.asset : 'CL') || 'CL';
     _visible = true;
+    _ensureScreen();
+    document.getElementById('chartScreen')?.classList.remove('hidden');
+
+    /* ✅ FIX — لا هدم/إعادة بناء الودجت لو كان حياً وجاهزاً أصلاً من فتحة
+       سابقة بنفس الجلسة (راجع رأس الملف #14). close() لا يهدم الودجت
+       إطلاقاً — فقط يُخفي الشاشة — فإعادة فتحه هنا كانت تُعيد التحميل
+       الكامل بلا داعٍ (طلب REST تاريخي جديد + إعادة بناء iframe/canvas).
+       الآن: إظهار فوري بلا أي تحميل، مع مسار setSymbol السريع لو تغيّر
+       الرمز. البناء الكامل (_initChart) يبقى فقط لأول فتح بهذه الجلسة،
+       أو كتراجع تلقائي لو فشل setSymbol. */
+    if (_widget && _widgetReady) {
+      _linesReady = true;
+      if (targetSym !== _sym) {
+        switchAssetChart(targetSym);
+      } else {
+        _setHdr(_sym); _setNavOn(_sym);
+        _execLines();
+      }
+      _dot('wait'); _bboConn(_sym);
+      _ovrHide();
+      _restartLiveClock();
+      return;
+    }
+
+    _sym = targetSym;
     const saved = _loadLayout();
     const useSaved = saved && saved.sym === _sym && saved.content;
     const savedIv = _lsGet('iv_' + _sym);
     _interval = useSaved && saved.interval ? saved.interval : (savedIv && TV_TO_HL[savedIv] ? savedIv : '60');
 
-    _ensureScreen();
-    document.getElementById('chartScreen')?.classList.remove('hidden');
     _setHdr(_sym); _buildTrade(); _buildNav();
 
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -1114,7 +1239,12 @@ const ChartModule = (function () {
     }));
 
     _dot('wait'); _bboConn(_sym);
+    _restartLiveClock();
+  }
 
+  /* ✅ جديد — عزل مؤقّت الساعة الحيّة (سعر/PnL/خطوط) بدالة واحدة تُعاد
+     من كلا مساري open() (إعادة فتح سريعة بلا تحميل، أو بناء كامل). */
+  function _restartLiveClock() {
     clearInterval(_clockTimer);
     _clockTimer = setInterval(() => {
       if (!_visible || typeof State === 'undefined') return;
