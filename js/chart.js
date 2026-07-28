@@ -775,7 +775,7 @@ const ChartModule = (function () {
       container: '_tvC', autosize: true,
       symbol: sym, interval: iv,
       datafeed: _datafeed,
-      library_path: '/charting_library/',
+      library_path: 'https://chart.kanba.pw/charting_library/',
       locale: 'en',
       timezone: 'Asia/Kuwait',   // display only — data is always UTC
       theme: dark ? 'Dark' : 'Light',
