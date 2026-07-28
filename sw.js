@@ -9,23 +9,23 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
-const CACHE_APP   = 'hltrade-app-202607281133-54572a5';
-const CACHE_IMGS  = 'hltrade-img-202607281133-54572a5';
-const CACHE_FONTS = 'hltrade-fnt-202607281133-54572a5';
+const CACHE_APP   = 'hltrade-app-202607281546-a35be9d';
+const CACHE_IMGS  = 'hltrade-img-202607281546-a35be9d';
+const CACHE_FONTS = 'hltrade-fnt-202607281546-a35be9d';
 =======
-const CACHE_APP   = 'hltrade-app-202607281133-54572a5';
-const CACHE_IMGS  = 'hltrade-img-202607281133-54572a5';
-const CACHE_FONTS = 'hltrade-fnt-202607281133-54572a5';
+const CACHE_APP   = 'hltrade-app-202607281546-a35be9d';
+const CACHE_IMGS  = 'hltrade-img-202607281546-a35be9d';
+const CACHE_FONTS = 'hltrade-fnt-202607281546-a35be9d';
 >>>>>>> kanba
 =======
-const CACHE_APP   = 'hltrade-app-202607281133-54572a5';
-const CACHE_IMGS  = 'hltrade-img-202607281133-54572a5';
-const CACHE_FONTS = 'hltrade-fnt-202607281133-54572a5';
+const CACHE_APP   = 'hltrade-app-202607281546-a35be9d';
+const CACHE_IMGS  = 'hltrade-img-202607281546-a35be9d';
+const CACHE_FONTS = 'hltrade-fnt-202607281546-a35be9d';
 >>>>>>> kanba
 =======
-const CACHE_APP   = 'hltrade-app-202607281133-54572a5';
-const CACHE_IMGS  = 'hltrade-img-202607281133-54572a5';
-const CACHE_FONTS = 'hltrade-fnt-202607281133-54572a5';
+const CACHE_APP   = 'hltrade-app-202607281546-a35be9d';
+const CACHE_IMGS  = 'hltrade-img-202607281546-a35be9d';
+const CACHE_FONTS = 'hltrade-fnt-202607281546-a35be9d';
 >>>>>>> kanba
 
 const APP_SHELL = [
