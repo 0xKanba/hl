@@ -63,6 +63,7 @@
 
 
 
+
 <!-- TREE START -->
 
 # 📂 repo tree
@@ -77,7 +78,6 @@
 ├── images
 │   ├── 100.png
 │   ├── gold.svg
-│   ├── icon-512x512.png
 │   ├── oil.svg
 │   ├── silver.svg
 │   ├── x1.png
@@ -119,6 +119,6 @@
 ├── sw.js
 └── tree.txt
 
-7 directories, 43 files
+7 directories, 42 files
 ```
 <!-- TREE END -->
