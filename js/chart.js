@@ -29,8 +29,20 @@
       الآن تُبذر فوراً من أيام الأسبوع الحالي المنقضية، بالتوازي مع
       الاشتراك الحي (لا تأخير عليه).
    8. ✅ pollAccount (دالة محذوفة من المشروع منذ تحويل الحساب لـpush-
-      based) كانت مُستدعاة هنا بحماية typeof (غير فعّالة أصلاً) — صُححت
-      لـ_multiPoll الحقيقية (trading.js) لتناسق مع بقية المشروع.
+      based) كانت مُستدعاة هنا بحماية typeof — صُححت لـ_multiPoll
+      الحقيقية (trading.js) لتناسق مع بقية المشروع.
+   9. ✅ NEW — خطأ تراكم الحجم (volume) بالشمعة الحيّة قيد التكوّن:
+      Candle.v (موثّق رسمياً بمخطط websocket/subscriptions) هو إجمالي
+      تراكمي لهذي الشمعة حتى الآن، لا دلتا لكل رسالة WS. الكود كان
+      يعمل `+=` (تراكم فوق تراكم) بدل `=` (استبدال) — يُضاعف حجم كل
+      شمعة حيّة مع كل تحديث أثناء تكوّنها. صُححت.
+   10. ✅ NEW — حُذفت mainSeriesProperties.showCountdown (كانت true).
+       ميزة تعداد تنازلي داخلية بـTradingView تُحسَب من ساعة المتصفح
+       المحلية، لا من بياناتنا — أقرب مرشّح لإحساس "الرسم متقدم عن
+       الواقع بثانية" الذي وُصِف، بلا أي علاقة بصحة بيانات الشموع نفسها.
+   11. ✅ NEW — getBars: أُزيل هامش +5000ms المستقبلي بحد toMs (كان
+       Date.now()+5000) — الآن Date.now() الصارم فقط، بلا أي سماحية
+       لطلب بيانات أبعد من اللحظة الحالية الفعلية من جهتنا نحن.
 ═══════════════════════════════════════════════════════════════════ */
 const ChartModule = (function () {
   'use strict';
@@ -77,8 +89,9 @@ const ChartModule = (function () {
   const _dark   = () => (document.documentElement.getAttribute('data-theme')||'dark')==='dark';
 
   /* ══════════ UTC TIME NORMALIZATION ══════════
-     Every timestamp is snapped to the exact interval boundary.
-     No drift, no timezone shifts, no manual compensation.
+     Every timestamp is snapped to the exact interval boundary via
+     floor (never rounds up/forward — verified case by case). No
+     drift, no timezone shifts, no manual compensation.
      FIXED: case '1' used d.getUTCFullYear() for month — corrected
             to d.getUTCMonth().                                   */
   function _normTime(ms, res) {
@@ -179,7 +192,9 @@ const ChartModule = (function () {
       const isW = resolution === '1W';
       const hlIv = isW ? '1d' : (TV_TO_HL[resolution] || '1h');
       const fromMs = Math.max(periodParams.from * 1000, MIN_TIME);
-      const toMs   = Math.min(periodParams.to   * 1000, Date.now() + 5000);
+      /* ✅ حد صارم Date.now() — بلا أي هامش مستقبلي من جهتنا (كان
+         +5000ms سابقاً). راجع تعليق رأس الملف #11. */
+      const toMs   = Math.min(periodParams.to   * 1000, Date.now());
 
       if (fromMs >= toMs) { onHistory([], {noData:true}); return; }
 
@@ -237,8 +252,10 @@ const ChartModule = (function () {
 
     /*
       Build a bar from a Hyperliquid candle object.
-      Hyperliquid t is OPEN time in both REST and WS.
-      No subtraction needed — use directly.
+      Hyperliquid t is OPEN time in both REST and WS (confirmed:
+      Candle{ t: open millis; T: close millis } — T = t + duration - 1,
+      an inclusive-end convention; we never read T, only t).
+      No subtraction needed — use t directly.
     */
     _bar(candle, sym, res) {
       const g = _isGram(sym);
@@ -298,7 +315,7 @@ const ChartModule = (function () {
           ex.high = Math.max(ex.high, b.high);
           ex.low  = Math.min(ex.low,  b.low);
           ex.close = b.close;
-          ex.volume += b.volume;
+          ex.volume += b.volume; // ← صحيح هنا: مجموع أيام منفصلة، لا تحديثات متكررة لنفس اليوم
         }
       }
       return Array.from(m.values()).sort((a,b)=>a.time-b.time);
@@ -327,10 +344,14 @@ const ChartModule = (function () {
           if (!w.lastBar || raw.time > w.lastBar.time) {
             w.lastBar = {...raw};
           } else {
+            /* ✅ FIX #9 — Candle.v هو إجمالي تراكمي للشمعة حتى الآن
+               (موثّق رسمياً)، لا دلتا لكل رسالة WS. كان `+=` هنا يُضاعف
+               الحجم مع كل تحديث حي لنفس الشمعة قيد التكوّن — استبدال،
+               لا تراكم. */
             w.lastBar.high = Math.max(w.lastBar.high, raw.high);
             w.lastBar.low  = Math.min(w.lastBar.low,  raw.low);
             w.lastBar.close = raw.close;
-            w.lastBar.volume += raw.volume;
+            w.lastBar.volume = raw.volume;
           }
 
           let emit;
@@ -362,12 +383,10 @@ const ChartModule = (function () {
          فارغة تماماً (Map جديدة بكل _openWs)، ولا تُبذر أبداً من التاريخ
          المجلوب فعلاً بـgetBars — فقط تمتلئ لاحقاً من التحديثات الحيّة
          توّاً. فأول تحديث حي كان يحسب open/high/low الأسبوع من ذلك اليوم
-         فقط، ماحياً الأيام الأسبق المرسومة أصلاً بالتاريخ — هذا بالضبط
-         سبب "الشمعة تُحتسب من إغلاق سابق عند فتح جديدة". الحل: نجلب أيام
-         الأسبوع الحالي المنقضية فوراً (بالتوازي مع الاشتراك أعلاه، لا
-         بعده — لا تأخير على البيانات الحيّة) ونضعها بـdailyMap قبل وصول
-         أي تحديث حي. مُقيَّدة بمشترك 1W فعلي فقط — لا تكلفة إضافية
-         لمشاهدي الرسم اليومي العادي. */
+         فقط، ماحياً الأيام الأسبق المرسومة أصلاً بالتاريخ. الحل: نجلب
+         أيام الأسبوع الحالي المنقضية فوراً (بالتوازي مع الاشتراك أعلاه،
+         لا بعده — لا تأخير على البيانات الحيّة) ونضعها بـdailyMap قبل
+         وصول أي تحديث حي. مُقيَّدة بمشترك 1W فعلي فقط. */
       let needsWeekly = false;
       for (const [,s] of this._subs) if (s.wsKey === wsKey && s.resolution === '1W') { needsWeekly = true; break; }
       if (hlIv === '1d' && needsWeekly) {
@@ -393,7 +412,7 @@ const ChartModule = (function () {
         high = Math.max(high,b.high);
         low  = Math.min(low, b.low);
         close = b.close;
-        vol  += b.volume;
+        vol  += b.volume; // ← صحيح هنا أيضاً: مجموع أيام منفصلة بـdailyMap
       }
       if (open===null) return null;
       return {time:start, open, high, low, close, volume:vol};
@@ -780,7 +799,9 @@ const ChartModule = (function () {
         'mainSeriesProperties.showPriceLine': true,
         'mainSeriesProperties.priceLineColor': '#ff8c42',
         'mainSeriesProperties.priceLineWidth': 1,
-        'mainSeriesProperties.showCountdown': true,
+        /* ✅ حُذفت showCountdown (كانت true) — راجع تعليق رأس الملف #10:
+           تعداد تنازلي داخلي بـTradingView يُحسَب من ساعة المتصفح
+           المحلية، أقرب مرشّح لإحساس "الرسم متقدم عن الواقع". */
         'scalesProperties.fontSize': scaleFont,
         'scalesProperties.textColor': dark ? '#999' : '#444',
         'scalesProperties.lineColor': dark ? '#222' : '#ddd',
@@ -1001,11 +1022,6 @@ const ChartModule = (function () {
       _hideCf();
       const disp = isGr ? qty.toFixed(2) + ' غرام' : qty.toFixed(aApi.szDp) + ' ' + (aApi.unit || '');
       if (typeof toast !== 'undefined') toast(`✅ ${aApi.icon} ${isBuy ? 'شراء' : 'بيع'} ${disp}`, 'ok', 4000);
-      /* ✅ FIX — pollAccount محذوفة من المشروع منذ تحويل الحساب لـpush-
-         based (initAccountFeeds/_multiPoll). كانت هنا محمية بـtypeof
-         فما كسرت شيء، لكن صُححت لـ_multiPoll الحقيقية (trading.js)
-         لتناسق مع بقية المشروع — نفس الدالة اللي يستدعيها trading.js
-         بعد كل صفقة عادية. */
       if (typeof _multiPoll !== 'undefined') setTimeout(_multiPoll, 2000);
     } catch (e) {
       if (typeof toast !== 'undefined')
