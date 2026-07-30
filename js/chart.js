@@ -80,10 +80,24 @@ const ChartModule = (function () {
   const MIN_TIME    = 1577836800000;          // 2020-01-01 00:00 UTC
   const LS_PREFIX   = 'hl_tv_';
   const LAYOUT_KEY  = 'layout_v1';
-  /* ✅ جديد — نبضة الشموع الحيّة (راجع رأس الملف #12/#13): كل هذا العدد
-     من المللي ثانية تُفحص حدود الشمعة الحالية محلياً لكل اشتراك
-     intraday نشط. طلب صريح: تحديث كل ٢ ثانية. */
-  const LIVE_TICK_MS = 2000;
+  /* ✅ جديد — راجع رأس الملف #15: "الوقت" مستقل تماماً عن "السعر". هذه
+     الثوابت الثلاثة تُشغِّل آلية استمرار الوقت بلا أي علاقة بتوقيت وصول
+     رسائل WS (raw price data) — لا تُستخدَم أبداً لرفض أو تقييد بيانات
+     حقيقية قادمة من الخادم (ذاك بالضبط الخطأ في محاولة سابقة، راجع #12
+     المُلغى). */
+  // مدة كل دقة زمنية intraday بالمللي ثانية — اليومي/الأسبوعي مستثنيان
+  // عمداً من كل آلية استمرار الوقت أدناه (غير متأثرين بالمشكلة أصلاً).
+  const RES_DURATION_MS = {
+    '1':60000, '3':180000, '5':300000, '15':900000, '30':1800000,
+    '60':3600000, '120':7200000, '240':14400000
+  };
+  // هامش أمان بعد نهاية مدة الشمعة الكاملة قبل اعتبارها "بلا تداول
+  // فعلاً" وتمديد الرسم بشمعة استمرارية — يمتص أي تأخير شبكة/معالجة
+  // طبيعي (عادة أجزاء ثانية) بسخاء، بلا انتظار محسوس للمستخدم.
+  const NO_TRADE_GRACE_MS = 2000;
+  // فحص دوري مستقل تماماً عن توقيت وصول أي رسالة WS ("لا يهتم لوقت
+  // استدعاءات" — طلب صريح) — الوقت يتقدّم بذاته وفق هذه النبضة فقط.
+  const TIME_CHECK_MS = 1000;
 
   const TV_RESOLUTIONS = ['1','3','5','15','30','60','120','240','1D','1W'];
 
@@ -104,11 +118,11 @@ const ChartModule = (function () {
   const _lsGet = k => { try { return JSON.parse(localStorage.getItem(LS_PREFIX+k)); } catch { return null; } };
   const _lsSet = (k,v) => { try { localStorage.setItem(LS_PREFIX+k, JSON.stringify(v)); } catch {} };
 
-  /* ✅ جديد — ساعة الجهاز الفعلية (Date.now()) هي المرجع الوحيد لحساب
-     حدود الشموع الحيّة (intraday) — بلا أي تصحيح خادم/NTP، بناءً على
-     طلب صريح: التزامن يجب أن يطابق ساعة جهاز المستخدم كما يراها بعينه،
-     لا أي وقت آخر. اليومي/الأسبوعي لا يستخدمان هذه الدالة إطلاقاً
-     (يبقيان على Date.UTC المباشر كما كانا — راجع رأس الملف #12). */
+  /* ✅ ساعة الجهاز الفعلية — تُستخدَم حصراً بـ_advanceTime لتقدّم "الوقت"
+     (استمرارية الرسم بلا تداول). ⚠️ ممنوع استخدامها أبداً لرفض أو تقييد
+     أي بيانات حقيقية قادمة من candle.t/T (راجع رأس الملف #12 المُلغى
+     و#15 للتصميم الصحيح — بيانات الخادم دائماً هي المرجع للسعر، وهذه
+     الدالة فقط للوقت المستقل عنها). */
   const _now = () => Date.now();
 
   const _asset = s =>
@@ -185,10 +199,11 @@ const ChartModule = (function () {
     constructor() {
       this._subs = new Map();      // uid  → {sym,res,callback,wsKey,lastBar}
       this._ws   = new Map();      // wsKey → {unsub,lastBar,dailyMap}
-      /* ✅ جديد — نبضة حيّة كل LIVE_TICK_MS (راجع رأس الملف #13). تُعاد
-         لكل نسخة datafeed جديدة (تطابق دورة حياة _ws/_subs)، وتُلغى في
+      /* ✅ راجع رأس الملف #15 — نبضة "الوقت" مستقلة تماماً عن "السعر":
+         تعمل دائماً كل TIME_CHECK_MS بغضّ النظر عن وصول أي بيانات سعر
+         حقيقية من عدمه. تُعاد لكل نسخة datafeed جديدة، وتُلغى في
          destroy() أدناه. */
-      this._liveTick = setInterval(() => this._tickLiveBars(), LIVE_TICK_MS);
+      this._timeTick = setInterval(() => this._advanceTime(), TIME_CHECK_MS);
     }
 
     onReady(cb) {
@@ -249,7 +264,7 @@ const ChartModule = (function () {
         // Seed WS lastBar so the first realtime tick merges instead of dupes
         const wk = this._key(coin, isW ? '1d' : hlIv);
         const s = this._ws.get(wk);
-        if (s) s.lastBar = { ...bars[bars.length-1] };
+        if (s) s.lastBar = { ...bars[bars.length-1], synthetic:false }; // بيانات حقيقية من REST
 
         onHistory(bars, {noData:false});
       } catch (e) {
@@ -284,7 +299,7 @@ const ChartModule = (function () {
     }
 
     destroy() {
-      clearInterval(this._liveTick);
+      clearInterval(this._timeTick);
       for (const [,w] of this._ws) { try { w.unsub(); } catch {} }
       this._ws.clear();
       this._subs.clear();
@@ -369,50 +384,11 @@ const ChartModule = (function () {
       const entry = { unsub: null, lastBar: null, dailyMap: new Map() };
       this._ws.set(wsKey, entry);
 
-      entry.unsub = HL.subscribe({type:'candle', coin, interval:hlIv}, c => {
-        const w = this._ws.get(wsKey);
-        if (!w) return;
-
-        for (const [,sub] of this._subs) {
-          if (sub.wsKey !== wsKey) continue;
-
-          // For weekly subscribers, normalize to daily boundary first,
-          // then aggregate to weekly. For others, normalize to their resolution.
-          const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
-          const raw = this._bar(c, sub.sym, normRes);
-
-          /* ✅ FIX جوهري — منع "قفز الشمعة قبل أوانها" (راجع رأس الملف
-             #12). candle.t القادم من Hyperliquid قد يسبق ساعة الجهاز
-             الفعلية بجزء من ثانية (تأخير شبكة/معالجة أو فارق طفيف بين
-             ساعة الخادم والجهاز) — فيُحسَب bucket الشمعة التالية مبكراً،
-             فيظهر التبديل "متقدماً" عن الساعة المعروضة فعلياً. القيد هنا
-             على هوية bucket فقط (لا على قيم OHLCV): لا تُقبَل أبداً هوية
-             bucket أحدث مما تسمح به ساعة الجهاز الحقيقية. غير مُطبَّق
-             على اليومي/الأسبوعي (normRes === '1D') — تلك الفترات غير
-             متأثرة بفارق جزء الثانية هذا ولا تحتاج أي تعديل. */
-          if (normRes !== '1D') {
-            const localBucket = _normTime(_now(), normRes);
-            if (raw.time > localBucket) raw.time = localBucket;
-          }
-
-          // Guard against stale historical ticks after reconnect
-          if (w.lastBar && raw.time < w.lastBar.time) continue;
-
-          if (!w.lastBar || raw.time > w.lastBar.time) {
-            w.lastBar = {...raw};
-          } else {
-            /* ✅ FIX #9 — Candle.v هو إجمالي تراكمي للشمعة حتى الآن
-               (موثّق رسمياً)، لا دلتا لكل رسالة WS. كان `+=` هنا يُضاعف
-               الحجم مع كل تحديث حي لنفس الشمعة قيد التكوّن — استبدال،
-               لا تراكم. */
-            w.lastBar.high = Math.max(w.lastBar.high, raw.high);
-            w.lastBar.low  = Math.min(w.lastBar.low,  raw.low);
-            w.lastBar.close = raw.close;
-            w.lastBar.volume = raw.volume;
-          }
-
-          this._emitForSub(sub, w);
-        }
+      /* ✅ كل معالجة الرسالة انتقلت لـ_ingestCandle (نقطة استيعاب موحّدة
+         واحدة — طلب "توحيد" صريح). المُعالِج هنا لا يفعل شيئاً غير
+         التمرير المباشر، بلا أي حساب/تعديل على البيانات في هذه الطبقة. */
+      entry.unsub = HL.subscribe({type:'candle', coin, interval:hlIv}, payload => {
+        this._ingestCandle(wsKey, payload);
       });
 
       /* ✅ إصلاح جوهري — الشمعة الأسبوعية كانت تُعاد حسبتها من يوم واحد
@@ -435,15 +411,80 @@ const ChartModule = (function () {
           for (const d of raw) {
             if (d.time >= curWeekStart && !w.dailyMap.has(d.time)) w.dailyMap.set(d.time, { ...d });
           }
-          if (!w.lastBar && raw.length) w.lastBar = { ...raw[raw.length - 1] };
+          if (!w.lastBar && raw.length) w.lastBar = { ...raw[raw.length - 1], synthetic:false };
         }).catch(() => {});
       }
     }
 
-    /* ✅ جديد — تجميع منطق الإصدار (weekly aggregation + dedup + callback)
-       بدالة واحدة تُستدعى من مسارين: رسالة WS حقيقية أعلاه، والنبضة
-       الحيّة _tickLiveBars أدناه (لشمعة مصطنعة عند تأخر بث المنصة). */
-    _emitForSub(sub, w) {
+    /* ══════════════════════════════════════════════════════════════
+       ✅ نقطة الاستيعاب الموحّدة الوحيدة لكل تحديث شمعة حي (راجع رأس
+       الملف #15 و#16). القاعدة الحاسمة: **السعر (OHLCV) مصدره الخادم
+       حصراً، بلا استثناء ولا تقييد بأي ساعة محلية أياً كانت** — هذا هو
+       الدرس المستفاد من المحاولة السابقة الفاشلة (#12 المُلغى) التي
+       رفضت بيانات حقيقية بسبب افتراض خاطئ عن دقّة ساعة الجهاز.
+
+       التمييز الوحيد المطلوب هنا هو بين شمعة "حقيقية" (وصلت من
+       الخادم فعلاً) وشمعة "استمرارية" مصطنعة (وضعها _advanceTime أدناه
+       لتحريك الوقت أثناء غياب التداول) — عبر حقل synthetic. أي بيانات
+       حقيقية تفوز دائماً على أي تخمين استمراري، حتى لو بدت "أقدم"
+       رقمياً من التخمين (حالة نادرة: ساعة الجهاز أسرع من الواقع بمقدار
+       أكبر من هامش الأمان) — لأن الحقيقي أصدق من المصطنع دوماً.
+       ══════════════════════════════════════════════════════════════ */
+    _ingestCandle(wsKey, payload) {
+      const w = this._ws.get(wsKey);
+      if (!w) return;
+
+      /* ✅ تحوّط دفاعي — تعليق التوثيق الرسمي (websocket/subscriptions)
+         يذكر "Data format: Candle[]" لهذا النوع تحديداً رغم أن تعريف
+         Candle بنفس الصفحة كائن مفرد. لا ضرر من هذا التحوّط لو كانت
+         الحمولة كائناً مفرداً دائماً كما يبدو عملياً، ويحمينا لو وصلت
+         فعلاً كمصفوفة أحياناً. */
+      const c = Array.isArray(payload) ? payload[payload.length - 1] : payload;
+      if (!c) return;
+
+      for (const [,sub] of this._subs) {
+        if (sub.wsKey !== wsKey) continue;
+
+        // For weekly subscribers, normalize to daily boundary first,
+        // then aggregate to weekly. For others, normalize to their resolution.
+        const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
+        const raw = this._bar(c, sub.sym, normRes);
+
+        if (!w.lastBar) {
+          w.lastBar = { ...raw, synthetic:false };
+        } else if (raw.time > w.lastBar.time) {
+          // شمعة حقيقية جديدة فعلاً — تفوز دائماً، سواء كانت السابقة
+          // حقيقية أو استمرارية مصطنعة (تُستبدَل بالكامل، لا تُدمَج).
+          w.lastBar = { ...raw, synthetic:false };
+        } else if (raw.time === w.lastBar.time) {
+          /* ✅ FIX #9 — Candle.v هو إجمالي تراكمي للشمعة حتى الآن
+             (موثّق رسمياً)، لا دلتا لكل رسالة WS. كان `+=` هنا يُضاعف
+             الحجم مع كل تحديث حي لنفس الشمعة قيد التكوّن — استبدال،
+             لا تراكم. تحديث لنفس الشمعة يُرقّي أي شمعة مصطنعة سابقة
+             لحقيقية تلقائياً (synthetic:false). */
+          w.lastBar.high = Math.max(w.lastBar.high, raw.high);
+          w.lastBar.low  = Math.min(w.lastBar.low,  raw.low);
+          w.lastBar.close = raw.close;
+          w.lastBar.volume = raw.volume;
+          w.lastBar.synthetic = false;
+        } else if (w.lastBar.synthetic) {
+          // شمعتنا الحالية كانت تخميناً استمرارياً محضاً (لا بيانات حقيقية
+          // بعد) — أي بيانات حقيقية أصدق منها دوماً، حتى لو أقدم رقمياً.
+          w.lastBar = { ...raw, synthetic:false };
+        } else {
+          // Guard against stale historical ticks after reconnect —
+          // شمعتان حقيقيتان وهذه أقدم من المعروضة فعلاً: تجاهل.
+          continue;
+        }
+
+        this._emit(sub, w);
+      }
+    }
+
+    /* ✅ تجميع منطق الإصدار (weekly aggregation + dedup + callback) بدالة
+       واحدة تُستدعى من مسارين: بيانات حقيقية عبر _ingestCandle أعلاه،
+       وشمعة استمرارية مصطنعة عبر _advanceTime أدناه. */
+    _emit(sub, w) {
       let emit;
       if (sub.resolution === '1W') {
         const dk = _normTime(w.lastBar.time, '1D');
@@ -466,32 +507,42 @@ const ChartModule = (function () {
       }
     }
 
-    /* ✅ جديد — نبضة كل LIVE_TICK_MS (راجع رأس الملف #13): تكتشف عبور
-       ساعة الجهاز لحد شمعة جديدة (intraday فقط) قبل وصول أي بث حقيقي
-       من المنصة لتلك الفترة، فتُصدر شمعة "مسطّحة" مؤقتة بسعر الإغلاق
-       الأخير (بلا حجم) بدل تجميد الرسم لحظياً. أول بث حقيقي تالٍ لنفس
-       الـbucket يدمج قيمه الحقيقية فوق هذه الشمعة المؤقتة كتحديث عادي
-       (لا كشمعة جديدة، لأن bucket الزمني نفسه بعد القيد بالأعلى) — بلا
-       أي قفزة بصرية. لا تُشغَّل لليومي/الأسبوعي (normRes === '1D') —
-       غير متأثرين بهذا التأخير أصلاً ولا حاجة لأي شمعة مصطنعة لهما. */
-    _tickLiveBars() {
+    /* ══════════════════════════════════════════════════════════════
+       ✅ راجع رأس الملف #15 — "الوقت" مستقل تماماً عن "السعر": حتى
+       بانعدام أي تداول فعلي (لا رسائل WS تصل إطلاقاً)، الوقت يستمر
+       بالتقدّم وفق ساعة الجهاز فقط، بفحص دوري مستقل كل TIME_CHECK_MS —
+       بلا أي علاقة بتوقيت وصول رسائل السعر ("لا يهتم لوقت استدعاءات").
+
+       عند تجاوز مدة الشمعة الكاملة + هامش أمان (NO_TRADE_GRACE_MS) بلا
+       أي تداول حقيقي، تُمدَّد شمعة "استمرارية" مسطّحة (سعر الإغلاق
+       الأخير، حجم صفر) خطوة واحدة بمقدار مدة الشمعة بالضبط — لا قفز
+       مباشر لأي bucket "حسب الآن"، بل تراكم خطوات محدودة، فيبقى أي خطأ
+       محتمل بساعة الجهاز محصوراً بحجم خطوة واحدة كحد أقصى مهما طال أمد
+       الانقطاع (تطبيق مغلق بالخلفية لساعات مثلاً — يُعوَّض تدريجياً
+       بخطوات آمنة، لا بقفزة واحدة كبيرة). هذه الشمعات تُعلَّم
+       synthetic:true وتُستبدَل فوراً وبالكامل بأي بيانات حقيقية تصل
+       لاحقاً (راجع _ingestCandle أعلاه) — لا تُشغَّل لليومي/الأسبوعي
+       (استثناء متعمَّد، غير متأثرين بالمشكلة أصلاً حسب التأكيد المباشر).
+       ══════════════════════════════════════════════════════════════ */
+    _advanceTime() {
+      const now = Date.now();
       for (const [wsKey, w] of this._ws) {
         if (!w.lastBar) continue;
-        for (const [,sub] of this._subs) {
-          if (sub.wsKey !== wsKey) continue;
-          const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
-          if (normRes === '1D') continue;
 
-          const localBucket = _normTime(_now(), normRes);
-          if (localBucket > w.lastBar.time) {
-            w.lastBar = {
-              time: localBucket,
-              open: w.lastBar.close, high: w.lastBar.close,
-              low: w.lastBar.close, close: w.lastBar.close,
-              volume: 0
-            };
-            this._emitForSub(sub, w);
-          }
+        let normRes = null;
+        for (const [,s] of this._subs) if (s.wsKey === wsKey) { normRes = s.resolution === '1W' ? '1D' : s.resolution; break; }
+        const stepMs = normRes ? RES_DURATION_MS[normRes] : null;
+        if (!stepMs) continue; // 1D/1W مستثناة عمداً — راجع التعليق أعلاه
+
+        let guard = 0;
+        while (now >= w.lastBar.time + stepMs + NO_TRADE_GRACE_MS && guard++ < 500) {
+          w.lastBar = {
+            time: w.lastBar.time + stepMs,
+            open: w.lastBar.close, high: w.lastBar.close,
+            low: w.lastBar.close, close: w.lastBar.close,
+            volume: 0, synthetic: true
+          };
+          for (const [,sub] of this._subs) if (sub.wsKey === wsKey) this._emit(sub, w);
         }
       }
     }
