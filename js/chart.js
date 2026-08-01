@@ -7,24 +7,6 @@ const ChartModule = (function () {
   const MIN_TIME    = 1577836800000;          // 2020-01-01 00:00 UTC
   const LS_PREFIX   = 'hl_tv_';
   const LAYOUT_KEY  = 'layout_v2';
-  /* ✅ راجع رأس الملف #15 — "الوقت" مستقل تماماً عن "السعر". هذه
-     الثوابت الثلاثة تُشغِّل آلية استمرار الوقت بلا أي علاقة بتوقيت وصول
-     رسائل WS (raw price data) — لا تُستخدَم أبداً لرفض أو تقييد بيانات
-     حقيقية قادمة من الخادم (ذاك بالضبط الخطأ في محاولة سابقة، راجع #12
-     المُلغى). */
-  // مدة كل دقة زمنية intraday بالمللي ثانية — اليومي/الأسبوعي مستثنيان
-  // عمداً من كل آلية استمرار الوقت أدناه (غير متأثرين بالمشكلة أصلاً).
-  const RES_DURATION_MS = {
-    '1':60000, '3':180000, '5':300000, '15':900000, '30':1800000,
-    '60':3600000, '120':7200000, '240':14400000
-  };
-  // هامش أمان بعد نهاية مدة الشمعة الكاملة قبل اعتبارها "بلا تداول
-  // فعلاً" وتمديد الرسم بشمعة استمرارية — يمتص أي تأخير شبكة/معالجة
-  // طبيعي (عادة أجزاء ثانية) بسخاء، بلا انتظار محسوس للمستخدم.
-  const NO_TRADE_GRACE_MS = 2000;
-  // فحص دوري مستقل تماماً عن توقيت وصول أي رسالة WS ("لا يهتم لوقت
-  // استدعاءات" — طلب صريح) — الوقت يتقدّم بذاته وفق هذه النبضة فقط.
-  const TIME_CHECK_MS = 1000;
 
   const TV_RESOLUTIONS = ['1','3','5','15','30','60','120','240','1D','1W'];
 
@@ -45,12 +27,6 @@ const ChartModule = (function () {
   const _lsGet = k => { try { return JSON.parse(localStorage.getItem(LS_PREFIX+k)); } catch { return null; } };
   const _lsSet = (k,v) => { try { localStorage.setItem(LS_PREFIX+k, JSON.stringify(v)); } catch {} };
 
-  /* ✅ ساعة الجهاز الخام — تُستخدَم فقط كمُدخل أوّلي لـ_correctedNow()
-     (راجع #17). ⚠️ ممنوع استخدامها مباشرة لرفض أو تقييد أي بيانات
-     حقيقية قادمة من candle.t/T (راجع رأس الملف #12 المُلغى و#15 —
-     بيانات الخادم دائماً هي المرجع للسعر، هذه فقط للوقت المستقل عنها). */
-  const _now = () => Date.now();
-
   const _asset = s =>
     (typeof ASSETS !== 'undefined' && ASSETS[s]) ||
     { pxDp:2, szDp:2, name:s, icon:'📊', unit:'', lev:10, idx:0, cross:true, coin:`xyz:${s}` };
@@ -68,10 +44,8 @@ const ChartModule = (function () {
 
   /* ══════════ UTC TIME NORMALIZATION ══════════
      Every timestamp is snapped to the exact interval boundary via
-     floor (never rounds up/forward — verified case by case). No
-     drift, no timezone shifts, no manual compensation.
-     FIXED: case '1' used d.getUTCFullYear() for month — corrected
-            to d.getUTCMonth().                                   */
+     floor (never rounds up/forward). No drift, no timezone shifts,
+     no manual compensation — raw server time only.               */
   function _normTime(ms, res) {
     const d = new Date(ms);
     switch (res) {
@@ -118,27 +92,27 @@ const ChartModule = (function () {
   const _weekStart = ms => _normTime(ms, '1W');
 
   /* ══════════ DATAFEED ══════════
-     Single class implementing the exact TradingView Datafeed API.
-     Per-subscriber lastBar cache, deduplicated emissions, weekly
-     aggregation from daily WS, clean destroy().                    */
+     ✅ FIX جوهري — حُذف بالكامل نظام تصحيح الساعة المحلية القديم
+     (_correctedNow / _calibrateClock / _advanceTime / getServerTime /
+     supports_time). كان هذا يُسبِّب إغلاق الشمعة قبل موعدها الحقيقي
+     بثانية تقريباً ("1د" تُغلق عند 59 ثانية وتفتح التالية): كل شمعة حية
+     واردة من الخادم كانت تُشغِّل _calibrateClock، وأحد فرعيها يُعيد ضبط
+     _clockOffsetMs بحيث "الآن المصحَّح" = بداية الدلو الحالي بالضبط
+     بمجرد أن يتجاوزه — حلقة تغذية راجعة تُصفِّر تقدّم الوقت الفعلي
+     بدل تركه يتقدّم طبيعياً، وتُغذّي getServerTime المكتبة مباشرة بهذا
+     الرقم غير المستقر. الحل: لا تصحيح إطلاقاً — بيانات الوقت/السعر
+     تُغذّى تماماً كما تصل من الخادم (نفس فلسفة النسخة القديمة بلا
+     مكتبة Advanced Charts)، والعدّ التنازلي (showCountdown) يعتمد على
+     ساعة المتصفح الافتراضية لـTradingView (supports_time=false)، بلا
+     أي طبقة تخمين محلية بيننا وبين البيانات الحقيقية.
+     الأثر الجانبي المقبول: بلا تداول فعلي لفترة طويلة، الشمعة قيد
+     التكوّن تبقى ثابتة حتى وصول أول تحديث حقيقي — بالضبط سلوك النسخة
+     القديمة بلا مكتبة، لا نقص وظيفي عنها.
+  ══════════════════════════════════════════════════════════════ */
   class HyperliquidDatafeed {
     constructor() {
       this._subs = new Map();      // uid  → {sym,res,callback,wsKey,lastBar}
       this._ws   = new Map();      // wsKey → {unsub,lastBar,dailyMap}
-      /* ✅ جديد #17 — إزاحة الساعة (clock offset) بين جهاز المستخدم
-         والخادم، محسوبة ذاتياً من بيانات شموع حقيقية فقط (candle.t
-         الموثّق رسمياً). تُستخدَم حصراً بـ_correctedNow() أدناه، ولا
-         تؤثر أبداً على قراءة/قبول أي بيانات حقيقية قادمة من الخادم —
-         نفس مبدأ #12 الملغى، البيانات الحقيقية دائماً الأصدق. تُعاد
-         للصفر مع كل نسخة datafeed جديدة (كل _initChart) — تُعايَر من
-         جديد بسرعة من أول شمعة حية حقيقية تصل، وأيضاً فوراً من آخر
-         شمعة REST تاريخية عند getBars (راجع #18 — لا تنتظر أول WS). */
-      this._clockOffsetMs = 0;
-      /* ✅ راجع رأس الملف #15 — نبضة "الوقت" مستقلة تماماً عن "السعر":
-         تعمل دائماً كل TIME_CHECK_MS بغضّ النظر عن وصول أي بيانات سعر
-         حقيقية من عدمه. تُعاد لكل نسخة datafeed جديدة، وتُلغى في
-         destroy() أدناه. */
-      this._timeTick = setInterval(() => this._advanceTime(), TIME_CHECK_MS);
     }
 
     onReady(cb) {
@@ -151,32 +125,14 @@ const ChartModule = (function () {
         supports_group_request: false,
         supports_marks: false,
         supports_timescale_marks: false,
-        /* ✅ #18 — كانت false. مفعَّلة الآن لتمكين getServerTime أدناه —
-           الآلية الرسمية الوحيدة الموثَّقة بـTradingView لتصحيح عدّاد
-           التنازل (Countdown) ضد انحراف ساعة الجهاز المحلي. بلا هذا
-           العلم، المكتبة تتجاهل getServerTime بالكامل ولا تستدعيه أبداً
-           (موثّق رسمياً: "This function is called if the supports_time
-           configuration flag is true..."). */
-        supports_time: true,
+        /* ✅ FIX — كانت true (getServerTime مصدر الانحراف، راجع تعليق
+           رأس الملف). false تعني: المكتبة تستخدم ساعة المتصفح مباشرة،
+           بلا أي وسيط تصحيح محلي — تماماً كالنسخة القديمة بلا مكتبة. */
+        supports_time: false,
       }), 0);
     }
 
     searchSymbols() {}
-
-    /* ✅ #18 — جديد: يُستدعى من TradingView فقط لأن supports_time=true
-       أعلاه. نُعيد نفس الساعة المصحَّحة (_correctedNow، بند #17) التي
-       تُعايَر ذاتياً ضد كل شمعة حقيقية واردة فعلاً من الخادم — لا الساعة
-       الخام لجهاز المستخدم. بهذا تحسب مكتبة TradingView عدّاد التنازل
-       (Countdown) بجانب آخر سعر ضد "الآن" الموثوق فعلياً، بدل "الآن"
-       الخام المحلي الذي قد ينحرف ثانية أو أكثر بلا مزامنة NTP دقيقة —
-       هذا بالضبط ما كان يُنتج "19 بدل 20" عند بداية العدّ.
-       الصيغة إلزامية وموثَّقة رسمياً: ثوانٍ صحيحة (Unix seconds) بلا
-       كسور ولا مللي ثانية — "The time is provided without
-       milliseconds. Example: 1445324591." */
-    getServerTime(callback) {
-      try { callback(Math.floor(this._correctedNow() / 1000)); }
-      catch { callback(Math.floor(Date.now() / 1000)); }
-    }
 
     resolveSymbol(name, onOk, onErr) {
       const a = _asset(name);
@@ -205,12 +161,9 @@ const ChartModule = (function () {
       const isW = resolution === '1W';
       const hlIv = isW ? '1d' : (TV_TO_HL[resolution] || '1h');
       const fromMs = Math.max(periodParams.from * 1000, MIN_TIME);
-      /* ✅ حد صارم — راجع تعليق رأس الملف #11: بلا أي هامش مستقبلي من
-         جهتنا (كان +5000ms سابقاً). الآن يستخدم الساعة المصحَّحة
-         (_correctedNow، راجع #17) بدل Date.now() الخام — لا فرق عملي
-         هنا طالما الإزاحة صغيرة، لكن يمنع أي تناقض نظري لو طُلبت بيانات
-         حديثة جداً بينما الإزاحة تعوّض ساعة جهاز متأخرة. */
-      const toMs   = Math.min(periodParams.to   * 1000, this._correctedNow());
+      /* ✅ Date.now() خام مباشرة — بلا أي إزاحة محلية (راجع تعليق رأس
+         الملف). مطابق تماماً لأسلوب النسخة القديمة بلا مكتبة. */
+      const toMs   = Math.min(periodParams.to   * 1000, Date.now());
 
       if (fromMs >= toMs) { onHistory([], {noData:true}); return; }
 
@@ -223,17 +176,7 @@ const ChartModule = (function () {
         // Seed WS lastBar so the first realtime tick merges instead of dupes
         const wk = this._key(coin, isW ? '1d' : hlIv);
         const s = this._ws.get(wk);
-        if (s) s.lastBar = { ...bars[bars.length-1], synthetic:false }; // بيانات حقيقية من REST
-
-        /* ✅ #18 — معايرة فورية من آخر شمعة REST حقيقية، بدل انتظار
-           أول تحديث WS حي فقط (كان الوضع السابق ببند #17). تُضيّق نافذة
-           "غير مُعايَر بعد" تماماً عند أول فتح/تبديل للرسم — أكثر لحظة
-           عرضة لظهور انحراف العدّ التنازلي، لأنه لا توجد أي معايرة
-           سابقة بعد قبل وصول أول تحديث حي. RES_DURATION_MS[resolution]
-           يكون undefined لـ1D/1W فتتجاهله _calibrateClock تلقائياً (نفس
-           استثناء بند #17 — هامش خطئهما أياماً لا ثواني، غير معنيين
-           بهذا الإصلاح أصلاً). */
-        this._calibrateClock(bars[bars.length-1].time, RES_DURATION_MS[resolution]);
+        if (s) s.lastBar = { ...bars[bars.length-1] };
 
         onHistory(bars, {noData:false});
       } catch (e) {
@@ -268,7 +211,6 @@ const ChartModule = (function () {
     }
 
     destroy() {
-      clearInterval(this._timeTick);
       for (const [,w] of this._ws) { try { w.unsub(); } catch {} }
       this._ws.clear();
       this._subs.clear();
@@ -277,51 +219,11 @@ const ChartModule = (function () {
     /* ── internals ── */
     _key(coin, res) { return `${coin}:${res}`; }
 
-    /* ✅ جديد #17 — الوقت المصحَّح: Date.now() الخام + إزاحة معايرة
-       ذاتية (_clockOffsetMs). يُستخدَم فقط لتقدّم "الوقت" (استمرارية
-       الرسم بلا تداول، _advanceTime)، حد getBars العلوي، وعدّاد التنازل
-       المعروض داخل TradingView عبر getServerTime أعلاه (#18) — أبداً
-       لقبول أو رفض بيانات حقيقية (تلك تأتي من candle.t للخادم مباشرة،
-       بلا أي وسيط زمني محلي). */
-    _correctedNow() { return Date.now() + this._clockOffsetMs; }
-
-    /* ✅ جديد #17 — معايرة الإزاحة من كل شمعة حقيقية (غير مصطنعة) تصل
-       فعلاً من الخادم عبر _ingestCandle، وأيضاً من آخر شمعة REST
-       تاريخية عند getBars (راجع #18). سبب الإصلاح مفصَّل برأس الملف
-       (بند 17): تقدّم الشمعة الاصطناعية بـ_advanceTime كان يعتمد حصراً
-       على Date.now() الخام لجهاز المستخدم؛ أي انحراف بساعة الجهاز
-       (سريعة أو بطيئة) يجعل الشمعة "التالية" تُفتَح قبل أو بعد لحظتها
-       الحقيقية — بالضبط عرض "الساعة الفعلية 13:59:59 لكن يفتح 14:01
-       بدل 14:00" حين تكون ساعة الجهاز متقدّمة. نفس الإزاحة تغذّي الآن
-       أيضاً getServerTime أعلاه (#18)، فتصحيح واحد يخدم كلا الاستخدامين
-       (استمرارية الرسم + عدّاد التنازل داخل TradingView).
-       المبدأ: كل شمعة حقيقية واردة تُثبِّت مرجعاً موثوقاً — الخادم للتو
-       أكّد أن "الآن الحقيقي" يقع داخل الدلو [rawTime, rawTime+stepMs).
-       نُعيد ضبط الإزاحة لتُبقي (Date.now()+offset) داخل هذا النطاق
-       تماماً، سواء تطلّب ذلك رفعها (ساعة متأخرة) أو خفضها (ساعة
-       متقدّمة أكثر من اللازم). معايرة مستمرة وذاتية الإصلاح، بلا أي
-       حاجة لنقطة نهاية وقت خادم منفصلة (غير موجودة أصلاً بتوثيق
-       Hyperliquid الرسمي — راجع info-endpoint/websocket المرفقين). */
-    _calibrateClock(rawTime, stepMs) {
-      if (!stepMs) return; // اليومي/الأسبوعي غير معنيين — هامش خطئهما أياماً لا ثواني
-      const localNow  = Date.now();
-      const bucketEnd = rawTime + stepMs;
-      if (rawTime > localNow + this._clockOffsetMs) {
-        // ساعة الجهاز متأخرة عن الخادم — ارفع الإزاحة لتغطية الفارق
-        this._clockOffsetMs = rawTime - localNow;
-      } else if (localNow + this._clockOffsetMs >= bucketEnd) {
-        // ساعتنا المصحَّحة تجاوزت دلواً ما زال الخادم يبثّه كحيّ الآن —
-        // كانت متقدّمة أكثر مما ينبغي؛ أعد محاذاتها داخل الدلو المؤكَّد
-        this._clockOffsetMs = rawTime - localNow;
-      }
-    }
-
     /*
       Build a bar from a Hyperliquid candle object.
       Hyperliquid t is OPEN time in both REST and WS (confirmed:
-      Candle{ t: open millis; T: close millis } — T = t + duration - 1,
-      an inclusive-end convention; we never read T, only t).
-      No subtraction needed — use t directly.
+      Candle{ t: open millis; T: close millis }); we never read T,
+      only t — used directly, no correction.
     */
     _bar(candle, sym, res) {
       const g = _isGram(sym);
@@ -392,22 +294,13 @@ const ChartModule = (function () {
       const entry = { unsub: null, lastBar: null, dailyMap: new Map() };
       this._ws.set(wsKey, entry);
 
-      /* ✅ كل معالجة الرسالة انتقلت لـ_ingestCandle (نقطة استيعاب موحّدة
-         واحدة — طلب "توحيد" صريح، بند #16). المُعالِج هنا لا يفعل شيئاً
-         غير التمرير المباشر، بلا أي حساب/تعديل على البيانات بهذه الطبقة. */
       entry.unsub = HL.subscribe({type:'candle', coin, interval:hlIv}, payload => {
         this._ingestCandle(wsKey, payload);
       });
 
-      /* ✅ إصلاح جوهري — الشمعة الأسبوعية كانت تُعاد حسبتها من يوم واحد
-         فقط عند وصول أول تحديث حي بعد فتح/تبديل الرسم: dailyMap تبدأ
-         فارغة تماماً (Map جديدة بكل _openWs)، ولا تُبذر أبداً من التاريخ
-         المجلوب فعلاً بـgetBars — فقط تمتلئ لاحقاً من التحديثات الحيّة
-         توّاً. فأول تحديث حي كان يحسب open/high/low الأسبوع من ذلك اليوم
-         فقط، ماحياً الأيام الأسبق المرسومة أصلاً بالتاريخ. الحل: نجلب
-         أيام الأسبوع الحالي المنقضية فوراً (بالتوازي مع الاشتراك أعلاه،
-         لا بعده — لا تأخير على البيانات الحيّة) ونضعها بـdailyMap قبل
-         وصول أي تحديث حي. مُقيَّدة بمشترك 1W فعلي فقط. */
+      /* بذر أيام الأسبوع الحالي المنقضية فوراً (بالتوازي مع الاشتراك
+         أعلاه) لصحّة تجميع 1W من أول لحظة، بلا انتظار تحديثات حيّة
+         تتراكم من الصفر — مُقيَّدة بمشترك 1W فعلي فقط. */
       let needsWeekly = false;
       for (const [,s] of this._subs) if (s.wsKey === wsKey && s.resolution === '1W') { needsWeekly = true; break; }
       if (hlIv === '1d' && needsWeekly) {
@@ -419,39 +312,23 @@ const ChartModule = (function () {
           for (const d of raw) {
             if (d.time >= curWeekStart && !w.dailyMap.has(d.time)) w.dailyMap.set(d.time, { ...d });
           }
-          if (!w.lastBar && raw.length) w.lastBar = { ...raw[raw.length - 1], synthetic:false };
+          if (!w.lastBar && raw.length) w.lastBar = { ...raw[raw.length - 1] };
         }).catch(() => {});
       }
     }
 
     /* ══════════════════════════════════════════════════════════════
-       ✅ نقطة الاستيعاب الموحّدة الوحيدة لكل تحديث شمعة حي (راجع رأس
-       الملف #15/#16). القاعدة الحاسمة: **السعر (OHLCV) مصدره الخادم
-       حصراً، بلا استثناء ولا تقييد بأي ساعة محلية أياً كانت** — هذا هو
-       الدرس المستفاد من المحاولة السابقة الفاشلة (#12 المُلغى) التي
-       رفضت بيانات حقيقية بسبب افتراض خاطئ عن دقّة ساعة الجهاز.
-
-       التمييز الوحيد المطلوب هنا هو بين شمعة "حقيقية" (وصلت من
-       الخادم فعلاً) وشمعة "استمرارية" مصطنعة (وضعها _advanceTime أدناه
-       لتحريك الوقت أثناء غياب التداول) — عبر حقل synthetic. أي بيانات
-       حقيقية تفوز دائماً على أي تخمين استمراري، حتى لو بدت "أقدم"
-       رقمياً من التخمين (حالة نادرة: ساعة الجهاز أسرع من الواقع بمقدار
-       أكبر من هامش الأمان) — لأن الحقيقي أصدق من المصطنع دوماً.
-
-       ✅ جديد #17 — كل شمعة حقيقية تُمرّر أيضاً لـ_calibrateClock:
-       تُستخدَم لمعايرة ساعة الجهاز ضد الواقع المؤكَّد من الخادم، فتُصلح
-       ذاتياً أي انحراف كان سيتسرّب لاحقاً عبر _advanceTime، وأيضاً عبر
-       getServerTime المعروض لـTradingView مباشرة (#18).
+       ✅ نقطة الاستيعاب الموحّدة الوحيدة لكل تحديث شمعة حي. مبسَّطة
+       بالكامل بعد حذف مفهوم "الشمعة الاصطناعية" (لم يعد هناك أي بار
+       يُنشأ محلياً — كل بار هنا حقيقي 100% قادم من الخادم). القاعدة:
+       دلو زمني جديد → استبدال كامل؛ نفس الدلو → تحديث high/low/close
+       (Candle.v إجمالي تراكمي، لا دلتا — استبدال لا تراكم)؛ دلو أقدم
+       (تكة متأخرة بعد إعادة اتصال) → تجاهل.
        ══════════════════════════════════════════════════════════════ */
     _ingestCandle(wsKey, payload) {
       const w = this._ws.get(wsKey);
       if (!w) return;
 
-      /* ✅ تحوّط دفاعي — تعليق التوثيق الرسمي (websocket/subscriptions)
-         يذكر "Data format: Candle[]" لهذا النوع تحديداً رغم أن تعريف
-         Candle بنفس الصفحة كائن مفرد. لا ضرر من هذا التحوّط لو كانت
-         الحمولة كائناً مفرداً دائماً كما يبدو عملياً، ويحمينا لو وصلت
-         فعلاً كمصفوفة أحياناً. */
       const c = Array.isArray(payload) ? payload[payload.length - 1] : payload;
       if (!c) return;
 
@@ -463,44 +340,22 @@ const ChartModule = (function () {
         const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
         const raw = this._bar(c, sub.sym, normRes);
 
-        /* ✅ #17 — معايرة ساعة الجهاز ضد هذه الشمعة الحقيقية المؤكَّدة
-           من الخادم. راجع _calibrateClock أعلاه للتفصيل الكامل. */
-        this._calibrateClock(raw.time, RES_DURATION_MS[normRes]);
-
-        if (!w.lastBar) {
-          w.lastBar = { ...raw, synthetic:false };
-        } else if (raw.time > w.lastBar.time) {
-          // شمعة حقيقية جديدة فعلاً — تفوز دائماً، سواء كانت السابقة
-          // حقيقية أو استمرارية مصطنعة (تُستبدَل بالكامل، لا تُدمَج).
-          w.lastBar = { ...raw, synthetic:false };
+        if (!w.lastBar || raw.time > w.lastBar.time) {
+          w.lastBar = { ...raw };
         } else if (raw.time === w.lastBar.time) {
-          /* ✅ FIX #9 — Candle.v هو إجمالي تراكمي للشمعة حتى الآن
-             (موثّق رسمياً)، لا دلتا لكل رسالة WS. كان `+=` هنا يُضاعف
-             الحجم مع كل تحديث حي لنفس الشمعة قيد التكوّن — استبدال،
-             لا تراكم. تحديث لنفس الشمعة يُرقّي أي شمعة مصطنعة سابقة
-             لحقيقية تلقائياً (synthetic:false). */
-          w.lastBar.high = Math.max(w.lastBar.high, raw.high);
-          w.lastBar.low  = Math.min(w.lastBar.low,  raw.low);
+          w.lastBar.high  = Math.max(w.lastBar.high, raw.high);
+          w.lastBar.low   = Math.min(w.lastBar.low,  raw.low);
           w.lastBar.close = raw.close;
           w.lastBar.volume = raw.volume;
-          w.lastBar.synthetic = false;
-        } else if (w.lastBar.synthetic) {
-          // شمعتنا الحالية كانت تخميناً استمرارياً محضاً (لا بيانات حقيقية
-          // بعد) — أي بيانات حقيقية أصدق منها دوماً، حتى لو أقدم رقمياً.
-          w.lastBar = { ...raw, synthetic:false };
         } else {
-          // Guard against stale historical ticks after reconnect —
-          // شمعتان حقيقيتان وهذه أقدم من المعروضة فعلاً: تجاهل.
-          continue;
+          continue; // تكة متأخرة أقدم من المعروض فعلاً — تجاهل
         }
 
         this._emit(sub, w);
       }
     }
 
-    /* ✅ تجميع منطق الإصدار (weekly aggregation + dedup + callback) بدالة
-       واحدة تُستدعى من مسارين: بيانات حقيقية عبر _ingestCandle أعلاه،
-       وشمعة استمرارية مصطنعة عبر _advanceTime أدناه. */
+    /* ✅ تجميع منطق الإصدار (weekly aggregation + dedup + callback). */
     _emit(sub, w) {
       let emit;
       if (sub.resolution === '1W') {
@@ -521,51 +376,6 @@ const ChartModule = (function () {
           emit.volume!==sub.lastBar.volume) {
         sub.callback(emit);
         sub.lastBar = emit;
-      }
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       ✅ راجع رأس الملف #15 — "الوقت" مستقل تماماً عن "السعر": حتى
-       بانعدام أي تداول فعلي (لا رسائل WS تصل إطلاقاً)، الوقت يستمر
-       بالتقدّم وفق ساعة مصحَّحة (_correctedNow، بند #17) بفحص دوري
-       مستقل كل TIME_CHECK_MS — بلا أي علاقة بتوقيت وصول رسائل السعر
-       ("لا يهتم لوقت استدعاءات").
-
-       عند تجاوز مدة الشمعة الكاملة + هامش أمان (NO_TRADE_GRACE_MS) بلا
-       أي تداول حقيقي، تُمدَّد شمعة "استمرارية" مسطّحة (سعر الإغلاق
-       الأخير، حجم صفر) خطوة واحدة بمقدار مدة الشمعة بالضبط — لا قفز
-       مباشر لأي bucket "حسب الآن"، بل تراكم خطوات محدودة، فيبقى أي خطأ
-       محتمل بالساعة المصحَّحة محصوراً بحجم خطوة واحدة كحد أقصى مهما طال
-       أمد الانقطاع. هذه الشمعات تُعلَّم synthetic:true وتُستبدَل فوراً
-       وبالكامل بأي بيانات حقيقية تصل لاحقاً (راجع _ingestCandle أعلاه)
-       — لا تُشغَّل لليومي/الأسبوعي (استثناء متعمَّد، غير متأثرين
-       بالمشكلة أصلاً حسب التأكيد المباشر).
-
-       ✅ #17 — الفرق الوحيد عن النسخة السابقة: `now` هنا يأتي من
-       _correctedNow() (مُصحَّح ذاتياً ضد شموع حقيقية) بدل Date.now()
-       الخام — هذا بالضبط ما يمنع فتح شمعة "التالية+واحدة" (مثل 14:01
-       بدل 14:00) حين تنحرف ساعة الجهاز عن الواقع.
-       ══════════════════════════════════════════════════════════════ */
-    _advanceTime() {
-      const now = this._correctedNow();
-      for (const [wsKey, w] of this._ws) {
-        if (!w.lastBar) continue;
-
-        let normRes = null;
-        for (const [,s] of this._subs) if (s.wsKey === wsKey) { normRes = s.resolution === '1W' ? '1D' : s.resolution; break; }
-        const stepMs = normRes ? RES_DURATION_MS[normRes] : null;
-        if (!stepMs) continue; // 1D/1W مستثناة عمداً — راجع التعليق أعلاه
-
-        let guard = 0;
-        while (now >= w.lastBar.time + stepMs + NO_TRADE_GRACE_MS && guard++ < 500) {
-          w.lastBar = {
-            time: w.lastBar.time + stepMs,
-            open: w.lastBar.close, high: w.lastBar.close,
-            low: w.lastBar.close, close: w.lastBar.close,
-            volume: 0, synthetic: true
-          };
-          for (const [,sub] of this._subs) if (sub.wsKey === wsKey) this._emit(sub, w);
-        }
       }
     }
 
@@ -599,10 +409,6 @@ const ChartModule = (function () {
   let _lines       = [];
   let _linesReady  = false;
   let _linesPending = false;
-  /* ✅ جديد — راجع رأس الملف #14: يبقى true طالما الودجت حيّ فعلياً
-     (لا يُصفَّر بـclose()، بعكس _linesReady المؤقت الذي يتحكم فقط بإعادة
-     رسم الخطوط أثناء الإخفاء). يُصفَّر فقط عند هدم حقيقي للودجت داخل
-     _initChart، ويُرفَع مجدداً بعد onChartReady. */
   let _widgetReady = false;
 
   /* ══════════ CSS ══════════ */
@@ -742,11 +548,7 @@ const ChartModule = (function () {
     }
   }
 
-  /* ══════════ OVERLAY ══════════
-     ✅ الآن تُلحَق داخل #_tvChartWrap (غلاف يحتوي #_tvC فقط) بدل
-     #chartScreen كاملاً — تغطي منطقة الشارت حصراً، لا الرأس ولا شريط
-     الأصول ولا شريط التداول. أسلوب "شمشة" (shimmer) بروح c.js بدل
-     أيقونة+بار تحميل ثابت. */
+  /* ══════════ OVERLAY ══════════ */
   function _ovrShow(sym) {
     const wrap = document.getElementById('_tvChartWrap');
     if (!wrap) return;
@@ -811,15 +613,56 @@ const ChartModule = (function () {
 
   function _loadLayout() { return _lsGet(LAYOUT_KEY); }
 
-  /* ══════════ ORDER LINES ══════════ */
+  /* ══════════ ORDER LINES ══════════
+     ✅ FIX جوهري — كانت تُرسم عبر chart.createOrderLine() (Order Line
+     Tool)، وهذه موثّقة رسمياً حصراً ضمن منتج "Trading Terminal" —
+     مختلف عن "Advanced Charts"/"Charting Library" العادي المُستضاف
+     فعلياً هنا (chart.kanba.pw/charting_library). النتيجة: النداء لا
+     يرمي أي خطأ ظاهر، لكنه لا يرسم شيئاً على الإطلاق بهذا الترخيص —
+     بالضبط سبب ظهور الخطوط بالنسخة القديمة (Lightweight Charts، بلا
+     أي قيد ترخيص) وغيابها التام هنا رغم نفس منطق الحساب حرفياً.
+     البديل: chart.createShape() بنوع 'horizontal_line' — جزء أساسي من
+     Drawings API متاح في كل نسخ Charting Library/Advanced Charts بلا
+     استثناء وبلا أي ترخيص إضافي. الإزالة عبر chart.removeEntity(id)
+     بدل .remove() القديمة على كائن order line غير الموجود فعلياً.
+  ══════════════════════════════════════════════════════════════ */
   function _clearLines() {
-    _lines.forEach(l => { try { l.remove(); } catch {} });
+    if (!_widget) { _lines = []; return; }
+    let chart;
+    try { chart = _widget.chart(); } catch { _lines = []; return; }
+    _lines.forEach(id => { try { chart.removeEntity(id); } catch {} });
     _lines = [];
   }
 
   function _scheduleLines() {
     if (_linesReady) _execLines();
     else _linesPending = true;
+  }
+
+  /* رسم خط أفقي واحد ثابت (بلا تحديد/حفظ/تراجع من المستخدم) — يغطي كل
+     أنواع الخطوط الخمسة (Entry/TP/SL/Liq/أوامر معلّقة) بنفس الدالة. */
+  function _drawLine(chart, price, text, color, style, textColor) {
+    try {
+      const id = chart.createShape(
+        { time: Math.floor(Date.now() / 1000), price },
+        {
+          shape: 'horizontal_line',
+          text,
+          lock: true,
+          disableSelection: true,
+          disableSave: true,
+          disableUndo: true,
+          zOrder: 'top',
+          overrides: {
+            linecolor: color, linewidth: 1, linestyle: style,
+            showLabel: true, textcolor: textColor || '#fff',
+            horzLabelsAlign: 'right', vertLabelsAlign: 'bottom',
+            bold: true, fontsize: 11,
+          },
+        }
+      );
+      if (id != null) _lines.push(id);
+    } catch (e) { console.warn('[L]', text, e); }
   }
 
   function _execLines() {
@@ -840,36 +683,20 @@ const ChartModule = (function () {
       const pnlCol = pnl >= 0 ? '#00e676' : '#ff3d3d';
 
       if (entD > 0) {
-        try {
-          _lines.push(chart.createOrderLine()
-            .setPrice(entD)
-            .setQuantity(`${isLong ? '▲' : '▼'}  ${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`)
-            .setLineColor(pnlCol).setBodyBorderColor(pnlCol).setBodyBackgroundColor(pnlCol)
-            .setBodyTextColor(pnl >= 0 ? '#000' : '#fff').setLineWidth(1).setLineStyle(0));
-        } catch (e) { console.warn('[L]entry', e); }
+        _drawLine(chart, entD, `${isLong ? '▲' : '▼'}  ${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`,
+                  pnlCol, 0, pnl >= 0 ? '#000' : '#fff');
       }
       if (tpsl.tp) {
         const tpD = _toDisp(_sym, tpsl.tp), tpPnl = (Math.abs(sziOz) * Math.abs(tpsl.tp - entOz)).toFixed(2);
-        try {
-          _lines.push(chart.createOrderLine()
-            .setPrice(tpD).setQuantity(`🎯 TP  +$${tpPnl}`)
-            .setLineColor('#00e8a2').setBodyBorderColor('#00e8a2').setBodyBackgroundColor('#00e8a2')
-            .setBodyTextColor('#000').setLineWidth(1).setLineStyle(2));
-        } catch (e) { console.warn('[L]tp', e); }
+        _drawLine(chart, tpD, `🎯 TP  +$${tpPnl}`, '#00e8a2', 2, '#000');
       }
       if (tpsl.sl) {
         const slD = _toDisp(_sym, tpsl.sl), slPnl = (Math.abs(sziOz) * Math.abs(tpsl.sl - entOz)).toFixed(2);
-        try {
-          _lines.push(chart.createOrderLine()
-            .setPrice(slD).setQuantity(`🛡 SL  -$${slPnl}`)
-            .setLineColor('#ff6a1a').setBodyBorderColor('#ff6a1a').setBodyBackgroundColor('#ff6a1a')
-            .setBodyTextColor('#fff').setLineWidth(1).setLineStyle(2));
-        } catch (e) { console.warn('[L]sl', e); }
+        _drawLine(chart, slD, `🛡 SL  -$${slPnl}`, '#ff6a1a', 2, '#fff');
       }
-      /* ✅ سعر التصفية: يقرأ position.liquidationPx مباشرة من الـAPI أولاً
-         (موثّق رسمياً ضمن clearinghouseState — أدق من أي حساب محلي لأنه
-         محسوب فعلياً من الخادم بكامل تفاصيل الحساب). calcLiqPrice المحلي
-         يبقى فقط احتياطاً نادراً لو غاب الحقل. */
+      /* سعر التصفية: يقرأ position.liquidationPx مباشرة من الـAPI أولاً
+         (موثّق رسمياً ضمن clearinghouseState — أدق من أي حساب محلي).
+         calcLiqPrice المحلي احتياط نادر فقط لو غاب الحقل. */
       try {
         const apiLiqOz = parseFloat(pos.liquidationPx || 0);
         let liqOz = apiLiqOz > 0 ? apiLiqOz : null;
@@ -879,10 +706,7 @@ const ChartModule = (function () {
           liqOz = (typeof calcLiqPrice === 'function') ? calcLiqPrice(entOz, sziOz, eq, aL.cross, aL.lev) : null;
         }
         if (liqOz && liqOz > 0) {
-          _lines.push(chart.createOrderLine()
-            .setPrice(_toDisp(_sym, liqOz)).setQuantity('⚡ تصفية')
-            .setLineColor('#ff3d3d').setBodyBorderColor('#c62828').setBodyBackgroundColor('#c62828')
-            .setBodyTextColor('#fff').setLineWidth(1).setLineStyle(1));
+          _drawLine(chart, _toDisp(_sym, liqOz), '⚡ تصفية', '#ff3d3d', 1, '#fff');
         }
       } catch (e) { console.warn('[L]liq', e); }
       break;
@@ -896,20 +720,14 @@ const ChartModule = (function () {
       if (!px) continue;
       const dispPx = _toDisp(_sym, px), isBuy = o.side === 'B', isTrig = !!o.isTrigger;
       const ot = (o.orderType || '').toLowerCase();
-      let label, color, bg;
+      let label, color, textCol;
       if (isTrig) {
-        if (ot.includes('take profit') || ot.includes('tp')) { label = `🎯 TP ${isBuy ? '▲' : '▼'}`; color = '#00e8a2'; bg = '#00e8a2'; }
-        else if (ot.includes('stop')) { label = `🛡 SL ${isBuy ? '▲' : '▼'}`; color = '#ff6a1a'; bg = '#ff6a1a'; }
-        else { label = `⏹ ${isBuy ? '▲' : '▼'}`; color = '#ffd600'; bg = '#9a8000'; }
-      } else if (isBuy) { label = '📋 شراء'; color = '#00e676'; bg = '#00e676'; }
-      else { label = '📋 بيع'; color = '#ff3d3d'; bg = '#ff3d3d'; }
-      try {
-        _lines.push(chart.createOrderLine()
-          .setPrice(dispPx).setQuantity(label)
-          .setLineColor(color).setBodyBorderColor(color).setBodyBackgroundColor(bg)
-          .setBodyTextColor(bg === '#00e8a2' ? '#000' : '#fff')
-          .setLineWidth(1).setLineStyle(isTrig ? 2 : 0));
-      } catch (e) { console.warn('[L]ord', e); }
+        if (ot.includes('take profit') || ot.includes('tp')) { label = `🎯 TP ${isBuy ? '▲' : '▼'}`; color = '#00e8a2'; textCol = '#000'; }
+        else if (ot.includes('stop')) { label = `🛡 SL ${isBuy ? '▲' : '▼'}`; color = '#ff6a1a'; textCol = '#fff'; }
+        else { label = `⏹ ${isBuy ? '▲' : '▼'}`; color = '#ffd600'; textCol = '#000'; }
+      } else if (isBuy) { label = '📋 شراء'; color = '#00e676'; textCol = '#fff'; }
+      else { label = '📋 بيع'; color = '#ff3d3d'; textCol = '#fff'; }
+      _drawLine(chart, dispPx, label, color, isTrig ? 2 : 0, textCol);
     }
 
     _updatePnlBadge();
@@ -970,11 +788,10 @@ const ChartModule = (function () {
         'mainSeriesProperties.showPriceLine': true,
         'mainSeriesProperties.priceLineColor': '#ff8c42',
         'mainSeriesProperties.priceLineWidth': 1,
-        /* ✅ #18 — ممكَّن عمداً (كان محذوفاً ببند #10 القديم). المصدر
-           الحقيقي لانحراف العدّ التنازلي (ساعة الجهاز الخام) أُصلح
-           فعلياً عبر supports_time+getServerTime أعلاه على الـDatafeed —
-           فلا داعٍ لإخفاء الميزة نفسها؛ إظهارها الآن دقيق ومطابق لسلوك
-           Hyperliquid/TradingView الرسمي، تماماً كالمطلوب. */
+        /* ✅ العدّ التنازلي يعتمد الآن على ساعة المتصفح الافتراضية
+           لـTradingView (supports_time=false بالـDatafeed أعلاه) بدل
+           getServerTime المصحَّح محلياً — راجع تعليق رأس الملف لسبب
+           إزالة تلك الطبقة بالكامل (هي مصدر انحراف الإغلاق المبكر). */
         'mainSeriesProperties.showCountdown': true,
         'scalesProperties.fontSize': scaleFont,
         'scalesProperties.textColor': dark ? '#999' : '#444',
@@ -1014,12 +831,7 @@ const ChartModule = (function () {
     return new window.TradingView.widget(cfg);
   }
 
-  /* ══════════ CHART INIT (full teardown+rebuild) ══════════
-     تُستدعى فقط: أول دخول للشارت إطلاقاً بهذه الجلسة (open() لا تجد
-     ودجت حياً)، فشل تبديل الفترة، أو فشل chart().setSymbol() بتبديل
-     الأصل (راجع switchAssetChart). ترتيب العمليات مهم: _ovrShow أولاً
-     (تُلحَق بـ#_tvChartWrap، sibling لـ#_tvC)، ثم تفريغ #_tvC نفسها —
-     لا تعارض بينهما أبداً لأنهما لم يعودا نفس العنصر. */
+  /* ══════════ CHART INIT (full teardown+rebuild) ══════════ */
   function _initChart(sym, iv, saved) {
     _ovrShow(sym);
     _linesReady = false; _linesPending = false; _widgetReady = false;
@@ -1061,10 +873,7 @@ const ChartModule = (function () {
     });
   }
 
-  /* ══════════ ASSET NAV ══════════
-     ✅ الإدراج الآن نسبة لـ#_tvChartWrap (كان #_tvC مباشرة) — بعد
-     تغليف #_tvC داخل الغلاف الجديد، #_tvC لم يعد child مباشر لـ
-     #chartScreen، فـinsertBefore على المرجع القديم كان سيرمي خطأ. */
+  /* ══════════ ASSET NAV ══════════ */
   function _buildNav() {
     document.getElementById('_tvNav')?.remove();
     const nav = document.createElement('div');
@@ -1092,8 +901,7 @@ const ChartModule = (function () {
     document.querySelectorAll('.tvn-btn').forEach(b => b.classList.toggle('on', b.dataset.sym === sym));
   }
 
-  /* ══════════ TRADE BAR ══════════
-     ✅ الإدراج الآن نسبة لـ#_tvChartWrap (نفس سبب _buildNav أعلاه). */
+  /* ══════════ TRADE BAR ══════════ */
   function _buildTrade() {
     document.getElementById('_tvTrade')?.remove();
     const a = _asset(_sym), defQ = _lsGet('qty_' + _sym) || a.presets?.[0] || 1;
@@ -1136,8 +944,6 @@ const ChartModule = (function () {
     if (!mid) return typeof toast !== 'undefined' && toast('لا يوجد سعر', 'err');
     const midOz = _toOz(_sym, mid), qtyOz = isGr ? qty / TROY : qty;
     const usd = (midOz * qtyOz).toFixed(2), mgn = (midOz * qtyOz / a.lev).toFixed(2);
-    /* ✅ صيغة Cross الحقيقية المشتركة (calcLiqPrice) — معاينة صفقة لم
-       تُفتح بعد، ما فيه position.liquidationPx حقيقي بعد لنقرأه. */
     const sziLiqOz = isBuy ? qtyOz : -qtyOz;
     const eq       = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(0) : 0;
     const liqOz    = (typeof calcLiqPrice === 'function') ? calcLiqPrice(midOz, sziLiqOz, eq, a.cross, a.lev) : null;
@@ -1204,10 +1010,7 @@ const ChartModule = (function () {
     }
   }
 
-  /* ══════════ DOM ══════════
-     ✅ #_tvChartWrap غلاف جديد يحتوي #_tvC فقط — TradingView يملك
-     محتوى #_tvC بالكامل (innerHTML يُفرَّغ ويُعاد بناؤه بكل _initChart)،
-     والـoverlay تعيش كـsibling له بنفس الغلاف، فلا تعارض بينهما أبداً. */
+  /* ══════════ DOM ══════════ */
   function _ensureScreen() {
     const scr = document.getElementById('chartScreen');
     if (!scr || document.getElementById('_tvHdr')) return;
@@ -1277,13 +1080,6 @@ const ChartModule = (function () {
     _ensureScreen();
     document.getElementById('chartScreen')?.classList.remove('hidden');
 
-    /* ✅ FIX — لا هدم/إعادة بناء الودجت لو كان حياً وجاهزاً أصلاً من فتحة
-       سابقة بنفس الجلسة (راجع رأس الملف #14). close() لا يهدم الودجت
-       إطلاقاً — فقط يُخفي الشاشة — فإعادة فتحه هنا كانت تُعيد التحميل
-       الكامل بلا داعٍ (طلب REST تاريخي جديد + إعادة بناء iframe/canvas).
-       الآن: إظهار فوري بلا أي تحميل، مع مسار setSymbol السريع لو تغيّر
-       الرمز. البناء الكامل (_initChart) يبقى فقط لأول فتح بهذه الجلسة،
-       أو كتراجع تلقائي لو فشل setSymbol. */
     if (_widget && _widgetReady) {
       _linesReady = true;
       if (targetSym !== _sym) {
@@ -1314,8 +1110,6 @@ const ChartModule = (function () {
     _restartLiveClock();
   }
 
-  /* ✅ جديد — عزل مؤقّت الساعة الحيّة (سعر/PnL/خطوط) بدالة واحدة تُعاد
-     من كلا مساري open() (إعادة فتح سريعة بلا تحميل، أو بناء كامل). */
   function _restartLiveClock() {
     clearInterval(_clockTimer);
     _clockTimer = setInterval(() => {
@@ -1351,17 +1145,6 @@ const ChartModule = (function () {
     }
   }
 
-  /* ══════════ ✅ تبديل الأصل — بدون هدم/إعادة بناء الودجت ══════════
-     نفس فلسفة switchInterval أعلاه: chart().setSymbol() مدعومة رسمياً
-     بـTradingView Advanced Charts وتبدّل الرمز على نفس نسخة الودجت
-     الحيّة، بلا أي هدم لـiframe/canvas ولا "شاشة سوداء" تغطي الرأس/
-     شريط الأصول/شريط التداول — فقط #_tvChartWrap تُظهر حالة تحميل
-     قصيرة ريثما TradingView يجهّز بيانات الرمز الجديد.
-     ⚠️ ملف charting_library.d.ts غير متاح لي بنسخة المشروع الحالية
-     للتحقق من التوقيع الدقيق حرفياً من المصدر — استُخدم الشكل الأكثر
-     توثيقاً (symbol, callback) بثقة عالية، مع تراجع تلقائي كامل
-     (_initChart) لو فشلت لأي سبب. لا كسر صامت ممكن — راقب الـconsole
-     أول استخدام: أي "setSymbol failed" يعني رجع للطريقة القديمة تلقائياً. */
   function switchAssetChart(sym) {
     if (!_visible || sym === _sym) return;
     _doAutoSave();
