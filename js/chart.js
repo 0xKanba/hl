@@ -1,1537 +1,933 @@
-/* ═══════════════════════════════════════════════════════════════════
-   chart.js — Hyperliquid TradingView Advanced Charts
-   Complete rewrite — correct Datafeed API, exact UTC timestamps,
-   seamless history+realtime sync, clean weekly aggregation,
-   isolated per-asset state, zero memory leaks.
+/* ═══════════════════════════════════════════════════════════════
+   HL Trade · chart.js v7.3 (LEGACY — Lightweight Charts, NOT the file
+   referenced by index.html today. index.html loads the TradingView
+   Advanced Charts version already patched separately — see
+   chart.js / getServerTime / _calibrateClock discussion.)
 
-   CRITICAL CORRECTIONS:
-   1. _normTime case '1' had d.getUTCFullYear() twice (month slot),
-      causing 1m candles to jump ~168 years into the future.
-   2. Hyperliquid t is OPEN time in BOTH REST candleSnapshot AND
-      WS candle updates. Removed all _ivMs subtraction logic.
-   3. Realtime lastBar cache merges correctly without drift.
-   4. ✅ Liquidation price everywhere in this file now routes through
-      position.liquidationPx directly (موثّق رسمياً ضمن clearinghouseState)
-      عند وجود صفقة مفتوحة فعلاً، ويلجأ لـpositions.js:calcLiqPrice فقط
-      كاحتياط نادر أو لمعاينة صفقة لم تُفتح بعد (chart.js:_showCf).
-   5. ✅ إصلاح "الشاشة كلها تتجمّد عند تبديل الأصل" — شاشة التحميل
-      (_tvOvr) كانت child مباشر لـ#chartScreen كاملاً (الرأس+النافبار+
-      شريط التداول+الشارت)، والـCSS بتاعتها position:absolute;inset:0
-      كانت تتمدد لتغطي كل شيء لأن #chartScreen هو الجد المُموضَع. الآن
-      غلاف مستقل #_tvChartWrap يحتوي #_tvC فقط، وoverlay sibling له
-      بداخله — يغطي منطقة الشارت حصراً، الباقي يبقى حياً وتفاعلياً.
-   6. ✅ تبديل الأصل (switchAssetChart) يستخدم chart().setSymbol()
-      أولاً (لا هدم/بناء الودجت بالكامل) — يتراجع لـ_initChart الكاملة
-      فقط لو فشلت (try/catch)، فلا كسر صامت لو اختلف توقيع المكتبة.
-   7. ✅ إصلاح جوهري بالشمعة الأسبوعية الحيّة — dailyMap كانت تبدأ فارغة
-      بكل _openWs جديد ولا تُبذر من التاريخ المجلوب فعلاً، فأول تحديث حي
-      بعد الفتح يعيد حساب الأسبوع من يوم واحد فقط (يمحو الأيام الأسبق).
-      الآن تُبذر فوراً من أيام الأسبوع الحالي المنقضية، بالتوازي مع
-      الاشتراك الحي (لا تأخير عليه).
-   8. ✅ pollAccount (دالة محذوفة من المشروع منذ تحويل الحساب لـpush-
-      based) كانت مُستدعاة هنا بحماية typeof — صُححت لـ_multiPoll
-      الحقيقية (trading.js) لتناسق مع بقية المشروع.
-   9. ✅ NEW — خطأ تراكم الحجم (volume) بالشمعة الحيّة قيد التكوّن:
-      Candle.v (موثّق رسمياً بمخطط websocket/subscriptions) هو إجمالي
-      تراكمي لهذي الشمعة حتى الآن، لا دلتا لكل رسالة WS. الكود كان
-      يعمل `+=` (تراكم فوق تراكم) بدل `=` (استبدال) — يُضاعف حجم كل
-      شمعة حيّة مع كل تحديث أثناء تكوّنها. صُححت.
-   10. ✅ NEW — حُذفت mainSeriesProperties.showCountdown (كانت true).
-       ميزة تعداد تنازلي داخلية بـTradingView تُحسَب من ساعة المتصفح
-       المحلية، لا من بياناتنا — أقرب مرشّح لإحساس "الرسم متقدم عن
-       الواقع بثانية" الذي وُصِف، بلا أي علاقة بصحة بيانات الشموع نفسها.
-       ⚠️ مُتجاوَز ببند #18 أدناه: التشخيص هنا كان صحيحاً بالسبب (ساعة
-       الجهاز الخام) لكن الحل كان إخفاء العرَض بدل علاج السبب — أُعيد
-       تفعيل الميزة بعد تصحيح مصدر الوقت نفسه، بدل حرمان المستخدم منها.
-   11. ✅ NEW — getBars: أُزيل هامش +5000ms المستقبلي بحد toMs (كان
-       Date.now()+5000) — الآن Date.now() المصحَّح فقط (راجع #17)، بلا
-       أي سماحية لطلب بيانات أبعد من اللحظة الحالية الفعلية من جهتنا.
-   12. ❌ REVERTED (كانت هنا سابقاً) — محاولة سابقة "قيّدت" هوية bucket
-       الشمعة الحيّة بساعة الجهاز المحلي (Date.now())، ظناً أن candle.t
-       القادم من الخادم يسبق الساعة المحلية بجزء من ثانية. بعد مراجعة
-       التوثيق الرسمي مباشرة (hyperliquid-docs/api/websocket/subscriptions
-       + info-endpoint) لا يوجد أي أساس لهذا الافتراض — Candle.t/T
-       (فتح/إغلاق) قادمان من الخادم وهما المرجع الوحيد الصحيح، تماماً
-       مثل أي منصة تداول حقيقية (Binance، TradingView نفسها لا تستخدم
-       ساعة الجهاز لتحديد حدود الشمعة). المشكلة الفعلية بهذا "الإصلاح":
-       لو ساعة جهاز المستخدم متأخرة ولو بضع ثوانٍ (شائع على أندرويد بلا
-       مزامنة NTP دقيقة) كان الكود يرفض بيانات الشمعة الجديدة الحقيقية
-       ويدمجها قسراً داخل الشمعة القديمة — فساد بيانات فعلي (OHLC خاطئ)،
-       لا مجرد خلل بصري. أُزيل بالكامل (كان هنا وفي _tickLiveBars/_now()).
-       راجع #15 أدناه للتصميم الصحيح البديل.
-   13. (رقم محجوز فارغ عمداً بعد إزالة النبضة الاصطناعية المرتبطة بـ#12
-       السابقة — لا حاجة لإعادة ترقيم بقية القائمة).
-   14. ✅ NEW — "لا تحميل مزعج بكل مرة": open() كانت تهدم وتُعيد بناء
-       الودجت بالكامل (REST تاريخي جديد + إعادة بناء iframe/canvas)
-       في كل استدعاء، حتى لو المستخدم فقط أغلق شاشة الرسم وأعاد فتحها
-       فوراً لنفس الجلسة — رغم أن close() أصلاً لا تهدم الودجت، فقط
-       تُخفي الشاشة. الآن: لو الودجت حيّ وجاهز فعلاً (_widgetReady)،
-       open() تكتفي بإظهار الشاشة (ولو الرمز مختلف، تستخدم مسار
-       switchAssetChart السريع أدناه) — بلا أي إعادة تحميل. البناء
-       الكامل (_initChart) يبقى فقط لأول فتح إطلاقاً بهذه الجلسة، أو
-       كتراجع تلقائي لو فشل setSymbol. ⚠️ Trade-off واعٍ: اشتراك الشمعة
-       الحي (WS) يبقى نشطاً بالخلفية طالما الودجت حيّ، حتى والشاشة
-       مخفية — تكلفته ضئيلة جداً (اتصال واحد مشترك أصلاً عبر ws.js)،
-       وهذا بالضبط ثمن "إعادة فتح فورية بلا تحميل" المطلوبة صراحة.
-   15. ✅ التصميم البديل الصحيح لـ#12 الملغى: "الوقت" (استمرارية الرسم
-       بلا تداول عبر _advanceTime) مستقل تماماً عن "السعر" (OHLCV يأتي
-       حصراً من candle.t للخادم، بلا أي تدخل من ساعة الجهاز). مُفصَّل
-       بالكامل بتعليقات RES_DURATION_MS/_advanceTime أدناه.
-   16. ✅ نقطة استيعاب موحّدة وحيدة لكل تحديث شمعة حي: _ingestCandle —
-       مفصّلة عند تعريفها أدناه (حقيقي يفوز دوماً على مصطنع/synthetic).
-   17. ✅ NEW — FIX جوهري: معايرة ذاتية لساعة الجهاز (clock offset) ضد
-       شموع حقيقية واردة فعلاً من الخادم. يُصلِح بلاغاً حقيقياً بالإنتاج:
-       "الساعة الفعلية 13:59:59 لكن الرسم يفتح شمعة 14:01 بدل 14:00
-       بالضبط". السبب الجذري: _advanceTime (استمرارية الرسم بلا تداول،
-       بند #15) كانت تعتمد حصراً على Date.now() الخام لجهاز المستخدم —
-       أي انحراف بساعة الجهاز (سريعة أو بطيئة، شائع بأندرويد بلا NTP
-       دقيق — نفس فئة المشكلة المذكورة بتعليقات session.js/c.js) يجعلها
-       تفتح الشمعة "التالية" بلحظة خاطئة تماماً. هنا كانت الساعة متقدّمة
-       فدفعت الكود لتوليد شمعات اصطناعية أسرع من الواقع الفعلي.
-       الحل (_calibrateClock/_correctedNow أدناه): كل شمعة حقيقية واردة
-       فعلاً (candle.t الموثّق رسمياً بـwebsocket/subscriptions) تُثبِّت
-       مرجعاً موثوقاً — الخادم للتو أكّد أن "الآن الحقيقي" يقع داخل هذا
-       الدلو الزمني [t, t+stepMs) — فتُعاد محاذاة إزاحة محلية (رفعاً لو
-       الساعة متأخرة، خفضاً لو متقدّمة) تُبقي (Date.now()+offset) داخل
-       هذا النطاق المؤكَّد دوماً. معايرة مستمرة وذاتية الإصلاح، بلا أي
-       حاجة لنقطة نهاية وقت خادم منفصلة (غير موجودة أصلاً بتوثيق
-       Hyperliquid الرسمي). تُستخدَم فقط بـ_advanceTime وحد getBars
-       العلوي — لا تُستخدَم إطلاقاً لقبول/رفض أي بيانات سعر حقيقية (نفس
-       مبدأ #12 الملغى تماماً — بيانات الخادم تبقى المرجع الوحيد للسعر).
-       ⚠️ ثغرة تبقّت بعد هذا البند وحده (سبب اكتشاف #18 أدناه): هذا
-       التصحيح كان محصوراً داخل HyperliquidDatafeed فقط (_advanceTime +
-       حد getBars) — لا يصل أبداً لمكتبة TradingView نفسها، التي تحسب
-       عدّاد التنازل (Countdown) بجانب آخر سعر بمقياسها اعتماداً على
-       ساعتها الداخلية الخاصة (راجع #18 للحل الكامل).
-   18. ✅ FIX جوهري — عدّاد التنازل (Countdown) بجانب آخر سعر على مقياس
-       السعر كان يُحسَب داخل مكتبة TradingView نفسها اعتماداً حصراً على
-       ساعة الجهاز الخام (Date.now())، لأن supports_time كانت false ولا
-       يوجد أي getServerTime على الـDatafeed — فالمكتبة لا تملك أي طريق
-       لمعرفة "الآن" المصحَّح الذي يحسبه _correctedNow()/_calibrateClock
-       (بند #17) أصلاً بهذا الملف؛ ذاك التصحيح كان محصوراً داخلياً بـ
-       _advanceTime وحد getBars العلوي فقط، ولا يصل أبداً لمكتبة
-       TradingView نفسها. أي انحراف بساعة الجهاز (حتى جزء من ثانية —
-       شائع بلا NTP دقيق، وبالضبط نفس فئة العطل المذكورة بتعليقات
-       session.js/c.js) كان يتسرّب مباشرة لنص العدّ التنازلي المعروض:
-       "19" بدل "20" باللحظة التي يُفترض أن يبدأ فيها العدّ من "20".
-       موثَّق رسمياً بتوثيق TradingView (Datafeed API → getServerTime:
-       "consider implementing getServerTime to make sure the countdown
-       is correct" — يُستدعى فقط لو supports_time=true، ويُستخدم حصراً
-       لعرض Countdown على مقياس السعر، وللدقات intraday فقط رسمياً).
-       الإصلاح: supports_time:true + getServerTime(callback) يُعيد
-       Math.floor(_correctedNow()/1000) (ثوانٍ صحيحة بلا مللي ثانية —
-       بالضبط الصيغة الموثَّقة رسمياً). كذلك أُضيفت معايرة فورية من آخر
-       شمعة REST حقيقية داخل getBars (بدل انتظار أول تحديث WS حي فقط
-       كما كان بند #17 يفعل) — تُضيّق نافذة "غير مُعايَر بعد" عند أول
-       فتح/تبديل للرسم، بالضبط اللحظات التي وُصِف الخلل بالظهور بها
-       ("أحياناً"). وأُعيد mainSeriesProperties.showCountdown:true (بند
-       #10 أعلاه كان يُخفي العرض بدل إصلاح مصدره الحقيقي — الآن المصدر
-       مُصحَّح فعلياً فلا داعٍ لإخفاء الميزة، إظهارها دقيق ومطابق لسلوك
-       Hyperliquid/TradingView الرسمي).
-═══════════════════════════════════════════════════════════════════ */
+   ⚠️ هذا ملف قديم (v7.2 الأصلي، يعتمد على Lightweight Charts مباشرة —
+   لا TradingView) رفعه المستخدم كمثال لإثبات أن مشكلة انحراف العدّ
+   التنازلي "1 ثانية" ليست خاصة بمكتبة TradingView إطلاقاً — بل تظهر
+   بنفس الحدّة في أي تنفيذ من الصفر، لأن السبب الجذري ليس بمكتبة
+   بعينها بل بمصدر "الآن" المستخدم لحساب الوقت المتبقي.
+
+   ✅ FIX جوهري (v7.2 → v7.3) — العدّ التنازلي كان يُحسَب بالكامل من
+      Date.now() الخام بلا أي تصحيح على الإطلاق (راجع startClock
+      بالأسفل، السطر القديم:
+        const diff = Math.ceil(Date.now() / ivMs) * ivMs - Date.now();
+      ). أي انحراف بساعة الجهاز (شائع جداً بلا مزامنة NTP دقيقة، خصوصاً
+      أندرويد) يظهر مباشرة كفرق ثانية أو أكثر بالنص المعروض — بالضبط
+      نفس فئة العطل الموصوفة: "19 بدل 20 باللحظة التي يُفترض أن تبدأ
+      فيها من 20". لا علاقة لهذا بأي مكتبة رسم بياني؛ هذا الملف يثبت
+      ذلك حرفياً — بلا TradingView وبلا أي getServerTime، نفس العطل
+      موجود بنفس الآلية بالضبط.
+      الحل: أُضيفت معايرة ذاتية للساعة (_correctedNow/_calibrateClock)
+      — بالضبط نفس المبدأ المطبَّق بملف الإنتاج الحالي (TradingView،
+      Advanced Charts) — تُشتقّ من كل شمعة حقيقية واردة فعلاً من
+      الخادم: عند أول تحميل REST (fetchCandles→load) وعند كل تحديث حي
+      عبر الـWebSocket المباشر (wsConnect). عدّاد التنازل بـstartClock
+      يستخدم الآن _correctedNow() بدل Date.now() الخام — بلا أي تأثير
+      على قبول/رفض بيانات السعر نفسها (تلك تبقى دوماً من candle.t
+      للخادم فقط)، فقط على "الآن" المستخدم لحساب الوقت المتبقي.
+
+   ✅ اليوم يبدأ 00:00 UTC+3 (منتصف الليل فعلياً)
+   ✅ Crosshair legend: سعر + تاريخ + وقت كامل
+   ✅ لا خط سعر أفقي — فقط label على المحور
+   ✅ العد التنازلي بجانب label السعر (أسفل يمين الرسم)
+   ✅ زر ↺ إعادة ضبط بدون bug
+   ✅ خطوط Entry / TP / SL / Liq
+═══════════════════════════════════════════════════════════════ */
 
 const ChartModule = (function () {
-  'use strict';
 
-  /* ══════════ CONSTANTS ══════════ */
-  const HL_API      = 'https://api.hyperliquid.xyz';
-  const TROY        = 31.1035;
-  const MIN_TIME    = 1577836800000;          // 2020-01-01 00:00 UTC
-  const LS_PREFIX   = 'hl_tv_';
-  const LAYOUT_KEY  = 'layout_v1';
-  /* ✅ راجع رأس الملف #15 — "الوقت" مستقل تماماً عن "السعر". هذه
-     الثوابت الثلاثة تُشغِّل آلية استمرار الوقت بلا أي علاقة بتوقيت وصول
-     رسائل WS (raw price data) — لا تُستخدَم أبداً لرفض أو تقييد بيانات
-     حقيقية قادمة من الخادم (ذاك بالضبط الخطأ في محاولة سابقة، راجع #12
-     المُلغى). */
-  // مدة كل دقة زمنية intraday بالمللي ثانية — اليومي/الأسبوعي مستثنيان
-  // عمداً من كل آلية استمرار الوقت أدناه (غير متأثرين بالمشكلة أصلاً).
-  const RES_DURATION_MS = {
-    '1':60000, '3':180000, '5':300000, '15':900000, '30':1800000,
-    '60':3600000, '120':7200000, '240':14400000
+  const HL_API = 'https://api.hyperliquid.xyz';
+  const HL_WS  = 'wss://api.hyperliquid.xyz/ws';
+  const UTC3   = 3 * 3600; // ثواني
+
+  const RANGES = {
+    '1m':  90   * 3600000,
+    '5m':  360  * 3600000,
+    '15m': 900  * 3600000,
+    '1h':  3600 * 3600000,
+    '4h':  14400* 3600000,
+    '1d':  43200* 3600000,
   };
-  // هامش أمان بعد نهاية مدة الشمعة الكاملة قبل اعتبارها "بلا تداول
-  // فعلاً" وتمديد الرسم بشمعة استمرارية — يمتص أي تأخير شبكة/معالجة
-  // طبيعي (عادة أجزاء ثانية) بسخاء، بلا انتظار محسوس للمستخدم.
-  const NO_TRADE_GRACE_MS = 2000;
-  // فحص دوري مستقل تماماً عن توقيت وصول أي رسالة WS ("لا يهتم لوقت
-  // استدعاءات" — طلب صريح) — الوقت يتقدّم بذاته وفق هذه النبضة فقط.
-  const TIME_CHECK_MS = 1000;
+  const IV_SPACING = { '1m':4, '5m':5, '15m':6, '1h':7, '4h':9, '1d':13 };
 
-  const TV_RESOLUTIONS = ['1','3','5','15','30','60','120','240','1D','1W'];
+  let _chart      = null;
+  let _series     = null;
+  let _entryLines = [];
+  let _tpLine     = null;
+  let _slLine     = null;
+  let _liqLine    = null;
+  let _candles    = [];
+  let _ws         = null;
+  let _wsTimer    = null;
+  let _visible    = false;
+  let _sym        = 'CL';
+  let _interval   = '1h';
+  let _resizeObs  = null;
+  let _lastClose  = 0;
+  let _clockTimer = null;
+  let _dayTimer   = null;
+  let _cdTimer    = null;   // countdown overlay timer
+  let _gestInit   = false;
+  /* ✅ NEW (v7.3) — إزاحة ساعة الجهاز (ms) معايَرة ذاتياً ضد شموع
+     حقيقية واردة فعلاً من الخادم. راجع _correctedNow/_calibrateClock
+     أدناه للتفصيل الكامل. صفر افتراضياً، تُعاير بسرعة من أول شمعة REST
+     أو WS حقيقية تصل. */
+  let _clockOffsetMs = 0;
 
-  const TV_TO_HL = {
-    '1':'1m','3':'3m','5':'5m','15':'15m','30':'30m',
-    '60':'1h','120':'2h','240':'4h','1D':'1d','1W':'1d'
-  };
-
-  const NAV_ASSETS = [
-    { sym:'CL',     ar:'النفط',     icon:'🛢'  },
-    { sym:'GOLD',   ar:'الذهب',     icon:'🟡'  },
-    { sym:'XAU',    ar:'غرام ذهب',  icon:'⚖️'  },
-    { sym:'SILVER', ar:'الفضة',     icon:'⚪'  },
-    { sym:'NQ',     ar:'ناسداك',    icon:'📊'  },
-  ];
-
-  /* ══════════ HELPERS ══════════ */
-  const _lsGet = k => { try { return JSON.parse(localStorage.getItem(LS_PREFIX+k)); } catch { return null; } };
-  const _lsSet = (k,v) => { try { localStorage.setItem(LS_PREFIX+k, JSON.stringify(v)); } catch {} };
-
-  /* ✅ ساعة الجهاز الخام — تُستخدَم فقط كمُدخل أوّلي لـ_correctedNow()
-     (راجع #17). ⚠️ ممنوع استخدامها مباشرة لرفض أو تقييد أي بيانات
-     حقيقية قادمة من candle.t/T (راجع رأس الملف #12 المُلغى و#15 —
-     بيانات الخادم دائماً هي المرجع للسعر، هذه فقط للوقت المستقل عنها). */
-  const _now = () => Date.now();
-
-  const _asset = s =>
-    (typeof ASSETS !== 'undefined' && ASSETS[s]) ||
-    { pxDp:2, szDp:2, name:s, icon:'📊', unit:'', lev:10, idx:0, cross:true, coin:`xyz:${s}` };
-
-  const _coin = s => {
-    if (s === 'XAU') return 'xyz:GOLD';
-    const a = _asset(s);
-    return a.coin || `xyz:${s}`;
-  };
-
-  const _isGram = s => s === 'XAU';
-  const _toDisp = (s,v) => _isGram(s) ? v / TROY : v;
-  const _toOz   = (s,v) => _isGram(s) ? v * TROY : v;
-  const _dark   = () => (document.documentElement.getAttribute('data-theme')||'dark')==='dark';
-
-  /* ══════════ UTC TIME NORMALIZATION ══════════
-     Every timestamp is snapped to the exact interval boundary via
-     floor (never rounds up/forward — verified case by case). No
-     drift, no timezone shifts, no manual compensation.
-     FIXED: case '1' used d.getUTCFullYear() for month — corrected
-            to d.getUTCMonth().                                   */
-  function _normTime(ms, res) {
-    const d = new Date(ms);
-    switch (res) {
-      case '1':
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes());
-      case '3': {
-        const m = d.getUTCMinutes();
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), m - (m % 3));
-      }
-      case '5': {
-        const m = d.getUTCMinutes();
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), m - (m % 5));
-      }
-      case '15': {
-        const m = d.getUTCMinutes();
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), m - (m % 15));
-      }
-      case '30': {
-        const m = d.getUTCMinutes();
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), m - (m % 30));
-      }
-      case '60':
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours());
-      case '120': {
-        const h = d.getUTCHours();
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h - (h % 2));
-      }
-      case '240': {
-        const h = d.getUTCHours();
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h - (h % 4));
-      }
-      case '1D':
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-      case '1W': {
-        const dow = d.getUTCDay();                 // 0=Sun … 6=Sat
-        const back = dow === 0 ? 6 : dow - 1;      // days since Monday
-        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - back);
-      }
-      default:
-        return ms;
-    }
-  }
-
-  const _weekStart = ms => _normTime(ms, '1W');
-
-  /* ══════════ DATAFEED ══════════
-     Single class implementing the exact TradingView Datafeed API.
-     Per-subscriber lastBar cache, deduplicated emissions, weekly
-     aggregation from daily WS, clean destroy().                    */
-  class HyperliquidDatafeed {
-    constructor() {
-      this._subs = new Map();      // uid  → {sym,res,callback,wsKey,lastBar}
-      this._ws   = new Map();      // wsKey → {unsub,lastBar,dailyMap}
-      /* ✅ جديد #17 — إزاحة الساعة (clock offset) بين جهاز المستخدم
-         والخادم، محسوبة ذاتياً من بيانات شموع حقيقية فقط (candle.t
-         الموثّق رسمياً). تُستخدَم حصراً بـ_correctedNow() أدناه، ولا
-         تؤثر أبداً على قراءة/قبول أي بيانات حقيقية قادمة من الخادم —
-         نفس مبدأ #12 الملغى، البيانات الحقيقية دائماً الأصدق. تُعاد
-         للصفر مع كل نسخة datafeed جديدة (كل _initChart) — تُعايَر من
-         جديد بسرعة من أول شمعة حية حقيقية تصل، وأيضاً فوراً من آخر
-         شمعة REST تاريخية عند getBars (راجع #18 — لا تنتظر أول WS). */
-      this._clockOffsetMs = 0;
-      /* ✅ راجع رأس الملف #15 — نبضة "الوقت" مستقلة تماماً عن "السعر":
-         تعمل دائماً كل TIME_CHECK_MS بغضّ النظر عن وصول أي بيانات سعر
-         حقيقية من عدمه. تُعاد لكل نسخة datafeed جديدة، وتُلغى في
-         destroy() أدناه. */
-      this._timeTick = setInterval(() => this._advanceTime(), TIME_CHECK_MS);
-    }
-
-    onReady(cb) {
-      setTimeout(() => cb({
-        supported_resolutions: TV_RESOLUTIONS,
-        currency_codes: ['USD'],
-        exchanges: [{value:'HL',name:'Hyperliquid',desc:'Hyperliquid Perps'}],
-        symbols_types: [{name:'Perp',value:'perp'}],
-        supports_search: false,
-        supports_group_request: false,
-        supports_marks: false,
-        supports_timescale_marks: false,
-        /* ✅ #18 — كانت false. مفعَّلة الآن لتمكين getServerTime أدناه —
-           الآلية الرسمية الوحيدة الموثَّقة بـTradingView لتصحيح عدّاد
-           التنازل (Countdown) ضد انحراف ساعة الجهاز المحلي. بلا هذا
-           العلم، المكتبة تتجاهل getServerTime بالكامل ولا تستدعيه أبداً
-           (موثّق رسمياً: "This function is called if the supports_time
-           configuration flag is true..."). */
-        supports_time: true,
-      }), 0);
-    }
-
-    searchSymbols() {}
-
-    /* ✅ #18 — جديد: يُستدعى من TradingView فقط لأن supports_time=true
-       أعلاه. نُعيد نفس الساعة المصحَّحة (_correctedNow، بند #17) التي
-       تُعايَر ذاتياً ضد كل شمعة حقيقية واردة فعلاً من الخادم — لا الساعة
-       الخام لجهاز المستخدم. بهذا تحسب مكتبة TradingView عدّاد التنازل
-       (Countdown) بجانب آخر سعر ضد "الآن" الموثوق فعلياً، بدل "الآن"
-       الخام المحلي الذي قد ينحرف ثانية أو أكثر بلا مزامنة NTP دقيقة —
-       هذا بالضبط ما كان يُنتج "19 بدل 20" عند بداية العدّ.
-       الصيغة إلزامية وموثَّقة رسمياً: ثوانٍ صحيحة (Unix seconds) بلا
-       كسور ولا مللي ثانية — "The time is provided without
-       milliseconds. Example: 1445324591." */
-    getServerTime(callback) {
-      try { callback(Math.floor(this._correctedNow() / 1000)); }
-      catch { callback(Math.floor(Date.now() / 1000)); }
-    }
-
-    resolveSymbol(name, onOk, onErr) {
-      const a = _asset(name);
-      setTimeout(() => onOk({
-        name, ticker:name, description:a.name||name, type:'crypto', session:'24x7',
-        timezone: 'Etc/UTC',          // data timestamps are pure UTC
-        minmov: 1,
-        pricescale: Math.pow(10, a.pxDp||2),
-        has_intraday: true,
-        has_daily: true,
-        has_weekly_and_monthly: true,
-        intraday_multipliers: ['1','3','5','15','30','60','120','240'],
-        supported_resolutions: TV_RESOLUTIONS,
-        volume_precision: 4,
-        data_status: 'streaming',
-        exchange: 'Hyperliquid',
-        listed_exchange: 'Hyperliquid',
-        format: 'price',
-        currency_code: 'USD',
-      }), 0);
-    }
-
-    async getBars(symbolInfo, resolution, periodParams, onHistory, onError) {
-      const sym = symbolInfo.name;
-      const coin = _coin(sym);
-      const isW = resolution === '1W';
-      const hlIv = isW ? '1d' : (TV_TO_HL[resolution] || '1h');
-      const fromMs = Math.max(periodParams.from * 1000, MIN_TIME);
-      /* ✅ حد صارم — راجع تعليق رأس الملف #11: بلا أي هامش مستقبلي من
-         جهتنا (كان +5000ms سابقاً). الآن يستخدم الساعة المصحَّحة
-         (_correctedNow، راجع #17) بدل Date.now() الخام — لا فرق عملي
-         هنا طالما الإزاحة صغيرة، لكن يمنع أي تناقض نظري لو طُلبت بيانات
-         حديثة جداً بينما الإزاحة تعوّض ساعة جهاز متأخرة. */
-      const toMs   = Math.min(periodParams.to   * 1000, this._correctedNow());
-
-      if (fromMs >= toMs) { onHistory([], {noData:true}); return; }
-
-      try {
-        const raw = await this._fetchRest(coin, hlIv, fromMs, toMs);
-        const bars = isW ? this._aggWeekly(raw) : raw;
-
-        if (!bars.length) { onHistory([], {noData:true}); return; }
-
-        // Seed WS lastBar so the first realtime tick merges instead of dupes
-        const wk = this._key(coin, isW ? '1d' : hlIv);
-        const s = this._ws.get(wk);
-        if (s) s.lastBar = { ...bars[bars.length-1], synthetic:false }; // بيانات حقيقية من REST
-
-        /* ✅ #18 — معايرة فورية من آخر شمعة REST حقيقية، بدل انتظار
-           أول تحديث WS حي فقط (كان الوضع السابق ببند #17). تُضيّق نافذة
-           "غير مُعايَر بعد" تماماً عند أول فتح/تبديل للرسم — أكثر لحظة
-           عرضة لظهور انحراف العدّ التنازلي، لأنه لا توجد أي معايرة
-           سابقة بعد قبل وصول أول تحديث حي. RES_DURATION_MS[resolution]
-           يكون undefined لـ1D/1W فتتجاهله _calibrateClock تلقائياً (نفس
-           استثناء بند #17 — هامش خطئهما أياماً لا ثواني، غير معنيين
-           بهذا الإصلاح أصلاً). */
-        this._calibrateClock(bars[bars.length-1].time, RES_DURATION_MS[resolution]);
-
-        onHistory(bars, {noData:false});
-      } catch (e) {
-        console.error('[DF getBars]', e);
-        onError(e.message);
-      }
-    }
-
-    subscribeBars(symbolInfo, resolution, onRealtime, uid, onReset) {
-      const sym = symbolInfo.name;
-      const coin = _coin(sym);
-      const isW = resolution === '1W';
-      const hlIv = isW ? '1d' : (TV_TO_HL[resolution] || '1h');
-      const wsKey = this._key(coin, hlIv);
-
-      this._subs.set(uid, { sym, resolution, callback: onRealtime, wsKey, lastBar: null });
-
-      if (!this._ws.has(wsKey)) this._openWs(wsKey, coin, hlIv);
-    }
-
-    unsubscribeBars(uid) {
-      const sub = this._subs.get(uid);
-      if (!sub) return;
-      this._subs.delete(uid);
-
-      let need = false;
-      for (const [,s] of this._subs) if (s.wsKey === sub.wsKey) { need = true; break; }
-      if (!need) {
-        const w = this._ws.get(sub.wsKey);
-        if (w) { try { w.unsub(); } catch {} this._ws.delete(sub.wsKey); }
-      }
-    }
-
-    destroy() {
-      clearInterval(this._timeTick);
-      for (const [,w] of this._ws) { try { w.unsub(); } catch {} }
-      this._ws.clear();
-      this._subs.clear();
-    }
-
-    /* ── internals ── */
-    _key(coin, res) { return `${coin}:${res}`; }
-
-    /* ✅ جديد #17 — الوقت المصحَّح: Date.now() الخام + إزاحة معايرة
-       ذاتية (_clockOffsetMs). يُستخدَم فقط لتقدّم "الوقت" (استمرارية
-       الرسم بلا تداول، _advanceTime)، حد getBars العلوي، وعدّاد التنازل
-       المعروض داخل TradingView عبر getServerTime أعلاه (#18) — أبداً
-       لقبول أو رفض بيانات حقيقية (تلك تأتي من candle.t للخادم مباشرة،
-       بلا أي وسيط زمني محلي). */
-    _correctedNow() { return Date.now() + this._clockOffsetMs; }
-
-    /* ✅ جديد #17 — معايرة الإزاحة من كل شمعة حقيقية (غير مصطنعة) تصل
-       فعلاً من الخادم عبر _ingestCandle، وأيضاً من آخر شمعة REST
-       تاريخية عند getBars (راجع #18). سبب الإصلاح مفصَّل برأس الملف
-       (بند 17): تقدّم الشمعة الاصطناعية بـ_advanceTime كان يعتمد حصراً
-       على Date.now() الخام لجهاز المستخدم؛ أي انحراف بساعة الجهاز
-       (سريعة أو بطيئة) يجعل الشمعة "التالية" تُفتَح قبل أو بعد لحظتها
-       الحقيقية — بالضبط عرض "الساعة الفعلية 13:59:59 لكن يفتح 14:01
-       بدل 14:00" حين تكون ساعة الجهاز متقدّمة. نفس الإزاحة تغذّي الآن
-       أيضاً getServerTime أعلاه (#18)، فتصحيح واحد يخدم كلا الاستخدامين
-       (استمرارية الرسم + عدّاد التنازل داخل TradingView).
-       المبدأ: كل شمعة حقيقية واردة تُثبِّت مرجعاً موثوقاً — الخادم للتو
-       أكّد أن "الآن الحقيقي" يقع داخل الدلو [rawTime, rawTime+stepMs).
-       نُعيد ضبط الإزاحة لتُبقي (Date.now()+offset) داخل هذا النطاق
-       تماماً، سواء تطلّب ذلك رفعها (ساعة متأخرة) أو خفضها (ساعة
-       متقدّمة أكثر من اللازم). معايرة مستمرة وذاتية الإصلاح، بلا أي
-       حاجة لنقطة نهاية وقت خادم منفصلة (غير موجودة أصلاً بتوثيق
-       Hyperliquid الرسمي — راجع info-endpoint/websocket المرفقين). */
-    _calibrateClock(rawTime, stepMs) {
-      if (!stepMs) return; // اليومي/الأسبوعي غير معنيين — هامش خطئهما أياماً لا ثواني
-      const localNow  = Date.now();
-      const bucketEnd = rawTime + stepMs;
-      if (rawTime > localNow + this._clockOffsetMs) {
-        // ساعة الجهاز متأخرة عن الخادم — ارفع الإزاحة لتغطية الفارق
-        this._clockOffsetMs = rawTime - localNow;
-      } else if (localNow + this._clockOffsetMs >= bucketEnd) {
-        // ساعتنا المصحَّحة تجاوزت دلواً ما زال الخادم يبثّه كحيّ الآن —
-        // كانت متقدّمة أكثر مما ينبغي؛ أعد محاذاتها داخل الدلو المؤكَّد
-        this._clockOffsetMs = rawTime - localNow;
-      }
-    }
-
-    /*
-      Build a bar from a Hyperliquid candle object.
-      Hyperliquid t is OPEN time in both REST and WS (confirmed:
-      Candle{ t: open millis; T: close millis } — T = t + duration - 1,
-      an inclusive-end convention; we never read T, only t).
-      No subtraction needed — use t directly.
-    */
-    _bar(candle, sym, res) {
-      const g = _isGram(sym);
-      const t = candle.t > 1e12 ? candle.t : candle.t * 1000;
-      const time = _normTime(t, res);
-      return {
-        time,
-        open:  g ? parseFloat(candle.o)/TROY : parseFloat(candle.o),
-        high:  g ? parseFloat(candle.h)/TROY : parseFloat(candle.h),
-        low:   g ? parseFloat(candle.l)/TROY : parseFloat(candle.l),
-        close: g ? parseFloat(candle.c)/TROY : parseFloat(candle.c),
-        volume: parseFloat(candle.v) || 0,
-      };
-    }
-
-    async _fetchRest(coin, hlIv, fromMs, toMs) {
-      const r = await fetch(HL_API+'/info', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({type:'candleSnapshot', req:{coin, interval:hlIv, startTime:fromMs, endTime:toMs}})
-      });
-      if (!r.ok) throw new Error('HTTP '+r.status);
-      const data = await r.json();
-      if (!Array.isArray(data)) return [];
-
-      const g = coin === 'xyz:GOLD';
-      // Map HL interval back to TV resolution for normalization
-      const tvRes = Object.keys(TV_TO_HL).find(k => TV_TO_HL[k] === hlIv) || '60';
-      const seen = new Set();
-      const out = [];
-
-      for (const c of data) {
-        const t = c.t > 1e12 ? c.t : c.t * 1000;
-        if (t < MIN_TIME || t > toMs + 86400000) continue;
-        const time = _normTime(t, tvRes);
-        if (seen.has(time)) continue;
-        seen.add(time);
-
-        out.push({
-          time,
-          open:  g ? parseFloat(c.o)/TROY : parseFloat(c.o),
-          high:  g ? parseFloat(c.h)/TROY : parseFloat(c.h),
-          low:   g ? parseFloat(c.l)/TROY : parseFloat(c.l),
-          close: g ? parseFloat(c.c)/TROY : parseFloat(c.c),
-          volume: parseFloat(c.v) || 0,
-        });
-      }
-      return out.sort((a,b)=>a.time-b.time);
-    }
-
-    _aggWeekly(daily) {
-      const m = new Map();
-      for (const b of daily) {
-        const w = _weekStart(b.time);
-        const ex = m.get(w);
-        if (!ex) m.set(w, {...b, time:w});
-        else {
-          ex.high = Math.max(ex.high, b.high);
-          ex.low  = Math.min(ex.low,  b.low);
-          ex.close = b.close;
-          ex.volume += b.volume; // ← صحيح هنا: مجموع أيام منفصلة، لا تحديثات متكررة لنفس اليوم
-        }
-      }
-      return Array.from(m.values()).sort((a,b)=>a.time-b.time);
-    }
-
-    _openWs(wsKey, coin, hlIv) {
-      if (typeof HL === 'undefined') return;
-      const entry = { unsub: null, lastBar: null, dailyMap: new Map() };
-      this._ws.set(wsKey, entry);
-
-      /* ✅ كل معالجة الرسالة انتقلت لـ_ingestCandle (نقطة استيعاب موحّدة
-         واحدة — طلب "توحيد" صريح، بند #16). المُعالِج هنا لا يفعل شيئاً
-         غير التمرير المباشر، بلا أي حساب/تعديل على البيانات بهذه الطبقة. */
-      entry.unsub = HL.subscribe({type:'candle', coin, interval:hlIv}, payload => {
-        this._ingestCandle(wsKey, payload);
-      });
-
-      /* ✅ إصلاح جوهري — الشمعة الأسبوعية كانت تُعاد حسبتها من يوم واحد
-         فقط عند وصول أول تحديث حي بعد فتح/تبديل الرسم: dailyMap تبدأ
-         فارغة تماماً (Map جديدة بكل _openWs)، ولا تُبذر أبداً من التاريخ
-         المجلوب فعلاً بـgetBars — فقط تمتلئ لاحقاً من التحديثات الحيّة
-         توّاً. فأول تحديث حي كان يحسب open/high/low الأسبوع من ذلك اليوم
-         فقط، ماحياً الأيام الأسبق المرسومة أصلاً بالتاريخ. الحل: نجلب
-         أيام الأسبوع الحالي المنقضية فوراً (بالتوازي مع الاشتراك أعلاه،
-         لا بعده — لا تأخير على البيانات الحيّة) ونضعها بـdailyMap قبل
-         وصول أي تحديث حي. مُقيَّدة بمشترك 1W فعلي فقط. */
-      let needsWeekly = false;
-      for (const [,s] of this._subs) if (s.wsKey === wsKey && s.resolution === '1W') { needsWeekly = true; break; }
-      if (hlIv === '1d' && needsWeekly) {
-        const now = Date.now();
-        this._fetchRest(coin, '1d', now - 9 * 86400000, now).then(raw => {
-          const w = this._ws.get(wsKey);
-          if (!w) return; // أُلغي الاشتراك قبل اكتمال الجلب
-          const curWeekStart = _weekStart(now);
-          for (const d of raw) {
-            if (d.time >= curWeekStart && !w.dailyMap.has(d.time)) w.dailyMap.set(d.time, { ...d });
-          }
-          if (!w.lastBar && raw.length) w.lastBar = { ...raw[raw.length - 1], synthetic:false };
-        }).catch(() => {});
-      }
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       ✅ نقطة الاستيعاب الموحّدة الوحيدة لكل تحديث شمعة حي (راجع رأس
-       الملف #15/#16). القاعدة الحاسمة: **السعر (OHLCV) مصدره الخادم
-       حصراً، بلا استثناء ولا تقييد بأي ساعة محلية أياً كانت** — هذا هو
-       الدرس المستفاد من المحاولة السابقة الفاشلة (#12 المُلغى) التي
-       رفضت بيانات حقيقية بسبب افتراض خاطئ عن دقّة ساعة الجهاز.
-
-       التمييز الوحيد المطلوب هنا هو بين شمعة "حقيقية" (وصلت من
-       الخادم فعلاً) وشمعة "استمرارية" مصطنعة (وضعها _advanceTime أدناه
-       لتحريك الوقت أثناء غياب التداول) — عبر حقل synthetic. أي بيانات
-       حقيقية تفوز دائماً على أي تخمين استمراري، حتى لو بدت "أقدم"
-       رقمياً من التخمين (حالة نادرة: ساعة الجهاز أسرع من الواقع بمقدار
-       أكبر من هامش الأمان) — لأن الحقيقي أصدق من المصطنع دوماً.
-
-       ✅ جديد #17 — كل شمعة حقيقية تُمرّر أيضاً لـ_calibrateClock:
-       تُستخدَم لمعايرة ساعة الجهاز ضد الواقع المؤكَّد من الخادم، فتُصلح
-       ذاتياً أي انحراف كان سيتسرّب لاحقاً عبر _advanceTime، وأيضاً عبر
-       getServerTime المعروض لـTradingView مباشرة (#18).
-       ══════════════════════════════════════════════════════════════ */
-    _ingestCandle(wsKey, payload) {
-      const w = this._ws.get(wsKey);
-      if (!w) return;
-
-      /* ✅ تحوّط دفاعي — تعليق التوثيق الرسمي (websocket/subscriptions)
-         يذكر "Data format: Candle[]" لهذا النوع تحديداً رغم أن تعريف
-         Candle بنفس الصفحة كائن مفرد. لا ضرر من هذا التحوّط لو كانت
-         الحمولة كائناً مفرداً دائماً كما يبدو عملياً، ويحمينا لو وصلت
-         فعلاً كمصفوفة أحياناً. */
-      const c = Array.isArray(payload) ? payload[payload.length - 1] : payload;
-      if (!c) return;
-
-      for (const [,sub] of this._subs) {
-        if (sub.wsKey !== wsKey) continue;
-
-        // For weekly subscribers, normalize to daily boundary first,
-        // then aggregate to weekly. For others, normalize to their resolution.
-        const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
-        const raw = this._bar(c, sub.sym, normRes);
-
-        /* ✅ #17 — معايرة ساعة الجهاز ضد هذه الشمعة الحقيقية المؤكَّدة
-           من الخادم. راجع _calibrateClock أعلاه للتفصيل الكامل. */
-        this._calibrateClock(raw.time, RES_DURATION_MS[normRes]);
-
-        if (!w.lastBar) {
-          w.lastBar = { ...raw, synthetic:false };
-        } else if (raw.time > w.lastBar.time) {
-          // شمعة حقيقية جديدة فعلاً — تفوز دائماً، سواء كانت السابقة
-          // حقيقية أو استمرارية مصطنعة (تُستبدَل بالكامل، لا تُدمَج).
-          w.lastBar = { ...raw, synthetic:false };
-        } else if (raw.time === w.lastBar.time) {
-          /* ✅ FIX #9 — Candle.v هو إجمالي تراكمي للشمعة حتى الآن
-             (موثّق رسمياً)، لا دلتا لكل رسالة WS. كان `+=` هنا يُضاعف
-             الحجم مع كل تحديث حي لنفس الشمعة قيد التكوّن — استبدال،
-             لا تراكم. تحديث لنفس الشمعة يُرقّي أي شمعة مصطنعة سابقة
-             لحقيقية تلقائياً (synthetic:false). */
-          w.lastBar.high = Math.max(w.lastBar.high, raw.high);
-          w.lastBar.low  = Math.min(w.lastBar.low,  raw.low);
-          w.lastBar.close = raw.close;
-          w.lastBar.volume = raw.volume;
-          w.lastBar.synthetic = false;
-        } else if (w.lastBar.synthetic) {
-          // شمعتنا الحالية كانت تخميناً استمرارياً محضاً (لا بيانات حقيقية
-          // بعد) — أي بيانات حقيقية أصدق منها دوماً، حتى لو أقدم رقمياً.
-          w.lastBar = { ...raw, synthetic:false };
-        } else {
-          // Guard against stale historical ticks after reconnect —
-          // شمعتان حقيقيتان وهذه أقدم من المعروضة فعلاً: تجاهل.
-          continue;
-        }
-
-        this._emit(sub, w);
-      }
-    }
-
-    /* ✅ تجميع منطق الإصدار (weekly aggregation + dedup + callback) بدالة
-       واحدة تُستدعى من مسارين: بيانات حقيقية عبر _ingestCandle أعلاه،
-       وشمعة استمرارية مصطنعة عبر _advanceTime أدناه. */
-    _emit(sub, w) {
-      let emit;
-      if (sub.resolution === '1W') {
-        const dk = _normTime(w.lastBar.time, '1D');
-        w.dailyMap.set(dk, {...w.lastBar});
-        const curW = _weekStart(w.lastBar.time);
-        for (const [k] of w.dailyMap) if (k < curW - 7*86400000) w.dailyMap.delete(k);
-        emit = this._calcWeek(w.dailyMap, curW);
-        if (!emit) return;
-      } else {
-        emit = {...w.lastBar};
-      }
-
-      // Deduplicate: only emit if bar actually changed
-      if (!sub.lastBar || emit.time!==sub.lastBar.time ||
-          emit.open!==sub.lastBar.open || emit.high!==sub.lastBar.high ||
-          emit.low!==sub.lastBar.low || emit.close!==sub.lastBar.close ||
-          emit.volume!==sub.lastBar.volume) {
-        sub.callback(emit);
-        sub.lastBar = emit;
-      }
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       ✅ راجع رأس الملف #15 — "الوقت" مستقل تماماً عن "السعر": حتى
-       بانعدام أي تداول فعلي (لا رسائل WS تصل إطلاقاً)، الوقت يستمر
-       بالتقدّم وفق ساعة مصحَّحة (_correctedNow، بند #17) بفحص دوري
-       مستقل كل TIME_CHECK_MS — بلا أي علاقة بتوقيت وصول رسائل السعر
-       ("لا يهتم لوقت استدعاءات").
-
-       عند تجاوز مدة الشمعة الكاملة + هامش أمان (NO_TRADE_GRACE_MS) بلا
-       أي تداول حقيقي، تُمدَّد شمعة "استمرارية" مسطّحة (سعر الإغلاق
-       الأخير، حجم صفر) خطوة واحدة بمقدار مدة الشمعة بالضبط — لا قفز
-       مباشر لأي bucket "حسب الآن"، بل تراكم خطوات محدودة، فيبقى أي خطأ
-       محتمل بالساعة المصحَّحة محصوراً بحجم خطوة واحدة كحد أقصى مهما طال
-       أمد الانقطاع. هذه الشمعات تُعلَّم synthetic:true وتُستبدَل فوراً
-       وبالكامل بأي بيانات حقيقية تصل لاحقاً (راجع _ingestCandle أعلاه)
-       — لا تُشغَّل لليومي/الأسبوعي (استثناء متعمَّد، غير متأثرين
-       بالمشكلة أصلاً حسب التأكيد المباشر).
-
-       ✅ #17 — الفرق الوحيد عن النسخة السابقة: `now` هنا يأتي من
-       _correctedNow() (مُصحَّح ذاتياً ضد شموع حقيقية) بدل Date.now()
-       الخام — هذا بالضبط ما يمنع فتح شمعة "التالية+واحدة" (مثل 14:01
-       بدل 14:00) حين تنحرف ساعة الجهاز عن الواقع.
-       ══════════════════════════════════════════════════════════════ */
-    _advanceTime() {
-      const now = this._correctedNow();
-      for (const [wsKey, w] of this._ws) {
-        if (!w.lastBar) continue;
-
-        let normRes = null;
-        for (const [,s] of this._subs) if (s.wsKey === wsKey) { normRes = s.resolution === '1W' ? '1D' : s.resolution; break; }
-        const stepMs = normRes ? RES_DURATION_MS[normRes] : null;
-        if (!stepMs) continue; // 1D/1W مستثناة عمداً — راجع التعليق أعلاه
-
-        let guard = 0;
-        while (now >= w.lastBar.time + stepMs + NO_TRADE_GRACE_MS && guard++ < 500) {
-          w.lastBar = {
-            time: w.lastBar.time + stepMs,
-            open: w.lastBar.close, high: w.lastBar.close,
-            low: w.lastBar.close, close: w.lastBar.close,
-            volume: 0, synthetic: true
-          };
-          for (const [,sub] of this._subs) if (sub.wsKey === wsKey) this._emit(sub, w);
-        }
-      }
-    }
-
-    _calcWeek(map, start) {
-      let open=null, high=-Infinity, low=Infinity, close=null, vol=0;
-      const end = start + 7*86400000;
-      for (const [t,b] of map) {
-        if (t < start || t >= end) continue;
-        if (open===null) open=b.open;
-        high = Math.max(high,b.high);
-        low  = Math.min(low, b.low);
-        close = b.close;
-        vol  += b.volume; // ← صحيح هنا أيضاً: مجموع أيام منفصلة بـdailyMap
-      }
-      if (open===null) return null;
-      return {time:start, open, high, low, close, volume:vol};
-    }
-  }
-
-  /* ══════════ MODULE STATE ══════════ */
-  let _widget      = null;
-  let _datafeed    = null;
-  let _visible     = false;
-  let _sym         = 'CL';
-  let _interval    = '60';
-  let _clockTimer  = null;
-  let _saveTimer   = null;
-  const _prices    = {};
-  let _bboUnsub    = null;
-  let _bboSym      = '';
-  let _lines       = [];
-  let _linesReady  = false;
-  let _linesPending = false;
-  /* ✅ جديد — راجع رأس الملف #14: يبقى true طالما الودجت حيّ فعلياً
-     (لا يُصفَّر بـclose()، بعكس _linesReady المؤقت الذي يتحكم فقط بإعادة
-     رسم الخطوط أثناء الإخفاء). يُصفَّر فقط عند هدم حقيقي للودجت داخل
-     _initChart، ويُرفَع مجدداً بعد onChartReady. */
-  let _widgetReady = false;
-
-  /* ══════════ CSS ══════════ */
-  (function _injectCSS() {
-    if (document.getElementById('_tvCSS')) return;
+  /* ════ CSS ════ */
+  (function injectCSS() {
+    if (document.getElementById('_chartCSS')) return;
     const s = document.createElement('style');
-    s.id = '_tvCSS';
+    s.id = '_chartCSS';
     s.textContent = `
-.chart-screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:var(--bg-app,#000);overflow:hidden;}
-.chart-screen.hidden{display:none!important;}
-#_tvHdr{display:flex;align-items:center;justify-content:space-between;padding:0 8px;height:46px;background:var(--bg-card,#0d0d0d);border-bottom:1px solid var(--border,#1e1e1e);flex-shrink:0;direction:rtl;gap:6px;z-index:5;min-width:0;}
-.tvh-l{display:flex;align-items:center;gap:5px;min-width:0;flex:1;overflow:hidden;}
-.tvh-r{display:flex;align-items:center;gap:5px;flex-shrink:0;}
-.tvh-back{font-size:11px;font-weight:800;padding:4px 9px;border-radius:8px;border:1.5px solid rgba(255,140,66,.3);background:rgba(255,140,66,.1);color:var(--ac,#ff8c42);font-family:'Cairo',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:opacity .12s;}
-.tvh-back:active{opacity:.5;transform:scale(.9);}
-.tvh-info{display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;flex:1;}
-.tvh-icon{font-size:14px;flex-shrink:0;line-height:1;}
-.tvh-name{font-size:11px;font-weight:900;color:var(--text-primary,#f0f0f0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;}
-.tvh-price{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text-primary,#f0f0f0);flex-shrink:0;transition:color .18s;white-space:nowrap;}
-.tvh-price.up{color:#00e676;}
-.tvh-price.dn{color:#ff3d3d;}
-.tvh-pnl{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;white-space:nowrap;flex-shrink:0;display:none;}
-.tvh-pnl.pos{background:rgba(0,230,118,.15);color:#00e676;border:1px solid rgba(0,230,118,.3);}
-.tvh-pnl.neg{background:rgba(255,61,61,.15);color:#ff3d3d;border:1px solid rgba(255,61,61,.3);}
-.tvh-pnl.show{display:inline-block;}
-.tvh-dot{width:7px;height:7px;border-radius:50%;background:#444;flex-shrink:0;transition:background .3s;}
-.tvh-dot.on{background:#00e676;box-shadow:0 0 6px #00e676;}
-.tvh-dot.wait{background:#ffd600;animation:_tvDt 1.1s ease-in-out infinite;}
-.tvh-dot.off{background:#ff3d3d;}
-@keyframes _tvDt{0%,100%{opacity:1}50%{opacity:.15}}
-.tvh-fs{width:27px;height:27px;border-radius:7px;border:1.5px solid var(--border,#1e1e1e);background:var(--bg-elev,#161616);color:var(--text-secondary,#777);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;}
-.tvh-fs:hover{border-color:var(--ac,#ff8c42);color:var(--ac,#ff8c42);}
-.tvh-fs:active{transform:scale(.86);}
-#_tvNav{display:flex;align-items:center;gap:3px;padding:4px 8px;background:var(--bg-card,#0d0d0d);border-bottom:1px solid var(--border,#1e1e1e);flex-shrink:0;direction:rtl;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-#_tvNav::-webkit-scrollbar{display:none;}
-.tvn-btn{display:flex;align-items:center;gap:3px;padding:3px 9px;border-radius:999px;cursor:pointer;border:1.5px solid var(--border,#1e1e1e);background:var(--bg-elev,#161616);white-space:nowrap;flex-shrink:0;transition:all .12s;}
-.tvn-btn:active{transform:scale(.88);}
-.tvn-icon{font-size:11px;line-height:1;}
-.tvn-label{font-family:'Cairo',sans-serif;font-size:10px;font-weight:700;color:var(--text-secondary,#777);}
-.tvn-btn.on{border-color:var(--ac,#ff8c42);background:rgba(255,140,66,.13);}
-.tvn-btn.on .tvn-label{color:var(--ac,#ff8c42);font-weight:900;}
-#_tvTrade{display:flex;align-items:center;gap:5px;padding:6px 8px;background:var(--bg-card,#0d0d0d);border-bottom:1px solid var(--border,#1e1e1e);flex-shrink:0;direction:rtl;}
-.tvt-btn{flex:1;min-height:48px;padding:5px 3px;border-radius:11px;border:none;font-family:'Cairo',sans-serif;font-size:13px;font-weight:900;cursor:pointer;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:filter .12s,transform .1s;flex-shrink:0;}
-.tvt-btn:active{transform:scale(.91);filter:brightness(.82);}
-.tvt-buy{background:linear-gradient(150deg,#00c853,#1b5e20);box-shadow:0 2px 8px rgba(0,200,83,.25);}
-.tvt-sell{background:linear-gradient(150deg,#ff1744,#b71c1c);box-shadow:0 2px 8px rgba(255,23,68,.25);}
-.tvt-dir{font-size:13px;line-height:1;}
-.tvt-px{font-family:'IBM Plex Mono',monospace;font-size:9px;opacity:.7;}
-.tvt-mid{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0;}
-.tvt-qlbl{font-size:8px;color:var(--text-muted,#444);font-weight:700;letter-spacing:.6px;}
-.tvt-qrow{display:flex;align-items:center;gap:4px;}
-.tvt-qin{width:72px;font-family:'IBM Plex Mono',monospace;font-size:max(16px,18px);font-weight:700;text-align:center;direction:ltr;background:var(--bg-input,#181818);border:1.5px solid var(--border,#1e1e1e);border-radius:9px;padding:4px 5px;color:var(--text-primary,#f0f0f0);outline:none;transition:border-color .13s;}
-.tvt-qin:focus{border-color:var(--ac,#ff8c42);}
-.tvt-unit{font-size:10px;font-weight:800;color:var(--text-secondary,#666);white-space:nowrap;}
-#_tvChartWrap{flex:1;min-height:0;width:100%;position:relative;overflow:hidden;background:#000;}
-#_tvC{position:absolute;inset:0;direction:ltr!important;overflow:hidden;background:#000;}
-#_tvC>div{width:100%!important;height:100%!important;}
-#_tvC>iframe{width:100%!important;height:100%!important;display:block;}
-#_tvOvr{position:absolute;inset:0;z-index:20;background:var(--bg-app,#000);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .35s ease;pointer-events:all;padding:20px;}
-#_tvOvr.fading{opacity:0;pointer-events:none;}
-#_tvOvr.gone{display:none;}
-.tvovr-icon{font-size:26px;line-height:1;opacity:.55;}
-.tvovr-skel{display:flex;align-items:flex-end;gap:4px;height:64px;width:min(78%,240px);}
-.tvovr-bar2{flex:1;border-radius:3px 3px 1px 1px;background:linear-gradient(90deg, rgba(255,140,66,.10) 25%, rgba(255,140,66,.32) 45%, rgba(255,140,66,.10) 65%);background-size:300% 100%;animation:_tvShimmer 1.4s ease-in-out infinite;}
-@keyframes _tvShimmer{0%{background-position:-135% 0}100%{background-position:135% 0}}
-.tvovr-txt{font-family:'Cairo',sans-serif;font-size:12px;font-weight:800;color:var(--text-secondary,#888);text-align:center;}
-.tvcf-ov{position:absolute;inset:0;z-index:99;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.65);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);direction:rtl;}
-.tvcf-card{background:var(--bg-card,#0d0d0d);border-top:1.5px solid var(--border-strong,#2a2a2a);border-radius:22px 22px 0 0;width:100%;max-width:520px;padding:14px 14px 30px;animation:_tvcfUp .22s cubic-bezier(.4,0,.2,1);}
-@keyframes _tvcfUp{from{transform:translateY(100%)}to{transform:none}}
-.tvcf-hdl{width:30px;height:3px;background:var(--border-strong,#2a2a2a);border-radius:999px;margin:0 auto 10px;}
-.tvcf-title{font-size:16px;font-weight:900;margin-bottom:2px;}
-.tvcf-sub{font-size:11px;color:var(--text-secondary,#666);margin-bottom:9px;}
-.tvcf-rows{background:var(--bg-input,#181818);border-radius:10px;padding:5px 10px;margin-bottom:10px;}
-.tvcf-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border,#1e1e1e);font-size:13px;}
-.tvcf-row:last-child{border:none;}
-.tvcf-k{color:var(--text-secondary,#666);font-weight:700;}
-.tvcf-v{font-family:'IBM Plex Mono',monospace;font-weight:800;color:var(--text-primary,#f0f0f0);}
-.tvcf-v.g{color:#00e676;} .tvcf-v.r{color:#ff3d3d;} .tvcf-v.w{color:#ffd600;}
-.tvcf-btns{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
-.tvcf-cancel{padding:12px;border-radius:999px;border:1.5px solid var(--border-strong,#2a2a2a);background:var(--bg-elev,#161616);color:var(--text-secondary,#777);font-size:13px;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif;}
-.tvcf-exec{padding:12px;border-radius:999px;border:none;color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:'Cairo',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;transition:filter .12s;}
-.tvcf-exec:active{filter:brightness(.82);}
-.tvcf-exec:disabled{opacity:.5;pointer-events:none;}
-.tvcf-exec.g{background:linear-gradient(135deg,#00c853,#1b5e20);}
-.tvcf-exec.r{background:linear-gradient(135deg,#ff1744,#b71c1c);}
-.tvsp{width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:_tvSp .7s linear infinite;}
-@keyframes _tvSp{to{transform:rotate(360deg)}}
-@media(min-width:400px){.tvh-name{display:block;}.tvt-qin{width:78px;}}
-@media(min-width:600px){#_tvHdr{height:48px;padding:0 12px;}.tvh-price{font-size:15px;}.tvh-name{font-size:12px;}.tvh-back{font-size:12px;padding:5px 12px;}.tvt-btn{min-height:52px;font-size:14px;}.tvt-qin{width:90px;font-size:max(16px,20px);}.tvn-label{font-size:11px;}}
-@media(min-width:900px){#_tvHdr{height:50px;padding:0 16px;}#_tvNav{padding:5px 12px;gap:5px;}.tvn-btn{padding:4px 12px;}#_tvTrade{padding:7px 12px;gap:8px;}.tvcf-card{border-radius:22px;margin-bottom:20px;}}
+.chart-screen {
+  position:fixed; inset:0; z-index:50;
+  display:flex; flex-direction:column; background:var(--bg-app);
+}
+.chart-screen.hidden { display:none !important; }
+
+.c-nav {
+  display:flex; flex-direction:column; padding:6px 10px;
+  background:var(--bg-card); border-bottom:1px solid var(--border);
+  flex-shrink:0; gap:6px; direction:rtl;
+}
+.c-nav-row {
+  display:flex; align-items:center; justify-content:space-between; width:100%;
+}
+.c-nav-group { display:flex; align-items:center; gap:6px; }
+
+.c-back {
+  color:var(--ac); font-size:12px; font-weight:800;
+  padding:5px 12px; border-radius:10px;
+  border:1.5px solid var(--ac-dim); background:var(--ac-dim);
+  font-family:'Cairo',sans-serif; white-space:nowrap;
+}
+.c-back:active { opacity:.7; }
+.c-asset-info { display:flex; align-items:center; gap:5px; margin-right:8px; }
+.c-asset-icon { font-size:15px; line-height:1; }
+.c-asset-name { font-size:13px; font-weight:900; color:var(--text-primary); }
+.c-cur-price  { font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:800; color:var(--text-primary); }
+
+.c-reset-btn {
+  font-size:16px; line-height:1;
+  background:var(--bg-elev); border:1px solid var(--border);
+  border-radius:8px; padding:4px 8px; color:var(--text-secondary);
+  cursor:pointer; transition:color .15s, border-color .15s;
+}
+.c-reset-btn:hover { color:var(--ac); border-color:var(--ac); }
+.c-reset-btn:active { transform:scale(.88); }
+
+.c-fs-btn {
+  background:var(--bg-elev); border:1px solid var(--border);
+  border-radius:8px; padding:4px 8px; font-size:14px;
+  color:var(--text-secondary); cursor:pointer;
+}
+.c-ws { font-size:11px; flex-shrink:0; }
+
+.c-intervals { display:flex; gap:4px; flex-shrink:0; }
+.iv-btn {
+  flex:1; min-width:0; padding:5px 3px; border-radius:999px;
+  border:1.5px solid var(--border); background:var(--bg-elev);
+  color:var(--text-secondary); font-size:11px; font-weight:800;
+  font-family:'IBM Plex Mono',monospace; text-align:center; cursor:pointer;
+}
+.iv-btn:active { transform:scale(.88); }
+.iv-btn.active { border-color:var(--ac); background:var(--ac-dim); color:var(--ac); }
+
+/* Trade Bar */
+.c-trade-bar {
+  display:flex; align-items:center; gap:6px;
+  padding:7px 8px; background:var(--bg-card);
+  border-bottom:1px solid var(--border); flex-shrink:0; direction:rtl;
+}
+.cbt-btn {
+  flex:1; min-height:54px; padding:7px 5px; border-radius:14px; border:none;
+  font-family:'Cairo',sans-serif; font-size:16px; font-weight:900;
+  cursor:pointer; color:#fff;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+}
+.cbt-btn:active { transform:scale(.93); }
+.cbt-buy  { background:linear-gradient(150deg,#2da44e,#1a7f37); }
+.cbt-sell { background:linear-gradient(150deg,#e5534b,#a0281e); }
+.cbt-dir  { font-size:15px; line-height:1; }
+.cbt-px   { font-family:'IBM Plex Mono',monospace; font-size:10px; opacity:.75; }
+.cbt-mid  { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1.1; }
+.cbt-qty-lbl  { font-size:9px; color:var(--text-muted); font-weight:700; letter-spacing:1px; }
+.cbt-qty-row  { display:flex; align-items:center; gap:4px; }
+.cbt-qty-in {
+  width:76px; font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:700;
+  text-align:center; direction:ltr; background:var(--bg-input);
+  border:2px solid var(--ac-dim); border-radius:10px; padding:6px 4px;
+  color:var(--text-primary); outline:none;
+}
+.cbt-qty-in:focus { border-color:var(--ac); }
+.cbt-qty-unit { font-size:9px; color:var(--text-secondary); font-weight:700; white-space:nowrap; }
+.cbt-presets  { display:flex; gap:3px; }
+.cbt-preset {
+  font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:700;
+  padding:3px 6px; border-radius:999px;
+  border:1.5px solid var(--border); background:var(--bg-elev); color:var(--text-muted); cursor:pointer;
+}
+.cbt-preset.active { border-color:var(--ac); color:var(--ac); background:var(--ac-dim); }
+
+/* Wrap */
+.c-wrap  { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
+.c-inner { flex:1; min-height:0; width:100%; touch-action:none; user-select:none; overflow:hidden; }
+
+/* ✅ Countdown overlay — بجانب label السعر (أسفل يمين) */
+.c-cd-overlay {
+  position:absolute; bottom:52px; left:4px;
+  background:rgba(0,0,0,.7);
+  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  border-radius:6px; padding:3px 7px;
+  font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:800;
+  color:var(--ac); z-index:10; pointer-events:none;
+  border:1px solid rgba(224,114,72,.35);
+  white-space:nowrap;
+  direction:ltr;
+}
+
+/* Day Stat bar */
+.c-day-stat {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:3px 10px; background:var(--bg-card);
+  border-top:1px solid var(--border); flex-shrink:0;
+  font-family:'IBM Plex Mono',monospace; min-height:22px;
+}
+
+/* OHLC Legend */
+.c-legend {
+  padding:4px 10px; background:var(--bg-card);
+  border-top:1px solid var(--border);
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px; font-weight:700; color:var(--text-secondary);
+  display:flex; gap:8px; flex-wrap:wrap;
+  flex-shrink:0; min-height:24px; align-items:center; overflow:hidden;
+}
+
+/* Confirmation */
+.cf-ov {
+  position:absolute; inset:0; z-index:95;
+  display:flex; align-items:flex-end; justify-content:center;
+  background:rgba(0,0,0,.65);
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); direction:rtl;
+}
+.cf-card {
+  background:var(--bg-card); border-top:2px solid var(--border-strong);
+  border-radius:22px 22px 0 0; width:100%; max-width:480px;
+  padding:14px 14px 20px; animation:cfSu .22s cubic-bezier(.4,0,.2,1);
+}
+@keyframes cfSu { from{transform:translateY(100%)} to{transform:none} }
+.cf-hdl { width:32px;height:4px;background:var(--border-strong);border-radius:999px;margin:0 auto 12px; }
+.cf-title { font-size:16px;font-weight:900;margin-bottom:3px; }
+.cf-sub   { font-size:11px;color:var(--text-secondary);margin-bottom:10px; }
+.cf-rows  { background:var(--bg-input);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;margin-bottom:10px; }
+.cf-row   { display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border); }
+.cf-row:last-child { border:none; }
+.cf-key { font-size:11px;color:var(--text-secondary);font-weight:700; }
+.cf-val { font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800; }
+.cf-val.g{color:#2da44e;} .cf-val.r{color:#e5534b;} .cf-val.w{color:var(--warn);}
+.cf-btns { display:grid;grid-template-columns:1fr 1fr;gap:8px; }
+.cf-cancel { padding:11px;border-radius:999px;border:1.5px solid var(--border-strong);background:var(--bg-elev);color:var(--text-secondary);font-size:13px;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif; }
+.cf-exec   { padding:11px;border-radius:999px;border:none;color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:'Cairo',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px; }
+.cf-exec.g { background:linear-gradient(135deg,#2da44e,#1a7f37); }
+.cf-exec.r { background:linear-gradient(135deg,#e5534b,#a0281e); }
+.cf-exec:active { filter:brightness(.88); }
+.cf-exec:disabled { opacity:.5;pointer-events:none; }
+.cf-spin { width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:cfR .7s linear infinite; }
+@keyframes cfR { to{transform:rotate(360deg)} }
 `;
     document.head.appendChild(s);
   })();
 
-  /* ══════════ PRICE STATE ══════════ */
-  function _setPrice(sym, disp) {
-    _prices[sym] = disp;
-    if (sym !== _sym) return;
-    const el = document.getElementById('_tvPx');
-    if (!el) return;
-    const prev = parseFloat(el.dataset.p || 0);
-    el.textContent = '$' + disp.toFixed(_asset(sym).pxDp);
-    el.className = 'tvh-price' + (disp > prev ? ' up' : disp < prev ? ' dn' : '');
-    el.dataset.p = disp;
-    _updBtnPx(sym, disp);
+  /* ════ مساعدات ════ */
+  const coin = s => (typeof ASSETS !== 'undefined' && ASSETS[s]?.coin) || `xyz:${s}`;
+  const ai   = s => (typeof ASSETS !== 'undefined' && ASSETS[s]) ||
+    { pxDp:2, szDp:2, name:s, icon:'📊', unit:'', lev:10, presets:[1], idx:0, cross:true };
+  const setStatus = t => { const e = document.getElementById('_cWs'); if (e) e.textContent = t; };
+  const isDark    = () => window.matchMedia('(prefers-color-scheme:dark)').matches;
+  const fp = (n, s) => (+n).toFixed(ai(s || _sym).pxDp);
+  const fs = (n, s) => (+n).toFixed(ai(s || _sym).szDp);
+
+  function setPrice(p) {
+    _lastClose = +p;
+    const e = document.getElementById('_cPrice');
+    if (e && p) e.textContent = '$' + (+p).toFixed(ai(_sym).pxDp);
+    updateBtnPx();
   }
 
-  function _updBtnPx(sym, mid) {
-    if (!mid || sym !== _sym) return;
-    const a = _asset(sym);
-    const bp = document.getElementById('_tvBuyPx');
-    const sp = document.getElementById('_tvSellPx');
-    if (bp) bp.textContent = '$' + (mid * 1.0003).toFixed(a.pxDp);
-    if (sp) sp.textContent = '$' + (mid * 0.9997).toFixed(a.pxDp);
+  /* ════ UTC+3 تنسيق الوقت ════ */
+  const _MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const _DN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  function _d3(tick) { return new Date((tick + UTC3) * 1000); }
+
+  /* المحور الأسفل — وقت فقط */
+  function fmtTimeAxis(tick) {
+    const d = _d3(tick);
+    const h = d.getUTCHours(), m = d.getUTCMinutes();
+    const ap = h >= 12 ? 'PM' : 'AM';
+    return `${String(h%12||12).padStart(2,'0')}:${String(m).padStart(2,'0')} ${ap}`;
+  }
+  /* المحور الأسفل — تاريخ */
+  function fmtDateAxis(tick) {
+    const d = _d3(tick);
+    return `${_MN[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  }
+  /* Crosshair Legend — تاريخ + وقت كامل */
+  function fmtFull(tick) {
+    const d  = _d3(tick);
+    const h  = d.getUTCHours(), m = d.getUTCMinutes();
+    const ap = h >= 12 ? 'PM' : 'AM';
+    return `${_DN[d.getUTCDay()]} ${d.getUTCDate()} ${_MN[d.getUTCMonth()]} ${d.getUTCFullYear()} · ${String(h%12||12).padStart(2,'0')}:${String(m).padStart(2,'0')} ${ap} +3`;
   }
 
-  function _curPx() {
-    return _prices[_sym] || (typeof State !== 'undefined' ? State.prices?.[_sym]?.mid : 0) || 0;
+  /* ════ ساعة UTC+3 ════ */
+  function getIvMs(iv) {
+    const n = parseInt(iv);
+    if (iv.endsWith('m')) return n * 60000;
+    if (iv.endsWith('h')) return n * 3600000;
+    if (iv.endsWith('d')) return n * 86400000;
+    return 60000;
   }
 
-  function _updatePnlBadge() {
-    const el = document.getElementById('_tvPnl');
-    if (!el || typeof State === 'undefined') return;
-    let pnl = null;
-    for (const p of (State.positions || [])) {
-      const rawC = (p.position.coin || '').includes(':') ? p.position.coin.split(':')[1] : p.position.coin;
-      const pSym = rawC === 'GOLD' ? 'XAU' : (typeof COIN_TO_SYM !== 'undefined' ? COIN_TO_SYM[rawC] || rawC : rawC);
-      if (pSym === _sym) { pnl = parseFloat(p.position.unrealizedPnl || 0); break; }
+  /* ✅ NEW (v7.3) — نفس مبدأ التصحيح الذاتي المستخدم بملف الإنتاج
+     الحالي (TradingView Advanced Charts). راجع تعليق رأس الملف للسياق
+     الكامل. _correctedNow() هي "الآن" الوحيد الذي يجب استخدامه لحساب
+     أي شيء زمني نسبي (هنا: العدّ التنازلي فقط) — أبداً لقبول/رفض
+     بيانات سعر حقيقية، تلك تبقى دوماً من candle.t للخادم مباشرة. */
+  function _correctedNow() { return Date.now() + _clockOffsetMs; }
+
+  /* rawTimeMs: وقت فتح شمعة حقيقية (ms) وصلت فعلاً من الخادم (REST أو
+     WS). stepMs: مدة تلك الشمعة بالمللي ثانية (getIvMs(iv)). تُعاير
+     الإزاحة لتُبقي (Date.now()+offset) داخل الدلو الزمني [rawTimeMs,
+     rawTimeMs+stepMs) الذي أكّده الخادم للتو — نفس منطق _calibrateClock
+     بملف الإنتاج حرفياً. */
+  function _calibrateClock(rawTimeMs, stepMs) {
+    if (!stepMs) return;
+    const localNow  = Date.now();
+    const bucketEnd = rawTimeMs + stepMs;
+    if (rawTimeMs > localNow + _clockOffsetMs) {
+      _clockOffsetMs = rawTimeMs - localNow;
+    } else if (localNow + _clockOffsetMs >= bucketEnd) {
+      _clockOffsetMs = rawTimeMs - localNow;
     }
-    if (pnl === null) {
-      el.classList.remove('show', 'pos', 'neg');
-      el.textContent = '';
-    } else {
-      const cls = pnl >= 0 ? 'pos' : 'neg';
-      el.className = `tvh-pnl show ${cls}`;
-      el.textContent = (pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(2);
-    }
   }
 
-  /* ══════════ OVERLAY ══════════
-     ✅ الآن تُلحَق داخل #_tvChartWrap (غلاف يحتوي #_tvC فقط) بدل
-     #chartScreen كاملاً — تغطي منطقة الشارت حصراً، لا الرأس ولا شريط
-     الأصول ولا شريط التداول. أسلوب "شمشة" (shimmer) بروح c.js بدل
-     أيقونة+بار تحميل ثابت. */
-  function _ovrShow(sym) {
-    const wrap = document.getElementById('_tvChartWrap');
-    if (!wrap) return;
-    let el = document.getElementById('_tvOvr');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = '_tvOvr';
-      wrap.appendChild(el);
-    }
-    const a = _asset(sym);
-    const heights = [38,58,32,66,46,72,40,60,34,52];
-    const bars = heights.map(h => `<div class="tvovr-bar2" style="height:${h}%"></div>`).join('');
-    el.innerHTML = `
-      <span class="tvovr-icon">${a.icon}</span>
-      <div class="tvovr-skel">${bars}</div>
-      <span class="tvovr-txt">${a.name} — جاري تحميل الرسم البياني...</span>`;
-    el.classList.remove('fading', 'gone');
-    el.style.opacity = '1';
-  }
+  function startClock() {
+    stopClock();
+    const tick = () => {
+      /* ساعة UTC+3 — عرض فقط، لا علاقة له بحساب العدّ التنازلي أدناه */
+      const nowUtc3 = new Date(Date.now() + 3 * 3600000);
+      const t   = document.getElementById('_cClockT');
+      if (t) t.textContent = nowUtc3.toLocaleTimeString('en-US',
+        { hour12:true, hour:'2-digit', minute:'2-digit', second:'2-digit', timeZone:'UTC' });
 
-  function _ovrHide() {
-    const el = document.getElementById('_tvOvr');
-    if (!el || el.classList.contains('gone')) return;
-    el.classList.add('fading');
-    setTimeout(() => { el.classList.add('gone'); el.classList.remove('fading'); }, 440);
-  }
-
-  /* ══════════ BBO ══════════ */
-  function _bboConn(sym) {
-    if (_bboSym === sym && _bboUnsub) return;
-    _bboClose();
-    _bboSym = sym;
-    if (typeof HL === 'undefined' || !HL.isOpen()) _dot('wait');
-    _bboUnsub = HL.subscribe({ type: 'bbo', coin: _coin(sym) }, data => {
-      const b = parseFloat(data.bbo?.[0]?.px || 0);
-      const a = parseFloat(data.bbo?.[1]?.px || 0);
-      const mid = b && a ? (b + a) / 2 : 0;
-      if (!mid) return;
-      const raw = (data.coin || '').includes(':') ? data.coin.split(':')[1] : data.coin;
-      _setPrice(sym, sym === 'XAU' && raw === 'GOLD' ? mid / TROY : mid);
-      _dot('on');
-    });
-  }
-
-  function _bboClose() {
-    if (_bboUnsub) { try { _bboUnsub(); } catch {} _bboUnsub = null; }
-    _bboSym = '';
-  }
-
-  /* ══════════ AUTO-SAVE ══════════ */
-  function _scheduleAutoSave() {
-    clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(_doAutoSave, 3000);
-  }
-
-  function _doAutoSave() {
-    if (!_widget || !_linesReady) return;
-    try {
-      _widget.save(c => _lsSet(LAYOUT_KEY, { sym: _sym, interval: _interval, content: c, ts: Date.now() }));
-    } catch {}
-  }
-
-  function _loadLayout() { return _lsGet(LAYOUT_KEY); }
-
-  /* ══════════ ORDER LINES ══════════ */
-  function _clearLines() {
-    _lines.forEach(l => { try { l.remove(); } catch {} });
-    _lines = [];
-  }
-
-  function _scheduleLines() {
-    if (_linesReady) _execLines();
-    else _linesPending = true;
-  }
-
-  function _execLines() {
-    if (!_linesReady || !_widget || typeof State === 'undefined') return;
-    let chart;
-    try { chart = _widget.chart(); } catch { return; }
-    if (!chart) return;
-    _clearLines();
-
-    for (const p of (State.positions || [])) {
-      const rawC = (p.position.coin || '').includes(':') ? p.position.coin.split(':')[1] : p.position.coin;
-      const pSym = rawC === 'GOLD' ? 'XAU' : (typeof COIN_TO_SYM !== 'undefined' ? COIN_TO_SYM[rawC] || rawC : rawC);
-      if (pSym !== _sym) continue;
-      const pos = p.position, sziOz = parseFloat(pos.szi || 0);
-      if (!sziOz) continue;
-      const isGr = _isGram(_sym), entOz = parseFloat(pos.entryPx || 0), entD = _toDisp(_sym, entOz);
-      const pnl = parseFloat(pos.unrealizedPnl || 0), isLong = sziOz > 0, tpsl = p.tpsl || {};
-      const pnlCol = pnl >= 0 ? '#00e676' : '#ff3d3d';
-
-      if (entD > 0) {
-        try {
-          _lines.push(chart.createOrderLine()
-            .setPrice(entD)
-            .setQuantity(`${isLong ? '▲' : '▼'}  ${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`)
-            .setLineColor(pnlCol).setBodyBorderColor(pnlCol).setBodyBackgroundColor(pnlCol)
-            .setBodyTextColor(pnl >= 0 ? '#000' : '#fff').setLineWidth(1).setLineStyle(0));
-        } catch (e) { console.warn('[L]entry', e); }
-      }
-      if (tpsl.tp) {
-        const tpD = _toDisp(_sym, tpsl.tp), tpPnl = (Math.abs(sziOz) * Math.abs(tpsl.tp - entOz)).toFixed(2);
-        try {
-          _lines.push(chart.createOrderLine()
-            .setPrice(tpD).setQuantity(`🎯 TP  +$${tpPnl}`)
-            .setLineColor('#00e8a2').setBodyBorderColor('#00e8a2').setBodyBackgroundColor('#00e8a2')
-            .setBodyTextColor('#000').setLineWidth(1).setLineStyle(2));
-        } catch (e) { console.warn('[L]tp', e); }
-      }
-      if (tpsl.sl) {
-        const slD = _toDisp(_sym, tpsl.sl), slPnl = (Math.abs(sziOz) * Math.abs(tpsl.sl - entOz)).toFixed(2);
-        try {
-          _lines.push(chart.createOrderLine()
-            .setPrice(slD).setQuantity(`🛡 SL  -$${slPnl}`)
-            .setLineColor('#ff6a1a').setBodyBorderColor('#ff6a1a').setBodyBackgroundColor('#ff6a1a')
-            .setBodyTextColor('#fff').setLineWidth(1).setLineStyle(2));
-        } catch (e) { console.warn('[L]sl', e); }
-      }
-      /* ✅ سعر التصفية: يقرأ position.liquidationPx مباشرة من الـAPI أولاً
-         (موثّق رسمياً ضمن clearinghouseState — أدق من أي حساب محلي لأنه
-         محسوب فعلياً من الخادم بكامل تفاصيل الحساب). calcLiqPrice المحلي
-         يبقى فقط احتياطاً نادراً لو غاب الحقل. */
-      try {
-        const apiLiqOz = parseFloat(pos.liquidationPx || 0);
-        let liqOz = apiLiqOz > 0 ? apiLiqOz : null;
-        if (!liqOz) {
-          const aL = isGr ? ((typeof ASSETS !== 'undefined' && ASSETS['GOLD']) || _asset('GOLD')) : _asset(_sym);
-          const eq = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(pnl) : 0;
-          liqOz = (typeof calcLiqPrice === 'function') ? calcLiqPrice(entOz, sziOz, eq, aL.cross, aL.lev) : null;
-        }
-        if (liqOz && liqOz > 0) {
-          _lines.push(chart.createOrderLine()
-            .setPrice(_toDisp(_sym, liqOz)).setQuantity('⚡ تصفية')
-            .setLineColor('#ff3d3d').setBodyBorderColor('#c62828').setBodyBackgroundColor('#c62828')
-            .setBodyTextColor('#fff').setLineWidth(1).setLineStyle(1));
-        }
-      } catch (e) { console.warn('[L]liq', e); }
-      break;
-    }
-
-    for (const o of (State.openOrders || [])) {
-      const rawC = (o.coin || '').includes(':') ? o.coin.split(':')[1] : o.coin;
-      const oSym = rawC === 'GOLD' ? 'XAU' : (typeof COIN_TO_SYM !== 'undefined' ? COIN_TO_SYM[rawC] || rawC : rawC);
-      if (oSym !== _sym) continue;
-      const px = parseFloat(o.limitPx || o.triggerPx || 0);
-      if (!px) continue;
-      const dispPx = _toDisp(_sym, px), isBuy = o.side === 'B', isTrig = !!o.isTrigger;
-      const ot = (o.orderType || '').toLowerCase();
-      let label, color, bg;
-      if (isTrig) {
-        if (ot.includes('take profit') || ot.includes('tp')) { label = `🎯 TP ${isBuy ? '▲' : '▼'}`; color = '#00e8a2'; bg = '#00e8a2'; }
-        else if (ot.includes('stop')) { label = `🛡 SL ${isBuy ? '▲' : '▼'}`; color = '#ff6a1a'; bg = '#ff6a1a'; }
-        else { label = `⏹ ${isBuy ? '▲' : '▼'}`; color = '#ffd600'; bg = '#9a8000'; }
-      } else if (isBuy) { label = '📋 شراء'; color = '#00e676'; bg = '#00e676'; }
-      else { label = '📋 بيع'; color = '#ff3d3d'; bg = '#ff3d3d'; }
-      try {
-        _lines.push(chart.createOrderLine()
-          .setPrice(dispPx).setQuantity(label)
-          .setLineColor(color).setBodyBorderColor(color).setBodyBackgroundColor(bg)
-          .setBodyTextColor(bg === '#00e8a2' ? '#000' : '#fff')
-          .setLineWidth(1).setLineStyle(isTrig ? 2 : 0));
-      } catch (e) { console.warn('[L]ord', e); }
-    }
-
-    _updatePnlBadge();
-  }
-
-  /* ══════════ SAVE/LOAD ADAPTER ══════════ */
-  function _buildSLA(sym) {
-    const K = 'sla_' + sym + '_';
-    const g = k => _lsGet(K + k) || [];
-    const sv = (k, v) => _lsSet(K + k, v);
-    return {
-      getAllCharts() { return Promise.resolve(g('_c')); },
-      removeChart(id) { sv('_c', g('_c').filter(x => x.id !== id)); return Promise.resolve(); },
-      saveChart(d) { sv('_c', [{ ...d, id: 'auto', timestamp: Date.now() }]); return Promise.resolve('auto'); },
-      getChartContent(id) { const i = g('_c').find(x => x.id === id); return Promise.resolve(i?.content || ''); },
-      getAllStudyTemplates() { return Promise.resolve(g('_st')); },
-      removeStudyTemplate(n) { sv('_st', g('_st').filter(x => x.name !== n)); return Promise.resolve(); },
-      saveStudyTemplate(t) { const d = g('_st'), i = d.findIndex(x => x.name === t.name); if (i >= 0) d[i] = t; else d.push(t); sv('_st', d); return Promise.resolve(); },
-      getStudyTemplateContent(n) { const i = g('_st').find(x => x.name === n); return Promise.resolve(i?.content || ''); },
-      getDrawingTemplates(t) { return Promise.resolve(g('_dt' + t)); },
-      loadDrawingTemplate(t, n) { const i = g('_dt' + t).find(x => x.name === n); return Promise.resolve(i?.content || ''); },
-      removeDrawingTemplate(t, n) { sv('_dt' + t, g('_dt' + t).filter(x => x.name !== n)); return Promise.resolve(); },
-      saveDrawingTemplate(t, n, c) { const d = g('_dt' + t), i = d.findIndex(x => x.name === n); const it = { name: n, content: c }; if (i >= 0) d[i] = it; else d.push(it); sv('_dt' + t, d); return Promise.resolve(); },
+      /* ✅ FIX (v7.3) — العدّ التنازلي في الـ overlay بجانب السعر.
+         كان يعتمد حصراً على Date.now() الخام (بلا أي تصحيح) — الآن
+         يستخدم _correctedNow()، المُعايَر ذاتياً ضد كل شمعة حقيقية
+         واردة فعلاً من الخادم (راجع load()/wsConnect() أدناه). هذا
+         بالضبط ما يمنع ظهور "19 بدل 20" عند انحراف ساعة الجهاز. */
+      const ivMs    = getIvMs(_interval);
+      const nowCorr = _correctedNow();
+      const diff    = Math.ceil(nowCorr / ivMs) * ivMs - nowCorr;
+      const hh   = Math.floor(diff / 3600000);
+      const mm   = Math.floor((diff % 3600000) / 60000);
+      const ss   = Math.floor((diff % 60000) / 1000);
+      const cdStr = (hh > 0 ? hh + ':' : '') + String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+      const cdOv  = document.getElementById('_cCdOverlay');
+      if (cdOv) cdOv.textContent = '⏱ ' + cdStr;
     };
+    tick();
+    _clockTimer = setInterval(tick, 1000);
+    _dayTimer   = setInterval(drawDayStats, 5000);
   }
 
-  /* ══════════ WIDGET BUILDER ══════════ */
-  function _mkWidget(sym, iv, saved) {
-    if (!window.TradingView?.widget) { console.error('[chart.js] TV not loaded'); return null; }
-    const dark = _dark();
-    const scaleFont = window.innerWidth >= 600 ? 13 : 12;
-    const a = _asset(sym);
-    const cfg = {
-      container: '_tvC', autosize: true,
-      symbol: sym, interval: iv,
-      datafeed: _datafeed,
-      library_path: 'https://chart.kanba.pw/charting_library/',
-      locale: 'en',
-      timezone: 'Asia/Kuwait',   // display only — data is always UTC
-      theme: dark ? 'Dark' : 'Light',
-      overrides: {
-        'paneProperties.background': dark ? '#000000' : '#F9F9F9',
-        'paneProperties.backgroundType': 'solid',
-        'paneProperties.vertGridProperties.color': dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)',
-        'paneProperties.horzGridProperties.color': dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)',
-        'paneProperties.vertGridProperties.style': 0,
-        'paneProperties.horzGridProperties.style': 0,
-        'paneProperties.crossHairProperties.color': '#888',
-        'paneProperties.crossHairProperties.style': 2,
-        'paneProperties.crossHairProperties.width': 1,
-        'mainSeriesProperties.candleStyle.upColor': '#00e676',
-        'mainSeriesProperties.candleStyle.downColor': '#ff3d3d',
-        'mainSeriesProperties.candleStyle.drawBorder': true,
-        'mainSeriesProperties.candleStyle.borderUpColor': '#00e676',
-        'mainSeriesProperties.candleStyle.borderDownColor': '#ff3d3d',
-        'mainSeriesProperties.candleStyle.wickUpColor': '#00e676',
-        'mainSeriesProperties.candleStyle.wickDownColor': '#ff3d3d',
-        'mainSeriesProperties.showPriceLine': true,
-        'mainSeriesProperties.priceLineColor': '#ff8c42',
-        'mainSeriesProperties.priceLineWidth': 1,
-        /* ✅ #18 — ممكَّن عمداً (كان محذوفاً ببند #10 القديم). المصدر
-           الحقيقي لانحراف العدّ التنازلي (ساعة الجهاز الخام) أُصلح
-           فعلياً عبر supports_time+getServerTime أعلاه على الـDatafeed —
-           فلا داعٍ لإخفاء الميزة نفسها؛ إظهارها الآن دقيق ومطابق لسلوك
-           Hyperliquid/TradingView الرسمي، تماماً كالمطلوب. */
-        'mainSeriesProperties.showCountdown': true,
-        'scalesProperties.fontSize': scaleFont,
-        'scalesProperties.textColor': dark ? '#999' : '#444',
-        'scalesProperties.lineColor': dark ? '#222' : '#ddd',
-        'scalesProperties.backgroundColor': dark ? '#000' : '#F9F9F9',
-      },
-      studies_overrides: {},
-      disabled_features: [
-        'header_symbol_search', 'symbol_search_hot_key',
-        'header_compare', 'symbol_info',
-        'border_around_the_chart', 'display_market_status', 'go_to_date',
-        'create_volume_indicator_by_default', 'volume_force_overlay',
-      ],
-      enabled_features: [
-        'study_templates', 'side_toolbar_in_fullscreen_mode', 'header_in_fullscreen_mode',
-        'horz_touch_drag_scroll', 'vert_touch_drag_scroll', 'pinch_scale',
-        'axis_pressed_mouse_move_scale', 'axis_double_clicked_reset_scale',
-        'shift_visible_range_on_new_bar', 'pre_post_market_sessions',
-        'items_favoriting', 'show_hide_button_in_legend', 'hide_last_na_study_output',
-        'adaptive_logo', 'move_logo_to_main_pane', 'end_of_period_timescale_marks',
-        'use_localstorage_for_settings', 'save_chart_properties_to_local_storage',
-        'chart_property_page_style', 'chart_property_page_scales',
-        'chart_property_page_background', 'chart_property_page_timezone_sessions',
-        'chart_property_page_trading',
-        'force_touch_drag', 'iframe_loading_compatibility_mode',
-      ],
-      save_load_adapter: _buildSLA(sym),
-      loading_screen: {
-        backgroundColor: dark ? '#000000' : '#F9F9F9',
-        foregroundColor: dark ? '#ff8c42' : '#c96442',
-      },
-      client_id: 'suyula_hl', user_id: 'trader',
-      charts_storage_api_version: '1.1',
-      fullscreen: false, debug: false,
-    };
-    if (saved) cfg.saved_data = saved;
-    return new window.TradingView.widget(cfg);
+  function stopClock() {
+    clearInterval(_clockTimer); _clockTimer = null;
+    clearInterval(_dayTimer);   _dayTimer   = null;
   }
 
-  /* ══════════ CHART INIT (full teardown+rebuild) ══════════
-     تُستدعى فقط: أول دخول للشارت إطلاقاً بهذه الجلسة (open() لا تجد
-     ودجت حياً)، فشل تبديل الفترة، أو فشل chart().setSymbol() بتبديل
-     الأصل (راجع switchAssetChart). ترتيب العمليات مهم: _ovrShow أولاً
-     (تُلحَق بـ#_tvChartWrap، sibling لـ#_tvC)، ثم تفريغ #_tvC نفسها —
-     لا تعارض بينهما أبداً لأنهما لم يعودا نفس العنصر. */
-  function _initChart(sym, iv, saved) {
-    _ovrShow(sym);
-    _linesReady = false; _linesPending = false; _widgetReady = false;
-
-    if (_widget) {
-      _clearLines();
-      try { _widget.remove(); } catch {}
-      _widget = null;
-    }
-    if (_datafeed) {
-      _datafeed.destroy();
-      _datafeed = null;
-    }
-
-    const c = document.getElementById('_tvC');
-    if (c) c.innerHTML = '';
-
-    _datafeed = new HyperliquidDatafeed();
-    _widget = _mkWidget(sym, iv, saved);
-    if (!_widget) { _ovrHide(); return; }
-
-    _widget.onChartReady(() => {
-      _linesReady = true; _widgetReady = true;
-      setTimeout(_ovrHide, 200);
-      _execLines();
-      if (_linesPending) { _linesPending = false; _execLines(); }
-
-      try {
-        _widget.chart().onIntervalChanged().subscribe(null, newIv => {
-          _interval = newIv;
-          _lsSet('iv_' + _sym, newIv);
-          _scheduleAutoSave();
-          setTimeout(_execLines, 300);
-        });
-      } catch {}
-
-      try { _widget.subscribe('onAutoSaveNeeded', _scheduleAutoSave); } catch {}
-      setTimeout(_doAutoSave, 5000);
-    });
+  function blockGestures(el) {
+    if (_gestInit) return; _gestInit = true;
+    ['gesturestart','gesturechange','gestureend'].forEach(ev =>
+      el.addEventListener(ev, e => e.preventDefault(), { passive:false })
+    );
+    el.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive:false });
   }
 
-  /* ══════════ ASSET NAV ══════════
-     ✅ الإدراج الآن نسبة لـ#_tvChartWrap (كان #_tvC مباشرة) — بعد
-     تغليف #_tvC داخل الغلاف الجديد، #_tvC لم يعد child مباشر لـ
-     #chartScreen، فـinsertBefore على المرجع القديم كان سيرمي خطأ. */
-  function _buildNav() {
-    document.getElementById('_tvNav')?.remove();
-    const nav = document.createElement('div');
-    nav.id = '_tvNav';
-    nav.innerHTML = NAV_ASSETS.map(a =>
-      `<button class="tvn-btn${a.sym === _sym ? ' on' : ''}" data-sym="${a.sym}">
-         <span class="tvn-icon">${a.icon}</span>
-         <span class="tvn-label">${a.ar}</span>
-       </button>`
-    ).join('');
-    const scr = document.getElementById('chartScreen');
-    const trd = document.getElementById('_tvTrade');
-    const wrap = document.getElementById('_tvChartWrap');
-    if (scr && trd) scr.insertBefore(nav, trd);
-    else if (scr && wrap) scr.insertBefore(nav, wrap);
-    nav.querySelectorAll('.tvn-btn').forEach(b => b.onclick = () => {
-      const s = b.dataset.sym;
-      if (!s || s === _sym) return;
-      ChartModule.switchAssetChart(s);
-      if (typeof switchAsset === 'function') switchAsset(s);
-    });
+  function toggleFullscreen() {
+    const el = document.getElementById('chartScreen');
+    if (!document.fullscreenElement) el.requestFullscreen?.() || el.webkitRequestFullscreen?.();
+    else document.exitFullscreen?.() || document.webkitExitFullscreen?.();
   }
 
-  function _setNavOn(sym) {
-    document.querySelectorAll('.tvn-btn').forEach(b => b.classList.toggle('on', b.dataset.sym === sym));
+  /* ════ ↺ إعادة الضبط — scrollToRealTime فقط، لا إعادة بناء ════ */
+  function resetView() {
+    if (!_chart) return;
+    _chart.timeScale().scrollToRealTime();
+    if (typeof toast !== 'undefined') toast('↺ عرض آخر الشموع', 'info', 900);
   }
 
-  /* ══════════ TRADE BAR ══════════
-     ✅ الإدراج الآن نسبة لـ#_tvChartWrap (نفس سبب _buildNav أعلاه). */
-  function _buildTrade() {
-    document.getElementById('_tvTrade')?.remove();
-    const a = _asset(_sym), defQ = _lsGet('qty_' + _sym) || a.presets?.[0] || 1;
+  /* ════ Trade Bar ════ */
+  function buildTradeBar(wrap) {
+    document.getElementById('_cTrade')?.remove();
+    const a  = ai(_sym);
+    const ps = (a.presets || []).slice(0, 3);
     const bar = document.createElement('div');
-    bar.id = '_tvTrade';
+    bar.id = '_cTrade'; bar.className = 'c-trade-bar';
     bar.innerHTML = `
-      <button class="tvt-btn tvt-sell" id="_tvSell">
-        <span class="tvt-dir">▼ بيع</span>
-        <span class="tvt-px" id="_tvSellPx">—</span>
+      <button class="cbt-btn cbt-sell" id="_cSell">
+        <span class="cbt-dir">▼ بيع</span>
+        <span class="cbt-px" id="_cSellPx">—</span>
       </button>
-      <div class="tvt-mid">
-        <span class="tvt-qlbl">الكمية</span>
-        <div class="tvt-qrow">
-          <input class="tvt-qin" id="_tvQty" type="number" value="${defQ}" min="0" step="any" inputmode="decimal">
-          <span class="tvt-unit">${a.unit || ''}</span>
+      <div class="cbt-mid">
+        <span class="cbt-qty-lbl">الكمية</span>
+        <div class="cbt-qty-row">
+          <input class="cbt-qty-in" id="_cQty" type="number"
+            value="${a.presets?.[0]||1}" min="0" step="any" inputmode="decimal">
+          <span class="cbt-qty-unit">${a.unit}</span>
+        </div>
+        <div class="cbt-presets">
+          ${ps.map((v,i)=>`<button class="cbt-preset${i===0?' active':''}" data-v="${v}">${v}</button>`).join('')}
         </div>
       </div>
-      <button class="tvt-btn tvt-buy" id="_tvBuy">
-        <span class="tvt-dir">▲ شراء</span>
-        <span class="tvt-px" id="_tvBuyPx">—</span>
+      <button class="cbt-btn cbt-buy" id="_cBuy">
+        <span class="cbt-dir">▲ شراء</span>
+        <span class="cbt-px" id="_cBuyPx">—</span>
       </button>`;
-    const scr = document.getElementById('chartScreen');
-    const wrap = document.getElementById('_tvChartWrap');
-    if (scr && wrap) scr.insertBefore(bar, wrap);
-    document.getElementById('_tvQty').addEventListener('change', function () {
-      const v = parseFloat(this.value); if (v > 0) _lsSet('qty_' + _sym, v);
+    wrap.insertAdjacentElement('afterbegin', bar);
+    bar.querySelectorAll('.cbt-preset').forEach(b => {
+      b.onclick = () => {
+        bar.querySelectorAll('.cbt-preset').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        document.getElementById('_cQty').value = b.dataset.v;
+      };
     });
-    document.getElementById('_tvBuy').onclick = () => _showCf(true);
-    document.getElementById('_tvSell').onclick = () => _showCf(false);
-    const p = _curPx(); if (p) _setPrice(_sym, p);
+    document.getElementById('_cQty').oninput = () =>
+      bar.querySelectorAll('.cbt-preset').forEach(x => x.classList.remove('active'));
+    document.getElementById('_cBuy').onclick  = () => showCf(true);
+    document.getElementById('_cSell').onclick = () => showCf(false);
+    updateBtnPx();
   }
 
-  /* ══════════ CONFIRM SHEET ══════════ */
-  function _showCf(isBuy) {
+  function updateBtnPx() {
+    if (!_lastClose) return;
+    const a = ai(_sym);
+    const bp = document.getElementById('_cBuyPx');
+    const sp = document.getElementById('_cSellPx');
+    if (bp) bp.textContent = '$' + (_lastClose * 1.0005).toFixed(a.pxDp);
+    if (sp) sp.textContent = '$' + (_lastClose * 0.9995).toFixed(a.pxDp);
+  }
+
+  /* ════ Confirmation ════ */
+  function showCf(isBuy) {
     if (typeof State === 'undefined' || !State.wallet)
-      return typeof toast !== 'undefined' && toast('سجّل الدخول أولاً', 'err');
-    const qty = parseFloat(document.getElementById('_tvQty')?.value || 0);
-    if (!qty || qty <= 0) return typeof toast !== 'undefined' && toast('أدخل الكمية', 'err');
-    const a = _asset(_sym), isGr = _isGram(_sym), mid = _curPx();
-    if (!mid) return typeof toast !== 'undefined' && toast('لا يوجد سعر', 'err');
-    const midOz = _toOz(_sym, mid), qtyOz = isGr ? qty / TROY : qty;
-    const usd = (midOz * qtyOz).toFixed(2), mgn = (midOz * qtyOz / a.lev).toFixed(2);
-    /* ✅ صيغة Cross الحقيقية المشتركة (calcLiqPrice) — معاينة صفقة لم
-       تُفتح بعد، ما فيه position.liquidationPx حقيقي بعد لنقرأه. */
-    const sziLiqOz = isBuy ? qtyOz : -qtyOz;
-    const eq       = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(0) : 0;
-    const liqOz    = (typeof calcLiqPrice === 'function') ? calcLiqPrice(midOz, sziLiqOz, eq, a.cross, a.lev) : null;
-    const liqD     = liqOz ? _toDisp(_sym, liqOz).toFixed(a.pxDp) : null;
-    _hideCf();
-    const scr = document.getElementById('chartScreen'); if (!scr) return;
-    const ov = document.createElement('div'); ov.id = '_tvcfOv'; ov.className = 'tvcf-ov';
+      return toast?.('سجّل الدخول أولاً', 'err');
+    const qty = parseFloat(document.getElementById('_cQty')?.value || 0);
+    if (!qty || qty <= 0) return toast?.('أدخل الكمية', 'err');
+    const a   = ai(_sym);
+    const TL  = 31.1035;
+    const isGr = _sym === 'XAU';
+    const mid  = _lastClose || State.prices?.[_sym]?.mid || 0;
+    if (!mid) return toast?.('لا يوجد سعر', 'err');
+    const midOz = isGr ? mid * TL : mid;
+    const qtyOz = isGr ? qty / TL : qty;
+    const usd   = (midOz * qtyOz).toFixed(2);
+    const mgn   = (midOz * qtyOz / a.lev).toFixed(2);
+    const liqOz = isBuy ? midOz*(1-1/a.lev) : midOz*(1+1/a.lev);
+    const liqD  = isGr ? (liqOz/TL).toFixed(a.pxDp) : liqOz.toFixed(a.pxDp);
+    hideCf();
+    const wrap = document.getElementById('_cWrap'); if (!wrap) return;
+    const ov   = document.createElement('div');
+    ov.id = '_cfOv'; ov.className = 'cf-ov';
     ov.innerHTML = `
-      <div class="tvcf-card">
-        <div class="tvcf-hdl"></div>
-        <div class="tvcf-title" style="color:${isBuy ? '#00e676' : '#ff3d3d'}">${a.icon} ${isBuy ? 'شراء ▲' : 'بيع ▼'} — ${a.name}</div>
-        <div class="tvcf-sub">رافعة ${a.lev}x · تأكيد قبل التنفيذ</div>
-        <div class="tvcf-rows">
-          <div class="tvcf-row"><span class="tvcf-k">الكمية</span><span class="tvcf-v">${qty.toFixed(a.szDp)} ${a.unit}</span></div>
-          <div class="tvcf-row"><span class="tvcf-k">السعر</span><span class="tvcf-v">$${mid.toFixed(a.pxDp)}</span></div>
-          <div class="tvcf-row"><span class="tvcf-k">القيمة</span><span class="tvcf-v">≈ $${usd}</span></div>
-          <div class="tvcf-row"><span class="tvcf-k">الهامش</span><span class="tvcf-v w">≈ $${mgn}</span></div>
-          <div class="tvcf-row"><span class="tvcf-k">التصفية</span><span class="tvcf-v ${isBuy ? 'r' : 'g'}">${liqD ? '≈ $'+liqD : '—'}</span></div>
+      <div class="cf-card">
+        <div class="cf-hdl"></div>
+        <div class="cf-title" style="color:${isBuy?'#2da44e':'#e5534b'}">${a.icon} ${isBuy?'شراء ▲':'بيع ▼'} — ${a.name}</div>
+        <div class="cf-sub">رافعة ${a.lev}x · تأكيد قبل التنفيذ</div>
+        <div class="cf-rows">
+          <div class="cf-row"><span class="cf-key">الكمية</span><span class="cf-val">${fs(qty)} ${a.unit}</span></div>
+          <div class="cf-row"><span class="cf-key">السعر</span><span class="cf-val">${fp(mid)} $</span></div>
+          <div class="cf-row"><span class="cf-key">القيمة</span><span class="cf-val">≈ $${usd}</span></div>
+          <div class="cf-row"><span class="cf-key">الهامش</span><span class="cf-val w">≈ $${mgn}</span></div>
+          <div class="cf-row"><span class="cf-key">التصفية</span><span class="cf-val ${isBuy?'r':'g'}">≈ ${liqD} $</span></div>
         </div>
-        <div class="tvcf-btns">
-          <button class="tvcf-cancel" id="_tvcfC">إلغاء ✕</button>
-          <button class="tvcf-exec ${isBuy ? 'g' : 'r'}" id="_tvcfX">${isBuy ? '✅ تأكيد الشراء' : '✅ تأكيد البيع'}</button>
+        <div class="cf-btns">
+          <button class="cf-cancel" id="_cfC">إلغاء ✕</button>
+          <button class="cf-exec ${isBuy?'g':'r'}" id="_cfX">${isBuy?'✅ تأكيد الشراء':'✅ تأكيد البيع'}</button>
         </div>
       </div>`;
-    scr.appendChild(ov);
-    ov.onclick = e => { if (e.target === ov) _hideCf(); };
-    document.getElementById('_tvcfC').onclick = _hideCf;
-    document.getElementById('_tvcfX').onclick = () =>
+    wrap.appendChild(ov);
+    ov.onclick = e => { if (e.target === ov) hideCf(); };
+    document.getElementById('_cfC').onclick = hideCf;
+    document.getElementById('_cfX').onclick = () =>
       typeof requirePin !== 'undefined' ? requirePin(() => _execTrade(isBuy, qty)) : _execTrade(isBuy, qty);
   }
-
-  function _hideCf() { document.getElementById('_tvcfOv')?.remove(); }
+  function hideCf() { document.getElementById('_cfOv')?.remove(); }
 
   async function _execTrade(isBuy, qty) {
     if (!State?.wallet) return;
-    const btn = document.getElementById('_tvcfX');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="tvsp"></span>'; }
-    const isGr = _isGram(_sym);
-    const aApi = isGr ? ((typeof ASSETS !== 'undefined' && ASSETS['GOLD']) || _asset('GOLD')) : _asset(_sym);
-    const mid = _curPx(), midOz = _toOz(_sym, mid);
-    if (!midOz) { _hideCf(); return; }
-    const qtyOz = isGr ? qty / TROY : qty;
+    const btn = document.getElementById('_cfX');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="cf-spin"></span>'; }
+    const TL   = 31.1035;
+    const isGr = _sym === 'XAU';
+    const a    = isGr ? (ASSETS?.['GOLD'] || ai(_sym)) : ai(_sym);
+    const mid  = _lastClose || (isGr ? State.prices?.['XAU']?.mid : State.prices?.[_sym]?.mid) || 0;
+    const midOz = isGr ? mid * TL : mid;
+    if (!midOz) { hideCf(); return; }
+    const qtyOz = isGr ? qty / TL : qty;
     try {
-      try { await hlExchange({ type: 'updateLeverage', asset: aApi.idx, isCross: aApi.cross, leverage: aApi.lev }); } catch {}
+      try { await hlExchange({ type:'updateLeverage', asset:a.idx, isCross:a.cross, leverage:a.lev }); } catch {}
       await hlExchange({
-        type: 'order',
-        orders: [{
-          a: aApi.idx, b: isBuy,
-          p: wirePx(midOz * (isBuy ? 1.02 : 0.98), aApi.szDp),
-          s: wireSz(qtyOz, aApi.szDp),
-          r: false,
-          t: { limit: { tif: 'Ioc' } }
+        type:'order',
+        orders:[{ a:a.idx, b:isBuy,
+          p:wirePx(midOz*(isBuy?1.02:0.98), a.szDp),
+          s:wireSz(qtyOz, a.szDp), r:false, t:{ limit:{ tif:'Ioc' } }
         }],
-        grouping: 'na'
+        grouping:'na'
       });
-      _hideCf();
-      const disp = isGr ? qty.toFixed(2) + ' غرام' : qty.toFixed(aApi.szDp) + ' ' + (aApi.unit || '');
-      if (typeof toast !== 'undefined') toast(`✅ ${aApi.icon} ${isBuy ? 'شراء' : 'بيع'} ${disp}`, 'ok', 4000);
-      if (typeof _multiPoll !== 'undefined') setTimeout(_multiPoll, 2000);
-    } catch (e) {
-      if (typeof toast !== 'undefined')
-        toast(typeof tradeErr !== 'undefined' ? tradeErr(e.message) : '❌ ' + e.message.slice(0, 100), 'err', 5000);
-      if (btn) { btn.disabled = false; btn.innerHTML = isBuy ? '✅ تأكيد الشراء' : '✅ تأكيد البيع'; }
+      hideCf();
+      const disp = isGr ? qty.toFixed(2)+' غرام' : fs(qty)+' '+(a.unit||'');
+      toast?.(`✅ ${a.icon} ${isBuy?'شراء':'بيع'} ${disp}`, 'ok', 4000);
+      if (typeof pollAccount !== 'undefined') setTimeout(pollAccount, 2000);
+    } catch(e) {
+      toast?.((typeof tradeErr !== 'undefined' ? tradeErr(e.message) : '❌ '+e.message.slice(0,100)), 'err', 5000);
+      if (btn) { btn.disabled=false; btn.innerHTML=isBuy?'✅ تأكيد الشراء':'✅ تأكيد البيع'; }
     }
   }
 
-  /* ══════════ DOM ══════════
-     ✅ #_tvChartWrap غلاف جديد يحتوي #_tvC فقط — TradingView يملك
-     محتوى #_tvC بالكامل (innerHTML يُفرَّغ ويُعاد بناؤه بكل _initChart)،
-     والـoverlay تعيش كـsibling له بنفس الغلاف، فلا تعارض بينهما أبداً. */
-  function _ensureScreen() {
-    const scr = document.getElementById('chartScreen');
-    if (!scr || document.getElementById('_tvHdr')) return;
+  /* ════ إحصائيات اليوم — ✅ يبدأ 00:00 UTC+3 ════ */
+  function getSessionStartSec() {
+    /*
+      نريد: منتصف الليل UTC+3 = 00:00 UTC+3
+      = 21:00 UTC من اليوم السابق
 
-    document.addEventListener('fullscreenchange', () => {
-      const btn = document.getElementById('_tvFsBtn');
-      if (btn) btn.title = document.fullscreenElement ? 'خروج ملء الشاشة' : 'ملء الشاشة';
+      الخطوات:
+      1. احسب التاريخ الحالي بتوقيت UTC+3
+      2. خذ منتصف الليل لذلك التاريخ بتوقيت UTC (أي 00:00 UTC)
+      3. اطرح 3 ساعات للحصول على 00:00 UTC+3 بتوقيت UTC
+    */
+    const nowUTC3ms  = Date.now() + UTC3 * 1000;         // ms كأن UTC هو UTC+3
+    const d          = new Date(nowUTC3ms);                // التاريخ بصيغة UTC+3
+    const midnightUTC = Date.UTC(                          // منتصف ليل UTC لهذا اليوم
+      d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()
+    );
+    /* ✅ منتصف الليل UTC+3 = منتصف UTC - 3 ساعات */
+    return Math.floor(midnightUTC / 1000) - UTC3;
+  }
+
+  function computeDayStats() {
+    const start = getSessionStartSec();
+    const sc    = _candles.filter(c => c.time >= start);
+    if (!sc.length) return null;
+    const open = sc[0].open;
+    const high = Math.max(...sc.map(c => c.high));
+    const low  = Math.min(...sc.map(c => c.low));
+    const cur  = _lastClose || sc[sc.length-1].close;
+    const pct  = (cur - open) / open * 100;
+    return { open, high, low, cur, pct };
+  }
+
+  function drawDayStats() {
+    if (!_series) return;
+    const st = computeDayStats();
+    const el = document.getElementById('_cDayStat');
+    if (!st) { if (el) el.innerHTML = ''; return; }
+    const dp  = ai(_sym).pxDp;
+    const up  = st.pct >= 0;
+    if (el) {
+      el.innerHTML =
+        `<span style="color:var(--text-muted);font-size:10px;font-weight:700;">00:00+3</span>` +
+        `<span style="color:#26a69a;font-size:11px;font-weight:800;">▲ ${st.high.toFixed(dp)}</span>` +
+        `<span style="color:#ef5350;font-size:11px;font-weight:800;">▼ ${st.low.toFixed(dp)}</span>` +
+        `<span style="color:${up?'#26a69a':'#ef5350'};font-size:13px;font-weight:900;">${up?'+':''}${st.pct.toFixed(2)}%</span>`;
+    }
+  }
+
+  /* ════ بناء الرسم ════ */
+  function buildChart(container) {
+    if (_chart) { try { _chart.remove(); } catch {} _chart=null; _series=null; }
+    if (_resizeObs) { try { _resizeObs.disconnect(); } catch {} }
+
+    const dark = isDark();
+    const BG   = dark ? '#131722' : '#ffffff';
+    const TXT  = dark ? '#d1d4dc' : '#131722';
+    const GRID = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    const BDR  = dark ? '#2a2e39' : '#e0e3eb';
+    const CH   = dark ? 'rgba(197,200,207,0.6)' : 'rgba(19,23,34,0.45)';
+    const LBG  = dark ? '#1565c0' : '#1e88e5';
+
+    _chart = LightweightCharts.createChart(container, {
+      width:  container.clientWidth,
+      height: container.clientHeight,
+      layout: {
+        background: { type:'solid', color:BG },
+        textColor:  TXT, fontSize:12,
+        fontFamily: "'IBM Plex Mono',monospace",
+      },
+      grid: {
+        vertLines: { color:GRID },
+        horzLines: { color:GRID },
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal,
+        vertLine: {
+          width:1, color:CH,
+          style:LightweightCharts.LineStyle.Dashed,
+          labelBackgroundColor:LBG, labelVisible:true,
+        },
+        horzLine: {
+          width:1, color:CH,
+          style:LightweightCharts.LineStyle.Dashed,
+          labelBackgroundColor:LBG, labelVisible:true,
+        },
+      },
+      rightPriceScale: {
+        borderColor:BDR, scaleMargins:{top:0.06,bottom:0.06},
+        minimumWidth:80, borderVisible:true, autoScale:true,
+      },
+      timeScale: {
+        borderColor:BDR, timeVisible:true, secondsVisible:false,
+        rightOffset:8, barSpacing:IV_SPACING[_interval]||7,
+        minBarSpacing:2, fixLeftEdge:true, borderVisible:true,
+        /* ✅ UTC+3 AM/PM على محور الأسفل */
+        tickMarkFormatter: (tick, type) => {
+          if (type >= 3) return fmtTimeAxis(tick);
+          if (type === 2) return fmtDateAxis(tick);
+          if (type === 1) return _MN[_d3(tick).getUTCMonth()];
+          return _d3(tick).getUTCFullYear().toString();
+        },
+      },
+      handleScroll: {
+        mouseWheel:true, pressedMouseMove:true,
+        horzTouchDrag:true, vertTouchDrag:true,
+      },
+      handleScale: {
+        mouseWheel:true, pinch:true,
+        axisPressedMouseMove:{time:true, price:true},
+      },
+      localization: {
+        locale:'en-US',
+        priceFormatter: p => p.toLocaleString('en-US', {
+          minimumFractionDigits:ai(_sym).pxDp,
+          maximumFractionDigits:ai(_sym).pxDp,
+        }),
+        /* ✅ label المحور السفلي عند Crosshair = تاريخ + وقت كامل */
+        timeFormatter: tick => fmtFull(tick),
+      },
+      attributionLogo:false,
     });
 
-    const hdr = document.createElement('nav');
-    hdr.id = '_tvHdr';
-    hdr.innerHTML = `
-      <div class="tvh-l">
-        <button class="tvh-back" id="_tvBack">← رجوع</button>
-        <div class="tvh-info">
-          <span id="_tvIcon" class="tvh-icon">🛢</span>
-          <span id="_tvName" class="tvh-name">—</span>
-          <span id="_tvPx" class="tvh-price" data-p="0">—</span>
-          <span id="_tvPnl" class="tvh-pnl"></span>
+    /* ✅ الشموع — بدون خط السعر الأفقي الزائد */
+    _series = _chart.addCandlestickSeries({
+      upColor:         '#26a69a',
+      downColor:       '#ef5350',
+      borderUpColor:   '#26a69a',
+      borderDownColor: '#ef5350',
+      wickUpColor:     '#26a69a',
+      wickDownColor:   '#ef5350',
+      borderVisible:   true,
+      wickVisible:     true,
+      priceLineVisible: false,   // ✅ إزالة الخط الأفقي — label يبقى
+      lastValueVisible: true,    // ✅ label السعر على المحور يبقى
+    });
+
+    /* ✅ Crosshair Legend — سعر + تاريخ + وقت كامل */
+    _chart.subscribeCrosshairMove(param => {
+      const el = document.getElementById('_cLegend');
+      if (!el) return;
+      if (!param.time || !param.seriesData?.size) { el.innerHTML = ''; return; }
+      const bar = param.seriesData.get(_series);
+      if (!bar) return;
+      const dp  = ai(_sym).pxDp;
+      const up  = bar.close >= bar.open;
+      const cl  = up ? '#26a69a' : '#ef5350';
+      const chg = (((bar.close - bar.open) / bar.open) * 100).toFixed(2);
+
+      /* ✅ السعر يظهر أولاً ثم التاريخ والوقت */
+      el.innerHTML =
+        `<span style="color:${cl};font-weight:900;font-size:13px;">$${bar.close.toFixed(dp)}</span>` +
+        `<span style="color:var(--text-secondary);font-size:10px;font-weight:700;white-space:nowrap;">${fmtFull(param.time)}</span>` +
+        `<span style="color:${cl};font-weight:800;">O ${bar.open.toFixed(dp)}</span>` +
+        `<span style="color:${cl};">H ${bar.high.toFixed(dp)}</span>` +
+        `<span style="color:${cl};">L ${bar.low.toFixed(dp)}</span>` +
+        `<span style="color:${cl};font-weight:900;">${chg>0?'+':''}${chg}%</span>`;
+    });
+
+    _resizeObs = new ResizeObserver(() => {
+      if (_chart && container)
+        _chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
+    });
+    _resizeObs.observe(container);
+  }
+
+  /* ════ جلب الشموع ════ */
+  async function fetchCandles(sym, iv) {
+    const now  = Date.now();
+    const start = now - (RANGES[iv] || RANGES['1h']);
+    const TL   = 31.1035;
+    const isGr = sym === 'XAU';
+    try {
+      const r   = await fetch(HL_API+'/info', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ type:'candleSnapshot', req:{ coin:coin(sym), interval:iv, startTime:start, endTime:now } })
+      });
+      const raw = await r.json();
+      if (!Array.isArray(raw) || !raw.length) return [];
+      return raw.map(c => ({
+        time:  Math.floor(c.t / 1000),
+        open:  isGr ? +c.o/TL : +c.o,
+        high:  isGr ? +c.h/TL : +c.h,
+        low:   isGr ? +c.l/TL : +c.l,
+        close: isGr ? +c.c/TL : +c.c,
+      })).sort((a, b) => a.time - b.time);
+    } catch (e) { console.warn('[Chart]', e.message); return []; }
+  }
+
+  /* ════ خطوط المراكز ════ */
+  function clearLines() {
+    _entryLines.forEach(l => { try { _series.removePriceLine(l); } catch {} }); _entryLines = [];
+    if (_tpLine)  { try { _series.removePriceLine(_tpLine);  } catch {} _tpLine  = null; }
+    if (_slLine)  { try { _series.removePriceLine(_slLine);  } catch {} _slLine  = null; }
+    if (_liqLine) { try { _series.removePriceLine(_liqLine); } catch {} _liqLine = null; }
+  }
+
+  function drawLines() {
+    if (!_series || typeof State === 'undefined') return;
+    clearLines();
+    const TL = 31.1035;
+    for (const p of (State.positions || [])) {
+      const rawCoin = p.position.coin.includes(':') ? p.position.coin.split(':')[1] : p.position.coin;
+      const posSym  = rawCoin === 'GOLD' ? 'XAU' : rawCoin;
+      if (posSym !== _sym) continue;
+      const pos     = p.position;
+      const sziOz   = +pos.szi;
+      const isGr    = _sym === 'XAU';
+      const entryOz = +(pos.entryPx || 0);
+      const entryD  = isGr ? entryOz/TL : entryOz;
+      const curD    = _lastClose || (isGr ? State.prices?.['XAU']?.mid : State.prices?.[_sym]?.mid) || entryD;
+      const curOz   = isGr ? curD*TL : curD;
+      const pnl     = (curOz - entryOz) * sziOz;
+
+      if (entryD > 0) {
+        _entryLines.push(_series.createPriceLine({
+          price:entryD, lineWidth:2, lineStyle:2,
+          color:pnl>=0?'#2da44e':'#e5534b', axisLabelVisible:true,
+          title:`${sziOz>0?'▲':'▼'} Entry  ${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}`,
+        }));
+      }
+      const ts = p.tpsl || {};
+      if (ts.tp) {
+        const tpD   = isGr ? ts.tp/TL : ts.tp;
+        const tpPnl = Math.abs(sziOz) * Math.abs(ts.tp - entryOz);
+        _tpLine = _series.createPriceLine({
+          price:tpD, lineWidth:2, lineStyle:2, color:'#22c58b', axisLabelVisible:true,
+          title:`🎯 TP +$${tpPnl.toFixed(2)}`
+        });
+      }
+      if (ts.sl) {
+        const slD   = isGr ? ts.sl/TL : ts.sl;
+        const slPnl = Math.abs(sziOz) * Math.abs(ts.sl - entryOz);
+        _slLine = _series.createPriceLine({
+          price:slD, lineWidth:2, lineStyle:2, color:'#e8804a', axisLabelVisible:true,
+          title:`🛡 SL -$${slPnl.toFixed(2)}`
+        });
+      }
+      if (typeof calcLiqPrice !== 'undefined' && typeof ASSETS !== 'undefined') {
+        const aLiq  = ASSETS[posSym] || ASSETS['GOLD'] || { lev:20, cross:false };
+        const liqOz = calcLiqPrice(entryOz, sziOz, State.balance?.total||0, aLiq.cross, aLiq.lev);
+        if (liqOz !== null && liqOz > 0) {
+          const liqD = isGr ? liqOz/TL : liqOz;
+          _liqLine = _series.createPriceLine({
+            price:liqD, lineWidth:2,
+            lineStyle:LightweightCharts.LineStyle.Dotted,
+            color:'#ff6b35', axisLabelVisible:true,
+            title:`⚡ Liq $${liqD.toFixed(ai(_sym).pxDp)}`,
+          });
+        }
+      }
+      break;
+    }
+  }
+
+  /* ════ WebSocket ════ */
+  function wsConnect() {
+    wsClose(); clearTimeout(_wsTimer);
+    const TL = 31.1035;
+    try {
+      _ws = new WebSocket(HL_WS);
+      _ws.onopen = () => {
+        _ws.send(JSON.stringify({ method:'subscribe', subscription:{ type:'candle', coin:coin(_sym), interval:_interval } }));
+        setStatus('🟢');
+      };
+      _ws.onmessage = e => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.channel !== 'candle' || !msg.data || !_series) return;
+          const c    = msg.data;
+          const isGr = _sym === 'XAU';
+          const bar  = {
+            time:  Math.floor(c.t/1000),
+            open:  isGr?+c.o/TL:+c.o,
+            high:  isGr?+c.h/TL:+c.h,
+            low:   isGr?+c.l/TL:+c.l,
+            close: isGr?+c.c/TL:+c.c,
+          };
+          _series.update(bar);
+          const last = _candles[_candles.length-1];
+          if (last && last.time === bar.time) _candles[_candles.length-1] = bar;
+          else if (last && bar.time > last.time) _candles.push(bar);
+          setPrice(bar.close);
+          drawLines();
+          drawDayStats();
+          /* ✅ FIX (v7.3) — معايرة ساعة الجهاز ضد هذه الشمعة الحقيقية
+             (candle.t فعلي من الخادم) — تغذّي عدّاد التنازل بـstartClock
+             عبر _correctedNow، بدل تركه معتمداً حصراً على Date.now()
+             الخام. c.t قد يصل بالثواني أو المللي ثانية حسب مصدر الحمولة
+             (تحوّط دفاعي، نفس أسلوب ملف الإنتاج). */
+          _calibrateClock(c.t > 1e12 ? c.t : c.t * 1000, getIvMs(_interval));
+        } catch {}
+      };
+      _ws.onerror = () => setStatus('🔴');
+      _ws.onclose = () => { setStatus('🔴'); if (_visible) _wsTimer = setTimeout(wsConnect, 4000); };
+    } catch (e) { console.warn('[WS]', e.message); }
+  }
+  function wsClose() {
+    if (_ws) { try { _ws.close(); } catch {} _ws = null; }
+    clearTimeout(_wsTimer);
+  }
+
+  /* ════ تحميل ════ */
+  async function load(sym, iv) {
+    if (!_chart || !_series) return;
+    setStatus('⏳');
+    const px = document.getElementById('_cPrice'); if (px) px.textContent = '—';
+    const candles = await fetchCandles(sym, iv);
+    if (!candles.length) { setStatus('❌'); return; }
+    _candles = candles;
+    /* ✅ FIX (v7.3) — معايرة فورية من آخر شمعة REST حقيقية، بدل انتظار
+       أول تحديث WS حي فقط. تُضيّق نافذة "غير مُعايَر بعد" عند أول
+       فتح/تبديل للرسم — أكثر لحظة عرضة لظهور انحراف العدّ التنازلي.
+       candles[].time هنا بالثواني (راجع fetchCandles) فتُحوَّل لملي
+       ثانية هنا لتطابق توقيع _calibrateClock. */
+    _calibrateClock(candles[candles.length-1].time * 1000, getIvMs(iv));
+    _series.setData(candles);
+    _chart.timeScale().applyOptions({ barSpacing:IV_SPACING[iv]||7 });
+    _chart.timeScale().scrollToRealTime();
+    _lastClose = candles[candles.length-1].close;
+    setPrice(_lastClose);
+    drawLines();
+    drawDayStats();
+    setStatus('🟡');
+    wsConnect();
+  }
+
+  /* ════ بناء الشاشة ════ */
+  function ensureScreen() {
+    const screen = document.getElementById('chartScreen');
+    if (!screen || document.getElementById('_cWrap')) return;
+    screen.innerHTML = `
+      <div class="c-nav">
+        <div class="c-nav-row">
+          <div class="c-nav-group">
+            <button class="c-back" id="_cBack">← رجوع</button>
+            <div class="c-asset-info">
+              <span id="_cIcon" class="c-asset-icon">🛢</span>
+              <span id="_cName" class="c-asset-name">—</span>
+              <span id="_cPrice" class="c-cur-price">—</span>
+            </div>
+          </div>
+          <div class="c-nav-group">
+            <button class="c-reset-btn" id="_cReset" title="↺ عرض آخر الشموع">↺</button>
+            <button class="c-fs-btn" id="_cLock" style="border:none;background:none;font-size:15px;">🔒</button>
+            <button class="c-fs-btn" id="_cFs">⛶</button>
+            <span class="c-ws" id="_cWs">⏳</span>
+          </div>
+        </div>
+        <div class="c-nav-row">
+          <div class="c-intervals" style="flex:1;">
+            <button class="iv-btn" data-iv="1m">1m</button>
+            <button class="iv-btn" data-iv="5m">5m</button>
+            <button class="iv-btn" data-iv="15m">15m</button>
+            <button class="iv-btn" data-iv="1h">1H</button>
+            <button class="iv-btn" data-iv="4h">4H</button>
+            <button class="iv-btn" data-iv="1d">1D</button>
+          </div>
+          <span id="_cClockT" style="font-family:monospace;font-size:11px;color:var(--text-secondary);padding-right:6px;">—</span>
         </div>
       </div>
-      <div class="tvh-r">
-        <button class="tvh-fs" id="_tvFsBtn" title="ملء الشاشة">⛶</button>
-        <div class="tvh-dot wait" id="_tvDot"></div>
+      <div class="c-wrap" id="_cWrap">
+        <div class="c-inner" id="_cInner"></div>
+        <!-- ✅ العد التنازلي overlay بجانب label السعر -->
+        <div class="c-cd-overlay" id="_cCdOverlay">⏱ —</div>
+        <div class="c-day-stat" id="_cDayStat"></div>
+        <div class="c-legend"   id="_cLegend"></div>
       </div>`;
-    scr.prepend(hdr);
 
-    const wrap = document.createElement('div');
-    wrap.id = '_tvChartWrap';
-    const tvC = document.createElement('div');
-    tvC.id = '_tvC';
-    wrap.appendChild(tvC);
-    scr.appendChild(wrap);
-
-    document.getElementById('_tvBack').onclick = () => ChartModule.close();
-    document.getElementById('_tvFsBtn').onclick = () => {
-      const el = document.getElementById('chartScreen');
-      if (!el) return;
-      document.fullscreenElement ? document.exitFullscreen?.() : el.requestFullscreen?.().catch(() => {});
-    };
+    document.getElementById('_cBack').onclick  = () => ChartModule.close();
+    document.getElementById('_cFs').onclick    = toggleFullscreen;
+    document.getElementById('_cReset').onclick = resetView;
+    document.getElementById('_cLock').onclick  = () => typeof lockApp === 'function' && lockApp();
+    document.querySelectorAll('.iv-btn').forEach(b =>
+      b.onclick = () => ChartModule.switchInterval(b.dataset.iv)
+    );
   }
 
-  function _setHdr(sym) {
-    const a = _asset(sym);
-    const ic = document.getElementById('_tvIcon');
-    const nm = document.getElementById('_tvName');
+  function setHeader(sym) {
+    const a  = ai(sym);
+    const ic = document.getElementById('_cIcon'), nm = document.getElementById('_cName');
     if (ic) ic.textContent = a.icon;
     if (nm) nm.textContent = a.name;
-    const p = _prices[sym] || (typeof State !== 'undefined' ? State.prices?.[sym]?.mid : 0) || 0;
-    const el = document.getElementById('_tvPx');
-    if (el) {
-      if (p) { el.textContent = '$' + p.toFixed(a.pxDp); el.dataset.p = p; el.className = 'tvh-price'; _updBtnPx(sym, p); }
-      else { el.textContent = '—'; el.dataset.p = '0'; el.className = 'tvh-price'; }
-    }
-    _updatePnlBadge();
   }
 
-  function _dot(cls) {
-    const e = document.getElementById('_tvDot');
-    if (e) e.className = 'tvh-dot ' + cls;
-  }
-
-  /* ══════════ PUBLIC API ══════════ */
+  /* ════ API عامة ════ */
   function open(sym) {
-    const targetSym = sym || (typeof State !== 'undefined' ? State.asset : 'CL') || 'CL';
-    _visible = true;
-    _ensureScreen();
+    _sym = sym || (typeof State !== 'undefined' ? State.asset : 'CL');
+    _visible = true; _gestInit = false;
+    ensureScreen();
     document.getElementById('chartScreen')?.classList.remove('hidden');
-
-    /* ✅ FIX — لا هدم/إعادة بناء الودجت لو كان حياً وجاهزاً أصلاً من فتحة
-       سابقة بنفس الجلسة (راجع رأس الملف #14). close() لا يهدم الودجت
-       إطلاقاً — فقط يُخفي الشاشة — فإعادة فتحه هنا كانت تُعيد التحميل
-       الكامل بلا داعٍ (طلب REST تاريخي جديد + إعادة بناء iframe/canvas).
-       الآن: إظهار فوري بلا أي تحميل، مع مسار setSymbol السريع لو تغيّر
-       الرمز. البناء الكامل (_initChart) يبقى فقط لأول فتح بهذه الجلسة،
-       أو كتراجع تلقائي لو فشل setSymbol. */
-    if (_widget && _widgetReady) {
-      _linesReady = true;
-      if (targetSym !== _sym) {
-        switchAssetChart(targetSym);
-      } else {
-        _setHdr(_sym); _setNavOn(_sym);
-        _execLines();
-      }
-      _dot('wait'); _bboConn(_sym);
-      _ovrHide();
-      _restartLiveClock();
-      return;
-    }
-
-    _sym = targetSym;
-    const saved = _loadLayout();
-    const useSaved = saved && saved.sym === _sym && saved.content;
-    const savedIv = _lsGet('iv_' + _sym);
-    _interval = useSaved && saved.interval ? saved.interval : (savedIv && TV_TO_HL[savedIv] ? savedIv : '60');
-
-    _setHdr(_sym); _buildTrade(); _buildNav();
-
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      _initChart(_sym, _interval, useSaved ? saved.content : null);
-    }));
-
-    _dot('wait'); _bboConn(_sym);
-    _restartLiveClock();
-  }
-
-  /* ✅ جديد — عزل مؤقّت الساعة الحيّة (سعر/PnL/خطوط) بدالة واحدة تُعاد
-     من كلا مساري open() (إعادة فتح سريعة بلا تحميل، أو بناء كامل). */
-  function _restartLiveClock() {
-    clearInterval(_clockTimer);
-    _clockTimer = setInterval(() => {
-      if (!_visible || typeof State === 'undefined') return;
-      const p = State.prices?.[_sym]?.mid;
-      if (p) _setPrice(_sym, p);
-      if (Date.now() % 3000 < 1100) { _updatePnlBadge(); _scheduleLines(); }
-    }, 1000);
+    setHeader(_sym);
+    document.querySelectorAll('.iv-btn').forEach(b => b.classList.toggle('active', b.dataset.iv === _interval));
+    const wrap = document.getElementById('_cWrap');
+    if (wrap) buildTradeBar(wrap);
+    const inner = document.getElementById('_cInner');
+    if (inner) { blockGestures(inner); buildChart(inner); load(_sym, _interval); }
+    startClock();
   }
 
   function close() {
-    _visible = false; _linesReady = false;
-    clearInterval(_clockTimer); clearTimeout(_saveTimer);
-    _doAutoSave(); _bboClose(); _hideCf(); _clearLines();
+    _visible = false;
+    wsClose(); hideCf(); stopClock();
     if (document.fullscreenElement) document.exitFullscreen?.();
     document.getElementById('chartScreen')?.classList.add('hidden');
-    const ov = document.getElementById('_tvOvr');
-    if (ov && !ov.classList.contains('gone')) ov.classList.add('gone');
+    const lg = document.getElementById('_cLegend');  if (lg) lg.innerHTML = '';
+    const ds = document.getElementById('_cDayStat'); if (ds) ds.innerHTML = '';
+    _liqLine = null; _candles = [];
   }
 
   function switchInterval(iv) {
-    if (!iv || iv === _interval) return;
-    _interval = iv; _lsSet('iv_' + _sym, iv);
-    try {
-      _widget?.chart?.().setResolution?.(iv);
-    } catch {
-      requestAnimationFrame(() => {
-        _clearLines();
-        if (_widget) { try { _widget.remove(); } catch {} _widget = null; }
-        if (_datafeed) { _datafeed.destroy(); _datafeed = null; }
-        _initChart(_sym, iv, null);
-      });
-    }
+    if (iv === _interval) return;
+    _interval = iv; wsClose();
+    document.querySelectorAll('.iv-btn').forEach(b => b.classList.toggle('active', b.dataset.iv === iv));
+    load(_sym, _interval);
   }
 
-  /* ══════════ ✅ تبديل الأصل — بدون هدم/إعادة بناء الودجت ══════════
-     نفس فلسفة switchInterval أعلاه: chart().setSymbol() مدعومة رسمياً
-     بـTradingView Advanced Charts وتبدّل الرمز على نفس نسخة الودجت
-     الحيّة، بلا أي هدم لـiframe/canvas ولا "شاشة سوداء" تغطي الرأس/
-     شريط الأصول/شريط التداول — فقط #_tvChartWrap تُظهر حالة تحميل
-     قصيرة ريثما TradingView يجهّز بيانات الرمز الجديد.
-     ⚠️ ملف charting_library.d.ts غير متاح لي بنسخة المشروع الحالية
-     للتحقق من التوقيع الدقيق حرفياً من المصدر — استُخدم الشكل الأكثر
-     توثيقاً (symbol, callback) بثقة عالية، مع تراجع تلقائي كامل
-     (_initChart) لو فشلت لأي سبب. لا كسر صامت ممكن — راقب الـconsole
-     أول استخدام: أي "setSymbol failed" يعني رجع للطريقة القديمة تلقائياً. */
   function switchAssetChart(sym) {
     if (!_visible || sym === _sym) return;
-    _doAutoSave();
-    _sym = sym;
-    _setHdr(sym); _setNavOn(sym); _buildTrade(); _bboConn(sym);
-
-    const saved = _loadLayout();
-    const useSaved = saved && saved.sym === sym && saved.content;
-    const savedIv = _lsGet('iv_' + sym);
-    const nextIv = useSaved && saved.interval ? saved.interval : (savedIv && TV_TO_HL[savedIv] ? savedIv : '60');
-
-    if (_widget && _linesReady) {
-      try {
-        const ch = _widget.chart();
-        if (ch && typeof ch.setSymbol === 'function') {
-          _ovrShow(sym);
-          ch.setSymbol(sym, () => {
-            try {
-              if (nextIv !== _interval && typeof ch.setResolution === 'function') ch.setResolution(nextIv);
-            } catch {}
-            _interval = nextIv;
-            _lsSet('iv_' + sym, nextIv);
-            _linesReady = true;
-            setTimeout(_ovrHide, 150);
-            _execLines();
-          });
-          return;
-        }
-      } catch (e) {
-        console.warn('[chart] setSymbol failed, falling back to full reinit', e);
-      }
-    }
-
-    _interval = nextIv;
-    requestAnimationFrame(() => { _initChart(sym, _interval, useSaved ? saved.content : null); });
+    _sym = sym; setHeader(sym); wsClose();
+    const wrap = document.getElementById('_cWrap');
+    if (wrap) buildTradeBar(wrap);
+    const inner = document.getElementById('_cInner');
+    if (inner) { buildChart(inner); load(_sym, _interval); }
   }
 
-  function refreshLines() { if (_visible) _scheduleLines(); }
+  function refreshLines() {
+    if (_visible && _series) drawLines();
+  }
 
   return { open, close, switchInterval, switchAssetChart, refreshLines };
 })();
