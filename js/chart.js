@@ -36,13 +36,22 @@
       تراكمي لهذي الشمعة حتى الآن، لا دلتا لكل رسالة WS. الكود كان
       يعمل `+=` (تراكم فوق تراكم) بدل `=` (استبدال) — يُضاعف حجم كل
       شمعة حيّة مع كل تحديث أثناء تكوّنها. صُححت.
-   10. ✅ NEW — حُذفت mainSeriesProperties.showCountdown (كانت true).
-       ميزة تعداد تنازلي داخلية بـTradingView تُحسَب من ساعة المتصفح
-       المحلية، لا من بياناتنا — أقرب مرشّح لإحساس "الرسم متقدم عن
-       الواقع بثانية" الذي وُصِف، بلا أي علاقة بصحة بيانات الشموع نفسها.
-   11. ✅ NEW — getBars: أُزيل هامش +5000ms المستقبلي بحد toMs (كان
+   10. ✅ تصحيح تشخيص سابق — showCountdown ليست سبب "التقدّم"؛ أُعيدت
+       (true). العدّاد الداخلي لـTradingView عرضٌ فقط: لا يمسّ بيانات
+       الشموع ولا يحرّك الشمعة ولا يستدعي الـDatafeed.
+   11. ✅ getBars: أُزيل هامش +5000ms المستقبلي بحد toMs (كان
        Date.now()+5000) — الآن Date.now() الصارم فقط، بلا أي سماحية
        لطلب بيانات أبعد من اللحظة الحالية الفعلية من جهتنا نحن.
+   12. ✅ NEW — السبب الحقيقي لظهور الشمعة الحيّة بوقت 18:00 بينما
+       الساعة 17:43: الميزة 'end_of_period_timescale_marks' كانت مُفعّلة
+       بـenabled_features، وهي تسمّي علامات المحور الزمني بـ«نهاية»
+       الفترة بدل بدايتها (إزاحة فترة كاملة، لا ثانية ولا منطقة زمنية).
+       حُذفت. الآن الشمعة تُعرض بوقت فتحها الحقيقي، تُغلق على 59،
+       والتالية تبدأ على 00 عند الحد الفعلي.
+       ⚠️ ثابت في كل الملف: لا خصم 1000ms ولا أي offset من candle.t
+       ولا من Date.now()، ولا Math.ceil في أي مسار زمني. البيانات
+       الزمنية تبقى دقيقة كما هي — التعديل على العرض فقط.
+
 ═══════════════════════════════════════════════════════════════════ */
 const ChartModule = (function () {
   'use strict';
@@ -799,9 +808,10 @@ const ChartModule = (function () {
         'mainSeriesProperties.showPriceLine': true,
         'mainSeriesProperties.priceLineColor': '#ff8c42',
         'mainSeriesProperties.priceLineWidth': 1,
-        /* ✅ حُذفت showCountdown (كانت true) — راجع تعليق رأس الملف #10:
-           تعداد تنازلي داخلي بـTradingView يُحسَب من ساعة المتصفح
-           المحلية، أقرب مرشّح لإحساس "الرسم متقدم عن الواقع". */
+        /* ✅ عدّاد المكتبة الداخلي مُعاد تفعيله (راجع #10 بالرأس).
+           عرضٌ فقط: لا يؤثر على candle.t ولا على الـDatafeed ولا يفتح
+           شمعة جديدة — الشمعة تتقدّم فقط ببيانات الخادم الفعلية. */
+        'mainSeriesProperties.showCountdown': true,
         'scalesProperties.fontSize': scaleFont,
         'scalesProperties.textColor': dark ? '#999' : '#444',
         'scalesProperties.lineColor': dark ? '#222' : '#ddd',
@@ -820,7 +830,9 @@ const ChartModule = (function () {
         'axis_pressed_mouse_move_scale', 'axis_double_clicked_reset_scale',
         'shift_visible_range_on_new_bar', 'pre_post_market_sessions',
         'items_favoriting', 'show_hide_button_in_legend', 'hide_last_na_study_output',
-        'adaptive_logo', 'move_logo_to_main_pane', 'end_of_period_timescale_marks',
+        /* ⛔ 'end_of_period_timescale_marks' مُزالة عمداً — كانت تسمّي
+           الشمعة بنهاية فترتها (18:00 بدل 17:00). راجع #12 بالرأس. */
+        'adaptive_logo', 'move_logo_to_main_pane',
         'use_localstorage_for_settings', 'save_chart_properties_to_local_storage',
         'chart_property_page_style', 'chart_property_page_scales',
         'chart_property_page_background', 'chart_property_page_timezone_sessions',
