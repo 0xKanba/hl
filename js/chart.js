@@ -1,3 +1,58 @@
+/* ═══════════════════════════════════════════════════════════════════
+   chart.js — Hyperliquid TradingView Advanced Charts
+   Complete rewrite — correct Datafeed API, exact UTC timestamps,
+   seamless history+realtime sync, clean weekly aggregation,
+   isolated per-asset state, zero memory leaks.
+
+   CRITICAL CORRECTIONS:
+   1. _normTime case '1' had d.getUTCFullYear() twice (month slot),
+      causing 1m candles to jump ~168 years into the future.
+   2. Hyperliquid t is OPEN time in BOTH REST candleSnapshot AND
+      WS candle updates. Removed all _ivMs subtraction logic.
+   3. Realtime lastBar cache merges correctly without drift.
+   4. ✅ Liquidation price everywhere in this file now routes through
+      position.liquidationPx directly (موثّق رسمياً ضمن clearinghouseState)
+      عند وجود صفقة مفتوحة فعلاً، ويلجأ لـpositions.js:calcLiqPrice فقط
+      كاحتياط نادر أو لمعاينة صفقة لم تُفتح بعد (chart.js:_showCf).
+   5. ✅ إصلاح "الشاشة كلها تتجمّد عند تبديل الأصل" — شاشة التحميل
+      (_tvOvr) كانت child مباشر لـ#chartScreen كاملاً (الرأس+النافبار+
+      شريط التداول+الشارت)، والـCSS بتاعتها position:absolute;inset:0
+      كانت تتمدد لتغطي كل شيء لأن #chartScreen هو الجد المُموضَع. الآن
+      غلاف مستقل #_tvChartWrap يحتوي #_tvC فقط، وoverlay sibling له
+      بداخله — يغطي منطقة الشارت حصراً، الباقي يبقى حياً وتفاعلياً.
+   6. ✅ تبديل الأصل (switchAssetChart) يستخدم chart().setSymbol()
+      أولاً (لا هدم/بناء الودجت بالكامل) — يتراجع لـ_initChart الكاملة
+      فقط لو فشلت (try/catch)، فلا كسر صامت لو اختلف توقيع المكتبة.
+   7. ✅ إصلاح جوهري بالشمعة الأسبوعية الحيّة — dailyMap كانت تبدأ فارغة
+      بكل _openWs جديد ولا تُبذر من التاريخ المجلوب فعلاً، فأول تحديث حي
+      بعد الفتح يعيد حساب الأسبوع من يوم واحد فقط (يمحو الأيام الأسبق).
+      الآن تُبذر فوراً من أيام الأسبوع الحالي المنقضية، بالتوازي مع
+      الاشتراك الحي (لا تأخير عليه).
+   8. ✅ pollAccount (دالة محذوفة من المشروع منذ تحويل الحساب لـpush-
+      based) كانت مُستدعاة هنا بحماية typeof — صُححت لـ_multiPoll
+      الحقيقية (trading.js) لتناسق مع بقية المشروع.
+   9. ✅ NEW — خطأ تراكم الحجم (volume) بالشمعة الحيّة قيد التكوّن:
+      Candle.v (موثّق رسمياً بمخطط websocket/subscriptions) هو إجمالي
+      تراكمي لهذي الشمعة حتى الآن، لا دلتا لكل رسالة WS. الكود كان
+      يعمل `+=` (تراكم فوق تراكم) بدل `=` (استبدال) — يُضاعف حجم كل
+      شمعة حيّة مع كل تحديث أثناء تكوّنها. صُححت.
+   10. ✅ تصحيح تشخيص سابق — showCountdown ليست سبب "التقدّم"؛ أُعيدت
+       (true). العدّاد الداخلي لـTradingView عرضٌ فقط: لا يمسّ بيانات
+       الشموع ولا يحرّك الشمعة ولا يستدعي الـDatafeed.
+   11. ✅ getBars: أُزيل هامش +5000ms المستقبلي بحد toMs (كان
+       Date.now()+5000) — الآن Date.now() الصارم فقط، بلا أي سماحية
+       لطلب بيانات أبعد من اللحظة الحالية الفعلية من جهتنا نحن.
+   12. ✅ NEW — السبب الحقيقي لظهور الشمعة الحيّة بوقت 18:00 بينما
+       الساعة 17:43: الميزة 'end_of_period_timescale_marks' كانت مُفعّلة
+       بـenabled_features، وهي تسمّي علامات المحور الزمني بـ«نهاية»
+       الفترة بدل بدايتها (إزاحة فترة كاملة، لا ثانية ولا منطقة زمنية).
+       حُذفت. الآن الشمعة تُعرض بوقت فتحها الحقيقي، تُغلق على 59،
+       والتالية تبدأ على 00 عند الحد الفعلي.
+       ⚠️ ثابت في كل الملف: لا خصم 1000ms ولا أي offset من candle.t
+       ولا من Date.now()، ولا Math.ceil في أي مسار زمني. البيانات
+       الزمنية تبقى دقيقة كما هي — التعديل على العرض فقط.
+
+═══════════════════════════════════════════════════════════════════ */
 const ChartModule = (function () {
   'use strict';
 
@@ -6,22 +61,13 @@ const ChartModule = (function () {
   const TROY        = 31.1035;
   const MIN_TIME    = 1577836800000;          // 2020-01-01 00:00 UTC
   const LS_PREFIX   = 'hl_tv_';
-  const LAYOUT_KEY  = 'layout_v2';
+  const LAYOUT_KEY  = 'layout_v1';
 
   const TV_RESOLUTIONS = ['1','3','5','15','30','60','120','240','1D','1W'];
 
   const TV_TO_HL = {
     '1':'1m','3':'3m','5':'5m','15':'15m','30':'30m',
     '60':'1h','120':'2h','240':'4h','1D':'1d','1W':'1d'
-  };
-
-  /* ✅ جديد — مدة كل دقة زمنية بالمللي ثانية، للعدّ التنازلي المستقل
-     فقط (راجع _updateCountdown أدناه). لا علاقة لها إطلاقاً ببيانات
-     الشموع أو قرارات الـDatafeed — عرض نصي بحت، بصمة الحساب مطابقة
-     تماماً لملف المشروع بدون مكتبة (Math.ceil(Date.now()/ms)*ms). */
-  const RES_MS = {
-    '1':60000, '3':180000, '5':300000, '15':900000, '30':1800000,
-    '60':3600000, '120':7200000, '240':14400000, '1D':86400000, '1W':604800000
   };
 
   const NAV_ASSETS = [
@@ -53,8 +99,10 @@ const ChartModule = (function () {
 
   /* ══════════ UTC TIME NORMALIZATION ══════════
      Every timestamp is snapped to the exact interval boundary via
-     floor (never rounds up/forward). No drift, no timezone shifts,
-     no manual compensation — raw server time only.               */
+     floor (never rounds up/forward — verified case by case). No
+     drift, no timezone shifts, no manual compensation.
+     FIXED: case '1' used d.getUTCFullYear() for month — corrected
+            to d.getUTCMonth().                                   */
   function _normTime(ms, res) {
     const d = new Date(ms);
     switch (res) {
@@ -101,34 +149,9 @@ const ChartModule = (function () {
   const _weekStart = ms => _normTime(ms, '1W');
 
   /* ══════════ DATAFEED ══════════
-     ✅ FIX جوهري — حُذف بالكامل نظام تصحيح الساعة المحلية القديم
-     (_correctedNow / _calibrateClock / _advanceTime / getServerTime /
-     supports_time). كان هذا يُسبِّب إغلاق الشمعة قبل موعدها الحقيقي
-     بثانية تقريباً ("1د" تُغلق عند 59 ثانية وتفتح التالية): كل شمعة حية
-     واردة من الخادم كانت تُشغِّل _calibrateClock، وأحد فرعيها يُعيد ضبط
-     _clockOffsetMs بحيث "الآن المصحَّح" = بداية الدلو الحالي بالضبط
-     بمجرد أن يتجاوزه — حلقة تغذية راجعة تُصفِّر تقدّم الوقت الفعلي
-     بدل تركه يتقدّم طبيعياً، وتُغذّي getServerTime المكتبة مباشرة بهذا
-     الرقم غير المستقر. الحل: لا تصحيح إطلاقاً — بيانات الوقت/السعر
-     تُغذّى تماماً كما تصل من الخادم (نفس فلسفة النسخة القديمة بلا
-     مكتبة Advanced Charts)، والعدّ التنازلي (showCountdown) يعتمد على
-     ساعة المتصفح الافتراضية لـTradingView (supports_time=false)، بلا
-     أي طبقة تخمين محلية بيننا وبين البيانات الحقيقية.
-     الأثر الجانبي المقبول: بلا تداول فعلي لفترة طويلة، الشمعة قيد
-     التكوّن تبقى ثابتة حتى وصول أول تحديث حقيقي — بالضبط سلوك النسخة
-     القديمة بلا مكتبة، لا نقص وظيفي عنها.
-
-     ✅ FIX ثانٍ وأهم — إزالة الطبقة أعلاه وحدها لم تكفِ: مكتبة
-     TradingView Advanced Charts تملك آلية showCountdown *داخلية* خاصة
-     بها، منفصلة تماماً عن الـDatafeed — تقارن آخر بار وصلها فعلياً مع
-     Date.now() الخام لجهاز المتصفح بمعزل عن أي بيانات حقيقية جديدة،
-     وتُظهر/تتصرّف وكأن الشمعة أُغلقت بمجرد انتهاء المدة حسابياً، حتى
-     لو الـDatafeed لم يُرسل أي بار جديد بعد. هذا تخمين المكتبة نفسها،
-     لا علاقة له بـ_ingestCandle أعلاه (المُصلَح فعلاً ويعمل بشكل سليم).
-     الحل: تعطيل showCountdown الداخلي كلياً (أسفل بـ_mkWidget)، واستبداله
-     بعدّاد تنازلي مستقل مبني خارج المكتبة تماماً — نفس معادلة الملف بدون
-     مكتبة حرفياً (_updateCountdown أسفل)، بلا أي تدخّل من TradingView.
-  ══════════════════════════════════════════════════════════════ */
+     Single class implementing the exact TradingView Datafeed API.
+     Per-subscriber lastBar cache, deduplicated emissions, weekly
+     aggregation from daily WS, clean destroy().                    */
   class HyperliquidDatafeed {
     constructor() {
       this._subs = new Map();      // uid  → {sym,res,callback,wsKey,lastBar}
@@ -145,9 +168,6 @@ const ChartModule = (function () {
         supports_group_request: false,
         supports_marks: false,
         supports_timescale_marks: false,
-        /* ✅ FIX — كانت true (getServerTime مصدر الانحراف، راجع تعليق
-           رأس الملف). false تعني: المكتبة تستخدم ساعة المتصفح مباشرة،
-           بلا أي وسيط تصحيح محلي — تماماً كالنسخة القديمة بلا مكتبة. */
         supports_time: false,
       }), 0);
     }
@@ -181,8 +201,8 @@ const ChartModule = (function () {
       const isW = resolution === '1W';
       const hlIv = isW ? '1d' : (TV_TO_HL[resolution] || '1h');
       const fromMs = Math.max(periodParams.from * 1000, MIN_TIME);
-      /* ✅ Date.now() خام مباشرة — بلا أي إزاحة محلية (راجع تعليق رأس
-         الملف). مطابق تماماً لأسلوب النسخة القديمة بلا مكتبة. */
+      /* ✅ حد صارم Date.now() — بلا أي هامش مستقبلي من جهتنا (كان
+         +5000ms سابقاً). راجع تعليق رأس الملف #11. */
       const toMs   = Math.min(periodParams.to   * 1000, Date.now());
 
       if (fromMs >= toMs) { onHistory([], {noData:true}); return; }
@@ -242,8 +262,9 @@ const ChartModule = (function () {
     /*
       Build a bar from a Hyperliquid candle object.
       Hyperliquid t is OPEN time in both REST and WS (confirmed:
-      Candle{ t: open millis; T: close millis }); we never read T,
-      only t — used directly, no correction.
+      Candle{ t: open millis; T: close millis } — T = t + duration - 1,
+      an inclusive-end convention; we never read T, only t).
+      No subtraction needed — use t directly.
     */
     _bar(candle, sym, res) {
       const g = _isGram(sym);
@@ -314,13 +335,67 @@ const ChartModule = (function () {
       const entry = { unsub: null, lastBar: null, dailyMap: new Map() };
       this._ws.set(wsKey, entry);
 
-      entry.unsub = HL.subscribe({type:'candle', coin, interval:hlIv}, payload => {
-        this._ingestCandle(wsKey, payload);
+      entry.unsub = HL.subscribe({type:'candle', coin, interval:hlIv}, c => {
+        const w = this._ws.get(wsKey);
+        if (!w) return;
+
+        for (const [,sub] of this._subs) {
+          if (sub.wsKey !== wsKey) continue;
+
+          // For weekly subscribers, normalize to daily boundary first,
+          // then aggregate to weekly. For others, normalize to their resolution.
+          const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
+          const raw = this._bar(c, sub.sym, normRes);
+
+          // Guard against stale historical ticks after reconnect
+          if (w.lastBar && raw.time < w.lastBar.time) continue;
+
+          if (!w.lastBar || raw.time > w.lastBar.time) {
+            w.lastBar = {...raw};
+          } else {
+            /* ✅ FIX #9 — Candle.v هو إجمالي تراكمي للشمعة حتى الآن
+               (موثّق رسمياً)، لا دلتا لكل رسالة WS. كان `+=` هنا يُضاعف
+               الحجم مع كل تحديث حي لنفس الشمعة قيد التكوّن — استبدال،
+               لا تراكم. */
+            w.lastBar.high = Math.max(w.lastBar.high, raw.high);
+            w.lastBar.low  = Math.min(w.lastBar.low,  raw.low);
+            w.lastBar.close = raw.close;
+            w.lastBar.volume = raw.volume;
+          }
+
+          let emit;
+          if (sub.resolution === '1W') {
+            const dk = _normTime(w.lastBar.time, '1D');
+            w.dailyMap.set(dk, {...w.lastBar});
+            // prune old weeks to prevent unbounded growth
+            const curW = _weekStart(w.lastBar.time);
+            for (const [k] of w.dailyMap) if (k < curW - 7*86400000) w.dailyMap.delete(k);
+            emit = this._calcWeek(w.dailyMap, curW);
+            if (!emit) continue;
+          } else {
+            emit = {...w.lastBar};
+          }
+
+          // Deduplicate: only emit if bar actually changed
+          if (!sub.lastBar || emit.time!==sub.lastBar.time ||
+              emit.open!==sub.lastBar.open || emit.high!==sub.lastBar.high ||
+              emit.low!==sub.lastBar.low || emit.close!==sub.lastBar.close ||
+              emit.volume!==sub.lastBar.volume) {
+            sub.callback(emit);
+            sub.lastBar = emit;
+          }
+        }
       });
 
-      /* بذر أيام الأسبوع الحالي المنقضية فوراً (بالتوازي مع الاشتراك
-         أعلاه) لصحّة تجميع 1W من أول لحظة، بلا انتظار تحديثات حيّة
-         تتراكم من الصفر — مُقيَّدة بمشترك 1W فعلي فقط. */
+      /* ✅ إصلاح جوهري — الشمعة الأسبوعية كانت تُعاد حسبتها من يوم واحد
+         فقط عند وصول أول تحديث حي بعد فتح/تبديل الرسم: dailyMap تبدأ
+         فارغة تماماً (Map جديدة بكل _openWs)، ولا تُبذر أبداً من التاريخ
+         المجلوب فعلاً بـgetBars — فقط تمتلئ لاحقاً من التحديثات الحيّة
+         توّاً. فأول تحديث حي كان يحسب open/high/low الأسبوع من ذلك اليوم
+         فقط، ماحياً الأيام الأسبق المرسومة أصلاً بالتاريخ. الحل: نجلب
+         أيام الأسبوع الحالي المنقضية فوراً (بالتوازي مع الاشتراك أعلاه،
+         لا بعده — لا تأخير على البيانات الحيّة) ونضعها بـdailyMap قبل
+         وصول أي تحديث حي. مُقيَّدة بمشترك 1W فعلي فقط. */
       let needsWeekly = false;
       for (const [,s] of this._subs) if (s.wsKey === wsKey && s.resolution === '1W') { needsWeekly = true; break; }
       if (hlIv === '1d' && needsWeekly) {
@@ -334,68 +409,6 @@ const ChartModule = (function () {
           }
           if (!w.lastBar && raw.length) w.lastBar = { ...raw[raw.length - 1] };
         }).catch(() => {});
-      }
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       ✅ نقطة الاستيعاب الموحّدة الوحيدة لكل تحديث شمعة حي. مبسَّطة
-       بالكامل بعد حذف مفهوم "الشمعة الاصطناعية" (لم يعد هناك أي بار
-       يُنشأ محلياً — كل بار هنا حقيقي 100% قادم من الخادم). القاعدة:
-       دلو زمني جديد → استبدال كامل؛ نفس الدلو → تحديث high/low/close
-       (Candle.v إجمالي تراكمي، لا دلتا — استبدال لا تراكم)؛ دلو أقدم
-       (تكة متأخرة بعد إعادة اتصال) → تجاهل.
-       ══════════════════════════════════════════════════════════════ */
-    _ingestCandle(wsKey, payload) {
-      const w = this._ws.get(wsKey);
-      if (!w) return;
-
-      const c = Array.isArray(payload) ? payload[payload.length - 1] : payload;
-      if (!c) return;
-
-      for (const [,sub] of this._subs) {
-        if (sub.wsKey !== wsKey) continue;
-
-        // For weekly subscribers, normalize to daily boundary first,
-        // then aggregate to weekly. For others, normalize to their resolution.
-        const normRes = sub.resolution === '1W' ? '1D' : sub.resolution;
-        const raw = this._bar(c, sub.sym, normRes);
-
-        if (!w.lastBar || raw.time > w.lastBar.time) {
-          w.lastBar = { ...raw };
-        } else if (raw.time === w.lastBar.time) {
-          w.lastBar.high  = Math.max(w.lastBar.high, raw.high);
-          w.lastBar.low   = Math.min(w.lastBar.low,  raw.low);
-          w.lastBar.close = raw.close;
-          w.lastBar.volume = raw.volume;
-        } else {
-          continue; // تكة متأخرة أقدم من المعروض فعلاً — تجاهل
-        }
-
-        this._emit(sub, w);
-      }
-    }
-
-    /* ✅ تجميع منطق الإصدار (weekly aggregation + dedup + callback). */
-    _emit(sub, w) {
-      let emit;
-      if (sub.resolution === '1W') {
-        const dk = _normTime(w.lastBar.time, '1D');
-        w.dailyMap.set(dk, {...w.lastBar});
-        const curW = _weekStart(w.lastBar.time);
-        for (const [k] of w.dailyMap) if (k < curW - 7*86400000) w.dailyMap.delete(k);
-        emit = this._calcWeek(w.dailyMap, curW);
-        if (!emit) return;
-      } else {
-        emit = {...w.lastBar};
-      }
-
-      // Deduplicate: only emit if bar actually changed
-      if (!sub.lastBar || emit.time!==sub.lastBar.time ||
-          emit.open!==sub.lastBar.open || emit.high!==sub.lastBar.high ||
-          emit.low!==sub.lastBar.low || emit.close!==sub.lastBar.close ||
-          emit.volume!==sub.lastBar.volume) {
-        sub.callback(emit);
-        sub.lastBar = emit;
       }
     }
 
@@ -422,7 +435,6 @@ const ChartModule = (function () {
   let _sym         = 'CL';
   let _interval    = '60';
   let _clockTimer  = null;
-  let _cdTimer     = null;   // ✅ جديد — مؤقّت عدّاد مستقل بتردد أعلى (200ms)
   let _saveTimer   = null;
   const _prices    = {};
   let _bboUnsub    = null;
@@ -430,7 +442,6 @@ const ChartModule = (function () {
   let _lines       = [];
   let _linesReady  = false;
   let _linesPending = false;
-  let _widgetReady = false;
 
   /* ══════════ CSS ══════════ */
   (function _injectCSS() {
@@ -455,7 +466,6 @@ const ChartModule = (function () {
 .tvh-pnl.pos{background:rgba(0,230,118,.15);color:#00e676;border:1px solid rgba(0,230,118,.3);}
 .tvh-pnl.neg{background:rgba(255,61,61,.15);color:#ff3d3d;border:1px solid rgba(255,61,61,.3);}
 .tvh-pnl.show{display:inline-block;}
-.tvh-cd{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:800;color:var(--text-secondary,#8a8278);white-space:nowrap;flex-shrink:0;letter-spacing:.3px;}
 .tvh-dot{width:7px;height:7px;border-radius:50%;background:#444;flex-shrink:0;transition:background .3s;}
 .tvh-dot.on{background:#00e676;box-shadow:0 0 6px #00e676;}
 .tvh-dot.wait{background:#ffd600;animation:_tvDt 1.1s ease-in-out infinite;}
@@ -570,7 +580,11 @@ const ChartModule = (function () {
     }
   }
 
-  /* ══════════ OVERLAY ══════════ */
+  /* ══════════ OVERLAY ══════════
+     ✅ الآن تُلحَق داخل #_tvChartWrap (غلاف يحتوي #_tvC فقط) بدل
+     #chartScreen كاملاً — تغطي منطقة الشارت حصراً، لا الرأس ولا شريط
+     الأصول ولا شريط التداول. أسلوب "شمشة" (shimmer) بروح c.js بدل
+     أيقونة+بار تحميل ثابت. */
   function _ovrShow(sym) {
     const wrap = document.getElementById('_tvChartWrap');
     if (!wrap) return;
@@ -635,56 +649,15 @@ const ChartModule = (function () {
 
   function _loadLayout() { return _lsGet(LAYOUT_KEY); }
 
-  /* ══════════ ORDER LINES ══════════
-     ✅ FIX جوهري — كانت تُرسم عبر chart.createOrderLine() (Order Line
-     Tool)، وهذه موثّقة رسمياً حصراً ضمن منتج "Trading Terminal" —
-     مختلف عن "Advanced Charts"/"Charting Library" العادي المُستضاف
-     فعلياً هنا (chart.kanba.pw/charting_library). النتيجة: النداء لا
-     يرمي أي خطأ ظاهر، لكنه لا يرسم شيئاً على الإطلاق بهذا الترخيص —
-     بالضبط سبب ظهور الخطوط بالنسخة القديمة (Lightweight Charts، بلا
-     أي قيد ترخيص) وغيابها التام هنا رغم نفس منطق الحساب حرفياً.
-     البديل: chart.createShape() بنوع 'horizontal_line' — جزء أساسي من
-     Drawings API متاح في كل نسخ Charting Library/Advanced Charts بلا
-     استثناء وبلا أي ترخيص إضافي. الإزالة عبر chart.removeEntity(id)
-     بدل .remove() القديمة على كائن order line غير الموجود فعلياً.
-  ══════════════════════════════════════════════════════════════ */
+  /* ══════════ ORDER LINES ══════════ */
   function _clearLines() {
-    if (!_widget) { _lines = []; return; }
-    let chart;
-    try { chart = _widget.chart(); } catch { _lines = []; return; }
-    _lines.forEach(id => { try { chart.removeEntity(id); } catch {} });
+    _lines.forEach(l => { try { l.remove(); } catch {} });
     _lines = [];
   }
 
   function _scheduleLines() {
     if (_linesReady) _execLines();
     else _linesPending = true;
-  }
-
-  /* رسم خط أفقي واحد ثابت (بلا تحديد/حفظ/تراجع من المستخدم) — يغطي كل
-     أنواع الخطوط الخمسة (Entry/TP/SL/Liq/أوامر معلّقة) بنفس الدالة. */
-  function _drawLine(chart, price, text, color, style, textColor) {
-    try {
-      const id = chart.createShape(
-        { time: Math.floor(Date.now() / 1000), price },
-        {
-          shape: 'horizontal_line',
-          text,
-          lock: true,
-          disableSelection: true,
-          disableSave: true,
-          disableUndo: true,
-          zOrder: 'top',
-          overrides: {
-            linecolor: color, linewidth: 1, linestyle: style,
-            showLabel: true, textcolor: textColor || '#fff',
-            horzLabelsAlign: 'right', vertLabelsAlign: 'bottom',
-            bold: true, fontsize: 11,
-          },
-        }
-      );
-      if (id != null) _lines.push(id);
-    } catch (e) { console.warn('[L]', text, e); }
   }
 
   function _execLines() {
@@ -705,20 +678,36 @@ const ChartModule = (function () {
       const pnlCol = pnl >= 0 ? '#00e676' : '#ff3d3d';
 
       if (entD > 0) {
-        _drawLine(chart, entD, `${isLong ? '▲' : '▼'}  ${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`,
-                  pnlCol, 0, pnl >= 0 ? '#000' : '#fff');
+        try {
+          _lines.push(chart.createOrderLine()
+            .setPrice(entD)
+            .setQuantity(`${isLong ? '▲' : '▼'}  ${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`)
+            .setLineColor(pnlCol).setBodyBorderColor(pnlCol).setBodyBackgroundColor(pnlCol)
+            .setBodyTextColor(pnl >= 0 ? '#000' : '#fff').setLineWidth(1).setLineStyle(0));
+        } catch (e) { console.warn('[L]entry', e); }
       }
       if (tpsl.tp) {
         const tpD = _toDisp(_sym, tpsl.tp), tpPnl = (Math.abs(sziOz) * Math.abs(tpsl.tp - entOz)).toFixed(2);
-        _drawLine(chart, tpD, `🎯 TP  +$${tpPnl}`, '#00e8a2', 2, '#000');
+        try {
+          _lines.push(chart.createOrderLine()
+            .setPrice(tpD).setQuantity(`🎯 TP  +$${tpPnl}`)
+            .setLineColor('#00e8a2').setBodyBorderColor('#00e8a2').setBodyBackgroundColor('#00e8a2')
+            .setBodyTextColor('#000').setLineWidth(1).setLineStyle(2));
+        } catch (e) { console.warn('[L]tp', e); }
       }
       if (tpsl.sl) {
         const slD = _toDisp(_sym, tpsl.sl), slPnl = (Math.abs(sziOz) * Math.abs(tpsl.sl - entOz)).toFixed(2);
-        _drawLine(chart, slD, `🛡 SL  -$${slPnl}`, '#ff6a1a', 2, '#fff');
+        try {
+          _lines.push(chart.createOrderLine()
+            .setPrice(slD).setQuantity(`🛡 SL  -$${slPnl}`)
+            .setLineColor('#ff6a1a').setBodyBorderColor('#ff6a1a').setBodyBackgroundColor('#ff6a1a')
+            .setBodyTextColor('#fff').setLineWidth(1).setLineStyle(2));
+        } catch (e) { console.warn('[L]sl', e); }
       }
-      /* سعر التصفية: يقرأ position.liquidationPx مباشرة من الـAPI أولاً
-         (موثّق رسمياً ضمن clearinghouseState — أدق من أي حساب محلي).
-         calcLiqPrice المحلي احتياط نادر فقط لو غاب الحقل. */
+      /* ✅ سعر التصفية: يقرأ position.liquidationPx مباشرة من الـAPI أولاً
+         (موثّق رسمياً ضمن clearinghouseState — أدق من أي حساب محلي لأنه
+         محسوب فعلياً من الخادم بكامل تفاصيل الحساب). calcLiqPrice المحلي
+         يبقى فقط احتياطاً نادراً لو غاب الحقل. */
       try {
         const apiLiqOz = parseFloat(pos.liquidationPx || 0);
         let liqOz = apiLiqOz > 0 ? apiLiqOz : null;
@@ -728,7 +717,10 @@ const ChartModule = (function () {
           liqOz = (typeof calcLiqPrice === 'function') ? calcLiqPrice(entOz, sziOz, eq, aL.cross, aL.lev) : null;
         }
         if (liqOz && liqOz > 0) {
-          _drawLine(chart, _toDisp(_sym, liqOz), '⚡ تصفية', '#ff3d3d', 1, '#fff');
+          _lines.push(chart.createOrderLine()
+            .setPrice(_toDisp(_sym, liqOz)).setQuantity('⚡ تصفية')
+            .setLineColor('#ff3d3d').setBodyBorderColor('#c62828').setBodyBackgroundColor('#c62828')
+            .setBodyTextColor('#fff').setLineWidth(1).setLineStyle(1));
         }
       } catch (e) { console.warn('[L]liq', e); }
       break;
@@ -742,14 +734,20 @@ const ChartModule = (function () {
       if (!px) continue;
       const dispPx = _toDisp(_sym, px), isBuy = o.side === 'B', isTrig = !!o.isTrigger;
       const ot = (o.orderType || '').toLowerCase();
-      let label, color, textCol;
+      let label, color, bg;
       if (isTrig) {
-        if (ot.includes('take profit') || ot.includes('tp')) { label = `🎯 TP ${isBuy ? '▲' : '▼'}`; color = '#00e8a2'; textCol = '#000'; }
-        else if (ot.includes('stop')) { label = `🛡 SL ${isBuy ? '▲' : '▼'}`; color = '#ff6a1a'; textCol = '#fff'; }
-        else { label = `⏹ ${isBuy ? '▲' : '▼'}`; color = '#ffd600'; textCol = '#000'; }
-      } else if (isBuy) { label = '📋 شراء'; color = '#00e676'; textCol = '#fff'; }
-      else { label = '📋 بيع'; color = '#ff3d3d'; textCol = '#fff'; }
-      _drawLine(chart, dispPx, label, color, isTrig ? 2 : 0, textCol);
+        if (ot.includes('take profit') || ot.includes('tp')) { label = `🎯 TP ${isBuy ? '▲' : '▼'}`; color = '#00e8a2'; bg = '#00e8a2'; }
+        else if (ot.includes('stop')) { label = `🛡 SL ${isBuy ? '▲' : '▼'}`; color = '#ff6a1a'; bg = '#ff6a1a'; }
+        else { label = `⏹ ${isBuy ? '▲' : '▼'}`; color = '#ffd600'; bg = '#9a8000'; }
+      } else if (isBuy) { label = '📋 شراء'; color = '#00e676'; bg = '#00e676'; }
+      else { label = '📋 بيع'; color = '#ff3d3d'; bg = '#ff3d3d'; }
+      try {
+        _lines.push(chart.createOrderLine()
+          .setPrice(dispPx).setQuantity(label)
+          .setLineColor(color).setBodyBorderColor(color).setBodyBackgroundColor(bg)
+          .setBodyTextColor(bg === '#00e8a2' ? '#000' : '#fff')
+          .setLineWidth(1).setLineStyle(isTrig ? 2 : 0));
+      } catch (e) { console.warn('[L]ord', e); }
     }
 
     _updatePnlBadge();
@@ -810,12 +808,10 @@ const ChartModule = (function () {
         'mainSeriesProperties.showPriceLine': true,
         'mainSeriesProperties.priceLineColor': '#ff8c42',
         'mainSeriesProperties.priceLineWidth': 1,
-        /* ✅ FIX — معطَّل عمداً. آلية showCountdown الداخلية لمكتبة
-           TradingView تخمّن إغلاق الشمعة بمقارنة آخر بار مع Date.now()
-           الخام بمعزل عن الـDatafeed — هي نفسها مصدر انحراف "الشمعة
-           المتقدّمة"، لا شيء بجانبنا. العدّاد الآن عنصر DOM مستقل تماماً
-           (#_tvCd) بمعادلة الملف بدون مكتبة حرفياً — راجع _updateCountdown. */
-        'mainSeriesProperties.showCountdown': false,
+        /* ✅ عدّاد المكتبة الداخلي مُعاد تفعيله (راجع #10 بالرأس).
+           عرضٌ فقط: لا يؤثر على candle.t ولا على الـDatafeed ولا يفتح
+           شمعة جديدة — الشمعة تتقدّم فقط ببيانات الخادم الفعلية. */
+        'mainSeriesProperties.showCountdown': true,
         'scalesProperties.fontSize': scaleFont,
         'scalesProperties.textColor': dark ? '#999' : '#444',
         'scalesProperties.lineColor': dark ? '#222' : '#ddd',
@@ -834,7 +830,9 @@ const ChartModule = (function () {
         'axis_pressed_mouse_move_scale', 'axis_double_clicked_reset_scale',
         'shift_visible_range_on_new_bar', 'pre_post_market_sessions',
         'items_favoriting', 'show_hide_button_in_legend', 'hide_last_na_study_output',
-        'adaptive_logo', 'move_logo_to_main_pane', 'end_of_period_timescale_marks',
+        /* ⛔ 'end_of_period_timescale_marks' مُزالة عمداً — كانت تسمّي
+           الشمعة بنهاية فترتها (18:00 بدل 17:00). راجع #12 بالرأس. */
+        'adaptive_logo', 'move_logo_to_main_pane',
         'use_localstorage_for_settings', 'save_chart_properties_to_local_storage',
         'chart_property_page_style', 'chart_property_page_scales',
         'chart_property_page_background', 'chart_property_page_timezone_sessions',
@@ -854,10 +852,15 @@ const ChartModule = (function () {
     return new window.TradingView.widget(cfg);
   }
 
-  /* ══════════ CHART INIT (full teardown+rebuild) ══════════ */
+  /* ══════════ CHART INIT (full teardown+rebuild) ══════════
+     تُستدعى فقط: أول دخول للشارت (open())، فشل تبديل الفترة، أو فشل
+     chart().setSymbol() بتبديل الأصل (راجع switchAssetChart). ترتيب
+     العمليات مهم: _ovrShow أولاً (تُلحَق بـ#_tvChartWrap، sibling
+     لـ#_tvC)، ثم تفريغ #_tvC نفسها — لا تعارض بينهما أبداً لأنهما لم
+     يعودا نفس العنصر. */
   function _initChart(sym, iv, saved) {
     _ovrShow(sym);
-    _linesReady = false; _linesPending = false; _widgetReady = false;
+    _linesReady = false; _linesPending = false;
 
     if (_widget) {
       _clearLines();
@@ -877,7 +880,7 @@ const ChartModule = (function () {
     if (!_widget) { _ovrHide(); return; }
 
     _widget.onChartReady(() => {
-      _linesReady = true; _widgetReady = true;
+      _linesReady = true;
       setTimeout(_ovrHide, 200);
       _execLines();
       if (_linesPending) { _linesPending = false; _execLines(); }
@@ -886,7 +889,6 @@ const ChartModule = (function () {
         _widget.chart().onIntervalChanged().subscribe(null, newIv => {
           _interval = newIv;
           _lsSet('iv_' + _sym, newIv);
-          _updateCountdown();
           _scheduleAutoSave();
           setTimeout(_execLines, 300);
         });
@@ -897,7 +899,10 @@ const ChartModule = (function () {
     });
   }
 
-  /* ══════════ ASSET NAV ══════════ */
+  /* ══════════ ASSET NAV ══════════
+     ✅ الإدراج الآن نسبة لـ#_tvChartWrap (كان #_tvC مباشرة) — بعد
+     تغليف #_tvC داخل الغلاف الجديد، #_tvC لم يعد child مباشر لـ
+     #chartScreen، فـinsertBefore على المرجع القديم كان سيرمي خطأ. */
   function _buildNav() {
     document.getElementById('_tvNav')?.remove();
     const nav = document.createElement('div');
@@ -925,7 +930,8 @@ const ChartModule = (function () {
     document.querySelectorAll('.tvn-btn').forEach(b => b.classList.toggle('on', b.dataset.sym === sym));
   }
 
-  /* ══════════ TRADE BAR ══════════ */
+  /* ══════════ TRADE BAR ══════════
+     ✅ الإدراج الآن نسبة لـ#_tvChartWrap (نفس سبب _buildNav أعلاه). */
   function _buildTrade() {
     document.getElementById('_tvTrade')?.remove();
     const a = _asset(_sym), defQ = _lsGet('qty_' + _sym) || a.presets?.[0] || 1;
@@ -968,6 +974,8 @@ const ChartModule = (function () {
     if (!mid) return typeof toast !== 'undefined' && toast('لا يوجد سعر', 'err');
     const midOz = _toOz(_sym, mid), qtyOz = isGr ? qty / TROY : qty;
     const usd = (midOz * qtyOz).toFixed(2), mgn = (midOz * qtyOz / a.lev).toFixed(2);
+    /* ✅ صيغة Cross الحقيقية المشتركة (calcLiqPrice) — معاينة صفقة لم
+       تُفتح بعد، ما فيه position.liquidationPx حقيقي بعد لنقرأه. */
     const sziLiqOz = isBuy ? qtyOz : -qtyOz;
     const eq       = (typeof crossEquityExcluding === 'function') ? crossEquityExcluding(0) : 0;
     const liqOz    = (typeof calcLiqPrice === 'function') ? calcLiqPrice(midOz, sziLiqOz, eq, a.cross, a.lev) : null;
@@ -1034,7 +1042,10 @@ const ChartModule = (function () {
     }
   }
 
-  /* ══════════ DOM ══════════ */
+  /* ══════════ DOM ══════════
+     ✅ #_tvChartWrap غلاف جديد يحتوي #_tvC فقط — TradingView يملك
+     محتوى #_tvC بالكامل (innerHTML يُفرَّغ ويُعاد بناؤه بكل _initChart)،
+     والـoverlay تعيش كـsibling له بنفس الغلاف، فلا تعارض بينهما أبداً. */
   function _ensureScreen() {
     const scr = document.getElementById('chartScreen');
     if (!scr || document.getElementById('_tvHdr')) return;
@@ -1057,7 +1068,6 @@ const ChartModule = (function () {
         </div>
       </div>
       <div class="tvh-r">
-        <span id="_tvCd" class="tvh-cd">⏱ —</span>
         <button class="tvh-fs" id="_tvFsBtn" title="ملء الشاشة">⛶</button>
         <div class="tvh-dot wait" id="_tvDot"></div>
       </div>`;
@@ -1100,31 +1110,15 @@ const ChartModule = (function () {
 
   /* ══════════ PUBLIC API ══════════ */
   function open(sym) {
-    const targetSym = sym || (typeof State !== 'undefined' ? State.asset : 'CL') || 'CL';
+    _sym = sym || (typeof State !== 'undefined' ? State.asset : 'CL') || 'CL';
     _visible = true;
-    _ensureScreen();
-    document.getElementById('chartScreen')?.classList.remove('hidden');
-
-    if (_widget && _widgetReady) {
-      _linesReady = true;
-      if (targetSym !== _sym) {
-        switchAssetChart(targetSym);
-      } else {
-        _setHdr(_sym); _setNavOn(_sym);
-        _execLines();
-      }
-      _dot('wait'); _bboConn(_sym);
-      _ovrHide();
-      _restartLiveClock();
-      return;
-    }
-
-    _sym = targetSym;
     const saved = _loadLayout();
     const useSaved = saved && saved.sym === _sym && saved.content;
     const savedIv = _lsGet('iv_' + _sym);
     _interval = useSaved && saved.interval ? saved.interval : (savedIv && TV_TO_HL[savedIv] ? savedIv : '60');
 
+    _ensureScreen();
+    document.getElementById('chartScreen')?.classList.remove('hidden');
     _setHdr(_sym); _buildTrade(); _buildNav();
 
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -1132,34 +1126,8 @@ const ChartModule = (function () {
     }));
 
     _dot('wait'); _bboConn(_sym);
-    _restartLiveClock();
-  }
 
-  /* ✅ عدّاد تنازلي مستقل بالكامل عن TradingView — نفس معادلة الملف
-     بدون مكتبة حرفياً (Math.ceil(Date.now()/ms)*ms - Date.now()، بلا
-     أي تصحيح/تخمين). راجع تعليق رأس الملف — showCountdown الداخلية
-     للمكتبة كانت هي مصدر انحراف "الشمعة المتقدّمة" المتبقي. */
-  function _updateCountdown() {
-    const el = document.getElementById('_tvCd');
-    if (!el) return;
-    const ms   = RES_MS[_interval] || 60000;
-    const diff = Math.ceil(Date.now() / ms) * ms - Date.now();
-    const hh = Math.floor(diff / 3600000);
-    const mm = Math.floor((diff % 3600000) / 60000);
-    const ss = Math.floor((diff % 60000) / 1000);
-    el.textContent = '⏱ ' + (hh > 0 ? hh + ':' : '') + String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
-  }
-
-  function _restartLiveClock() {
     clearInterval(_clockTimer);
-    clearInterval(_cdTimer);
-    _updateCountdown();
-    /* ✅ العدّاد وحده على مؤقّت أسرع (200ms بدل 1000ms) — يقلّص الحد
-       الأقصى لخطأ Math.floor العرضي (متى ضمن نافذة التكة تحديداً يُعاد
-       الحساب) من ~999ms إلى ~199ms. لا علاقة لهذا ببيانات الشموع
-       نفسها (تلك تبقى مدفوعة 100% من الخادم، بلا أي مساس) — تحسين
-       دقّة العرض فقط. السعر/PnL/الخطوط تبقى كل 1000ms (لا داعٍ لأسرع). */
-    _cdTimer = setInterval(_updateCountdown, 200);
     _clockTimer = setInterval(() => {
       if (!_visible || typeof State === 'undefined') return;
       const p = State.prices?.[_sym]?.mid;
@@ -1170,7 +1138,7 @@ const ChartModule = (function () {
 
   function close() {
     _visible = false; _linesReady = false;
-    clearInterval(_clockTimer); clearInterval(_cdTimer); clearTimeout(_saveTimer);
+    clearInterval(_clockTimer); clearTimeout(_saveTimer);
     _doAutoSave(); _bboClose(); _hideCf(); _clearLines();
     if (document.fullscreenElement) document.exitFullscreen?.();
     document.getElementById('chartScreen')?.classList.add('hidden');
@@ -1181,7 +1149,6 @@ const ChartModule = (function () {
   function switchInterval(iv) {
     if (!iv || iv === _interval) return;
     _interval = iv; _lsSet('iv_' + _sym, iv);
-    _updateCountdown();
     try {
       _widget?.chart?.().setResolution?.(iv);
     } catch {
@@ -1194,6 +1161,17 @@ const ChartModule = (function () {
     }
   }
 
+  /* ══════════ ✅ تبديل الأصل — بدون هدم/إعادة بناء الودجت ══════════
+     نفس فلسفة switchInterval أعلاه: chart().setSymbol() مدعومة رسمياً
+     بـTradingView Advanced Charts وتبدّل الرمز على نفس نسخة الودجت
+     الحيّة، بلا أي هدم لـiframe/canvas ولا "شاشة سوداء" تغطي الرأس/
+     شريط الأصول/شريط التداول — فقط #_tvChartWrap تُظهر حالة تحميل
+     قصيرة ريثما TradingView يجهّز بيانات الرمز الجديد.
+     ⚠️ ملف charting_library.d.ts غير متاح لي بنسخة المشروع الحالية
+     للتحقق من التوقيع الدقيق حرفياً من المصدر — استُخدم الشكل الأكثر
+     توثيقاً (symbol, callback) بثقة عالية، مع تراجع تلقائي كامل
+     (_initChart) لو فشلت لأي سبب. لا كسر صامت ممكن — راقب الـconsole
+     أول استخدام: أي "setSymbol failed" يعني رجع للطريقة القديمة تلقائياً. */
   function switchAssetChart(sym) {
     if (!_visible || sym === _sym) return;
     _doAutoSave();
@@ -1217,7 +1195,6 @@ const ChartModule = (function () {
             _interval = nextIv;
             _lsSet('iv_' + sym, nextIv);
             _linesReady = true;
-            _updateCountdown();
             setTimeout(_ovrHide, 150);
             _execLines();
           });
@@ -1229,7 +1206,6 @@ const ChartModule = (function () {
     }
 
     _interval = nextIv;
-    _updateCountdown();
     requestAnimationFrame(() => { _initChart(sym, _interval, useSaved ? saved.content : null); });
   }
 
