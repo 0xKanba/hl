@@ -422,6 +422,7 @@ const ChartModule = (function () {
   let _sym         = 'CL';
   let _interval    = '60';
   let _clockTimer  = null;
+  let _cdTimer     = null;   // ✅ جديد — مؤقّت عدّاد مستقل بتردد أعلى (200ms)
   let _saveTimer   = null;
   const _prices    = {};
   let _bboUnsub    = null;
@@ -1151,9 +1152,15 @@ const ChartModule = (function () {
 
   function _restartLiveClock() {
     clearInterval(_clockTimer);
+    clearInterval(_cdTimer);
     _updateCountdown();
+    /* ✅ العدّاد وحده على مؤقّت أسرع (200ms بدل 1000ms) — يقلّص الحد
+       الأقصى لخطأ Math.floor العرضي (متى ضمن نافذة التكة تحديداً يُعاد
+       الحساب) من ~999ms إلى ~199ms. لا علاقة لهذا ببيانات الشموع
+       نفسها (تلك تبقى مدفوعة 100% من الخادم، بلا أي مساس) — تحسين
+       دقّة العرض فقط. السعر/PnL/الخطوط تبقى كل 1000ms (لا داعٍ لأسرع). */
+    _cdTimer = setInterval(_updateCountdown, 200);
     _clockTimer = setInterval(() => {
-      _updateCountdown();
       if (!_visible || typeof State === 'undefined') return;
       const p = State.prices?.[_sym]?.mid;
       if (p) _setPrice(_sym, p);
@@ -1163,7 +1170,7 @@ const ChartModule = (function () {
 
   function close() {
     _visible = false; _linesReady = false;
-    clearInterval(_clockTimer); clearTimeout(_saveTimer);
+    clearInterval(_clockTimer); clearInterval(_cdTimer); clearTimeout(_saveTimer);
     _doAutoSave(); _bboClose(); _hideCf(); _clearLines();
     if (document.fullscreenElement) document.exitFullscreen?.();
     document.getElementById('chartScreen')?.classList.add('hidden');
