@@ -6,7 +6,7 @@ const ChartModule = (function () {
   const TROY        = 31.1035;
   const MIN_TIME    = 1577836800000;          // 2020-01-01 00:00 UTC
   const LS_PREFIX   = 'hl_tv_';
-  const LAYOUT_KEY  = 'layout_v2';
+  const LAYOUT_KEY  = 'layout_v1';
 
   const TV_RESOLUTIONS = ['1','3','5','15','30','60','120','240','1D','1W'];
 
