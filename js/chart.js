@@ -208,13 +208,17 @@ const ChartModule = (function () {
       if (fromMs >= toMs) { onHistory([], {noData:true}); return; }
 
       try {
-        const raw = await this._fetchRest(coin, hlIv, fromMs, toMs);
+        /* ✅ إصلاح: تحويل الغرام يعتمد على الرمز المعروض (XAU) لا على
+           العملة (xyz:GOLD) — لأن "الذهب أونصة" (GOLD) يشترك بنفس العملة.
+           كان التاريخ يُقسَم على TROY للأونصة فيظهر الرسم مكسوراً مقابل
+           الشموع الحيّة غير المقسومة. لا تغيير على أي زمن أو تاريخ. */
+        const raw = await this._fetchRest(coin, hlIv, fromMs, toMs, _isGram(sym));
         const bars = isW ? this._aggWeekly(raw) : raw;
 
         if (!bars.length) { onHistory([], {noData:true}); return; }
 
         // Seed WS lastBar so the first realtime tick merges instead of dupes
-        const wk = this._key(coin, isW ? '1d' : hlIv);
+        const wk = this._key(coin, isW ? '1d' : hlIv, _isGram(sym));
         const s = this._ws.get(wk);
         if (s) s.lastBar = { ...bars[bars.length-1] };
 
@@ -230,11 +234,13 @@ const ChartModule = (function () {
       const coin = _coin(sym);
       const isW = resolution === '1W';
       const hlIv = isW ? '1d' : (TV_TO_HL[resolution] || '1h');
-      const wsKey = this._key(coin, hlIv);
+      /* مفتاح البث يفصل الأونصة عن الغرام رغم اشتراكهما بنفس العملة،
+         حتى لا تختلط وحدات lastBar بين الرسمين. */
+      const wsKey = this._key(coin, hlIv, _isGram(sym));
 
       this._subs.set(uid, { sym, resolution, callback: onRealtime, wsKey, lastBar: null });
 
-      if (!this._ws.has(wsKey)) this._openWs(wsKey, coin, hlIv);
+      if (!this._ws.has(wsKey)) this._openWs(wsKey, coin, hlIv, _isGram(sym));
     }
 
     unsubscribeBars(uid) {
@@ -257,7 +263,7 @@ const ChartModule = (function () {
     }
 
     /* ── internals ── */
-    _key(coin, res) { return `${coin}:${res}`; }
+    _key(coin, res, gram) { return `${coin}:${res}:${gram ? 'g' : 'o'}`; }
 
     /*
       Build a bar from a Hyperliquid candle object.
@@ -280,7 +286,7 @@ const ChartModule = (function () {
       };
     }
 
-    async _fetchRest(coin, hlIv, fromMs, toMs) {
+    async _fetchRest(coin, hlIv, fromMs, toMs, gram = false) {
       const r = await fetch(HL_API+'/info', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({type:'candleSnapshot', req:{coin, interval:hlIv, startTime:fromMs, endTime:toMs}})
@@ -289,7 +295,7 @@ const ChartModule = (function () {
       const data = await r.json();
       if (!Array.isArray(data)) return [];
 
-      const g = coin === 'xyz:GOLD';
+      const g = gram === true;   // ← لا يعتمد على العملة بعد الآن
       // Map HL interval back to TV resolution for normalization
       const tvRes = Object.keys(TV_TO_HL).find(k => TV_TO_HL[k] === hlIv) || '60';
       const seen = new Set();
@@ -330,7 +336,7 @@ const ChartModule = (function () {
       return Array.from(m.values()).sort((a,b)=>a.time-b.time);
     }
 
-    _openWs(wsKey, coin, hlIv) {
+    _openWs(wsKey, coin, hlIv, gram = false) {
       if (typeof HL === 'undefined') return;
       const entry = { unsub: null, lastBar: null, dailyMap: new Map() };
       this._ws.set(wsKey, entry);
@@ -400,7 +406,7 @@ const ChartModule = (function () {
       for (const [,s] of this._subs) if (s.wsKey === wsKey && s.resolution === '1W') { needsWeekly = true; break; }
       if (hlIv === '1d' && needsWeekly) {
         const now = Date.now();
-        this._fetchRest(coin, '1d', now - 9 * 86400000, now).then(raw => {
+        this._fetchRest(coin, '1d', now - 9 * 86400000, now, gram).then(raw => {
           const w = this._ws.get(wsKey);
           if (!w) return; // أُلغي الاشتراك قبل اكتمال الجلب
           const curWeekStart = _weekStart(now);
