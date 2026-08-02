@@ -6,13 +6,22 @@ const ChartModule = (function () {
   const TROY        = 31.1035;
   const MIN_TIME    = 1577836800000;          // 2020-01-01 00:00 UTC
   const LS_PREFIX   = 'hl_tv_';
-  const LAYOUT_KEY  = 'layout_v1';
+  const LAYOUT_KEY  = 'layout_v2';
 
   const TV_RESOLUTIONS = ['1','3','5','15','30','60','120','240','1D','1W'];
 
   const TV_TO_HL = {
     '1':'1m','3':'3m','5':'5m','15':'15m','30':'30m',
     '60':'1h','120':'2h','240':'4h','1D':'1d','1W':'1d'
+  };
+
+  /* ✅ جديد — مدة كل دقة زمنية بالمللي ثانية، للعدّ التنازلي المستقل
+     فقط (راجع _updateCountdown أدناه). لا علاقة لها إطلاقاً ببيانات
+     الشموع أو قرارات الـDatafeed — عرض نصي بحت، بصمة الحساب مطابقة
+     تماماً لملف المشروع بدون مكتبة (Math.ceil(Date.now()/ms)*ms). */
+  const RES_MS = {
+    '1':60000, '3':180000, '5':300000, '15':900000, '30':1800000,
+    '60':3600000, '120':7200000, '240':14400000, '1D':86400000, '1W':604800000
   };
 
   const NAV_ASSETS = [
@@ -108,6 +117,17 @@ const ChartModule = (function () {
      الأثر الجانبي المقبول: بلا تداول فعلي لفترة طويلة، الشمعة قيد
      التكوّن تبقى ثابتة حتى وصول أول تحديث حقيقي — بالضبط سلوك النسخة
      القديمة بلا مكتبة، لا نقص وظيفي عنها.
+
+     ✅ FIX ثانٍ وأهم — إزالة الطبقة أعلاه وحدها لم تكفِ: مكتبة
+     TradingView Advanced Charts تملك آلية showCountdown *داخلية* خاصة
+     بها، منفصلة تماماً عن الـDatafeed — تقارن آخر بار وصلها فعلياً مع
+     Date.now() الخام لجهاز المتصفح بمعزل عن أي بيانات حقيقية جديدة،
+     وتُظهر/تتصرّف وكأن الشمعة أُغلقت بمجرد انتهاء المدة حسابياً، حتى
+     لو الـDatafeed لم يُرسل أي بار جديد بعد. هذا تخمين المكتبة نفسها،
+     لا علاقة له بـ_ingestCandle أعلاه (المُصلَح فعلاً ويعمل بشكل سليم).
+     الحل: تعطيل showCountdown الداخلي كلياً (أسفل بـ_mkWidget)، واستبداله
+     بعدّاد تنازلي مستقل مبني خارج المكتبة تماماً — نفس معادلة الملف بدون
+     مكتبة حرفياً (_updateCountdown أسفل)، بلا أي تدخّل من TradingView.
   ══════════════════════════════════════════════════════════════ */
   class HyperliquidDatafeed {
     constructor() {
@@ -434,6 +454,7 @@ const ChartModule = (function () {
 .tvh-pnl.pos{background:rgba(0,230,118,.15);color:#00e676;border:1px solid rgba(0,230,118,.3);}
 .tvh-pnl.neg{background:rgba(255,61,61,.15);color:#ff3d3d;border:1px solid rgba(255,61,61,.3);}
 .tvh-pnl.show{display:inline-block;}
+.tvh-cd{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:800;color:var(--text-secondary,#8a8278);white-space:nowrap;flex-shrink:0;letter-spacing:.3px;}
 .tvh-dot{width:7px;height:7px;border-radius:50%;background:#444;flex-shrink:0;transition:background .3s;}
 .tvh-dot.on{background:#00e676;box-shadow:0 0 6px #00e676;}
 .tvh-dot.wait{background:#ffd600;animation:_tvDt 1.1s ease-in-out infinite;}
@@ -788,11 +809,12 @@ const ChartModule = (function () {
         'mainSeriesProperties.showPriceLine': true,
         'mainSeriesProperties.priceLineColor': '#ff8c42',
         'mainSeriesProperties.priceLineWidth': 1,
-        /* ✅ العدّ التنازلي يعتمد الآن على ساعة المتصفح الافتراضية
-           لـTradingView (supports_time=false بالـDatafeed أعلاه) بدل
-           getServerTime المصحَّح محلياً — راجع تعليق رأس الملف لسبب
-           إزالة تلك الطبقة بالكامل (هي مصدر انحراف الإغلاق المبكر). */
-        'mainSeriesProperties.showCountdown': true,
+        /* ✅ FIX — معطَّل عمداً. آلية showCountdown الداخلية لمكتبة
+           TradingView تخمّن إغلاق الشمعة بمقارنة آخر بار مع Date.now()
+           الخام بمعزل عن الـDatafeed — هي نفسها مصدر انحراف "الشمعة
+           المتقدّمة"، لا شيء بجانبنا. العدّاد الآن عنصر DOM مستقل تماماً
+           (#_tvCd) بمعادلة الملف بدون مكتبة حرفياً — راجع _updateCountdown. */
+        'mainSeriesProperties.showCountdown': false,
         'scalesProperties.fontSize': scaleFont,
         'scalesProperties.textColor': dark ? '#999' : '#444',
         'scalesProperties.lineColor': dark ? '#222' : '#ddd',
@@ -863,6 +885,7 @@ const ChartModule = (function () {
         _widget.chart().onIntervalChanged().subscribe(null, newIv => {
           _interval = newIv;
           _lsSet('iv_' + _sym, newIv);
+          _updateCountdown();
           _scheduleAutoSave();
           setTimeout(_execLines, 300);
         });
@@ -1033,6 +1056,7 @@ const ChartModule = (function () {
         </div>
       </div>
       <div class="tvh-r">
+        <span id="_tvCd" class="tvh-cd">⏱ —</span>
         <button class="tvh-fs" id="_tvFsBtn" title="ملء الشاشة">⛶</button>
         <div class="tvh-dot wait" id="_tvDot"></div>
       </div>`;
@@ -1110,9 +1134,26 @@ const ChartModule = (function () {
     _restartLiveClock();
   }
 
+  /* ✅ عدّاد تنازلي مستقل بالكامل عن TradingView — نفس معادلة الملف
+     بدون مكتبة حرفياً (Math.ceil(Date.now()/ms)*ms - Date.now()، بلا
+     أي تصحيح/تخمين). راجع تعليق رأس الملف — showCountdown الداخلية
+     للمكتبة كانت هي مصدر انحراف "الشمعة المتقدّمة" المتبقي. */
+  function _updateCountdown() {
+    const el = document.getElementById('_tvCd');
+    if (!el) return;
+    const ms   = RES_MS[_interval] || 60000;
+    const diff = Math.ceil(Date.now() / ms) * ms - Date.now();
+    const hh = Math.floor(diff / 3600000);
+    const mm = Math.floor((diff % 3600000) / 60000);
+    const ss = Math.floor((diff % 60000) / 1000);
+    el.textContent = '⏱ ' + (hh > 0 ? hh + ':' : '') + String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+  }
+
   function _restartLiveClock() {
     clearInterval(_clockTimer);
+    _updateCountdown();
     _clockTimer = setInterval(() => {
+      _updateCountdown();
       if (!_visible || typeof State === 'undefined') return;
       const p = State.prices?.[_sym]?.mid;
       if (p) _setPrice(_sym, p);
@@ -1133,6 +1174,7 @@ const ChartModule = (function () {
   function switchInterval(iv) {
     if (!iv || iv === _interval) return;
     _interval = iv; _lsSet('iv_' + _sym, iv);
+    _updateCountdown();
     try {
       _widget?.chart?.().setResolution?.(iv);
     } catch {
@@ -1168,6 +1210,7 @@ const ChartModule = (function () {
             _interval = nextIv;
             _lsSet('iv_' + sym, nextIv);
             _linesReady = true;
+            _updateCountdown();
             setTimeout(_ovrHide, 150);
             _execLines();
           });
@@ -1179,6 +1222,7 @@ const ChartModule = (function () {
     }
 
     _interval = nextIv;
+    _updateCountdown();
     requestAnimationFrame(() => { _initChart(sym, _interval, useSaved ? saved.content : null); });
   }
 
