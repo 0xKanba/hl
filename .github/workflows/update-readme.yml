@@ -3,7 +3,6 @@ name: Auto Update Project Tree
 on:
   push:
     branches:
-    
       - demo
 
 jobs:
