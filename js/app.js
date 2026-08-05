@@ -21,11 +21,12 @@
       التنفيذ). إزالة الحظر هنا تتيح للزائر تصفّح الرسم البياني كاملاً
       قبل أي التزام بربط محفظة — بلا أي خطر تقني.
 
-   ✅ FIX — زر "🔌 إلغاء الاتصال" انتقل من قائمة الخيارات إلى رأس الصفحة
-      (سابقاً "تغيير المحفظة" ضمن ⚙️ الخيارات، وهو فعلياً كان زر تسجيل
-      خروج فقط بلا أي تبديل حقيقي). الزر الجديد بالرأس يفتح نفس
-      modalLogout — نصّه الآن يشرح كل احتمالات النتيجة بوضوح (راجع
-      index.html). updateConnectBtn بـauth.js تتكفّل بإظهاره/إخفائه.
+   ✅ FIX — دُمج زر "🔌 إلغاء الاتصال" المستقل بزر "اتصال" نفسه (انتقل
+      للشريط العلوي — راجع index.html/auth.js/components.css). لم يعد
+      هناك عنصر #btnDisconnect منفصل: نفس الزر الآن يفتح تسجيل الدخول
+      للزائر، ويفتح مباشرة modalLogout (تأكيد قطع الاتصال) لمن هو
+      متصل بالفعل. الوصول لـ"⚙️ الخيارات" يبقى متاحاً عبر زر الخيارات
+      المستقل بالفوتر (btnOptions) كما هو — لا تغيير هناك.
 
    ✅ FIX — إغلاق modalLogin عبر النقر على الخلفية المعتمة (لا زر
       "إغلاق" الصريح) لم يكن يستدعي _stopWalletListWatch()، فيبقى
@@ -186,20 +187,17 @@ document.addEventListener('DOMContentLoaded', () => {
     ChartModule.open(State.asset);
   };
 
+  /* ✅ FIX — زر "اتصال" أصبح مدمجاً: زائر → فتح تسجيل الدخول، متصل →
+     فتح modalLogout (تأكيد قطع الاتصال) مباشرة بدل فتح الخيارات —
+     راجع تعليق رأس الملف. الوصول لـ"⚙️ الخيارات" يبقى عبر btnOptions
+     المستقل بالفوتر، بلا أي تغيير هناك. */
   $('btnConnect').onclick = () => {
     if (State.isGuest) connectWallet();
-    else openOptions();
+    else openModal('modalLogout');
   };
 
   $('btnOptions').onclick = openOptions;
   $('optsClose').onclick  = closeOptions;
-
-  /* ✅ زر إلغاء الاتصال — رأس الصفحة، ظهوره/اختفاؤه تتكفّل به
-     updateConnectBtn بـauth.js حسب حالة الاتصال الفعلية */
-  $('btnDisconnect')?.addEventListener('click', () => {
-    if (State.isGuest || !State.wallet) return;
-    openModal('modalLogout');
-  });
 
   $('optBalance').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showBalance(); };
   $('optHistory').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showHistory(); };

@@ -3,6 +3,12 @@
    الألوان مستخرجة كاملة من hl.css + hl2.css (البرتقالي #e07248).
    تبديل ديناميكي عبر [data-theme="dark|light"] على <html>.
    لا @media (prefers-color-scheme) — التبديل يدوي فقط عبر الزر.
+   ✅ FIX — --ac-soft كانت color-mix(...50%...) فتظهر أزرار (login-btn،
+      بانر الزائر، qty-100، footer-opts-btn) خافتة بكلا المظهرين رغم
+      حدّها --ac بلون مشبّع كامل. الآن 100% (اللون مباشرة بلا مزج).
+      لون النص (--text-primary) يبقى كما هو — تباينه محسوب أصلاً
+      ليعمل جيداً فوق --ac الصلب بكلا المظهرين (فاتح على الغامق،
+      شبه أسود على البرتقالي المتوسط بالفاتح، نسبة تباين ~5:1+).
 ═══════════════════════════════════════════════════════════════ */
 
 @layer themes {
@@ -27,7 +33,7 @@
   --ac-2:    #a8502f;
   --ac-dim:  rgba(224,114,72,.22);
   --ac-deep: #a8502f;
-  --ac-soft: color-mix(in srgb, var(--ac) 50%, var(--bg-elev));
+  --ac-soft: var(--ac);
 
   /* Trading semantics */
   --up:       #34c85a;
@@ -96,7 +102,7 @@
   --ac-2:    #a8502f;
   --ac-dim:  rgba(201,100,66,.15);
   --ac-deep: #a8502f;
-  --ac-soft: color-mix(in srgb, var(--ac) 50%, var(--bg-elev));
+  --ac-soft: var(--ac);
 
   --up:       #1a8c3a;
   --up-2:     #005c2b;
