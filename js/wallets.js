@@ -29,6 +29,24 @@
       قصير (حتى ~1.2 ثانية، بفحص كل 100ms) بدل فحص واحد فوري — يتوقف
       بمجرد وصول الإعلان فلا تأثير محسوس على السرعة الفعلية، ويحمي فقط
       من هذا السباق الزمني النادر لكنه حقيقي.
+
+   ✅ FIX جوهري — التوقيع يفشل على شبكة غير Arbitrum (Trust Wallet
+      تحديداً، MetaMask بدرجة أقل): الاتصال نفسه (eth_requestAccounts)
+      لا يهتم بالشبكة الحالية إطلاقاً، لهذا ينجح دائماً بأي EVM. لكن كل
+      توقيعات EIP-712 بهذا المشروع (تفويض الوكيل، السحب) تحمل
+      domain.chainId=42161 (Arbitrum) صراحة — نفس ما تتحقق منه عقود
+      Hyperliquid لاحقاً. المفتاح نفسه لا يفرّق بين الشبكات، لكن
+      برمجيات بعض المحافظ (Trust Wallet أبرزها) تقارن الـchainId
+      المطلوب بالشبكة المفعّلة فعلياً بالمحفظة وترفض توقيع
+      eth_signTypedData_v4 لو ما تطابقا — حماية مقصودة ضد إعادة
+      استخدام توقيع بشبكة خاطئة. getArbitrumSigner (المستخدمة للإيداع
+      فقط) كانت الوحيدة اللي تطلب التبديل التلقائي؛ signTypedData
+      (المستخدمة لتفويض الوكيل وللسحب) كانت تُرسِل مباشرة بلا أي فحص
+      شبكة. الحل: _ensureArbitrum() دالة مشتركة تفحص eth_chainId أولاً
+      (فلا طلب تبديل زائد لمن هو أصلاً على Arbitrum)، وتُستدعى الآن قبل
+      أي توقيع أيضاً — لا فقط قبل الإيداع. النتيجة: اتصال بأي شبكة EVM
+      بلا احتكاك، وأول توقيع فعلي يطلب من المحفظة تبديل/إضافة Arbitrum
+      تلقائياً (موافقة واحدة)، ثم نافذة التوقيع العادية فوراً.
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -99,6 +117,38 @@ const Wallets = (function () {
     ]);
   }
 
+  /* ════════════════════════════════════════════════
+     ✅ جديد — يضمن أن المحفظة على شبكة Arbitrum One قبل أي طلب توقيع
+     أو تحويل يحتاجها. يفحص eth_chainId أولاً (بلا أي نافذة منبثقة) —
+     لو مطابق أصلاً لا شيء يحدث. غير ذلك: wallet_switchEthereumChain،
+     وwallet_addEthereumChain كبديل احتياطي لو Arbitrum غير مُضافة بعد
+     بالمحفظة (رمز خطأ 4902 القياسي). مشتركة بين getArbitrumSigner
+     (الإيداع) وsignTypedData (تفويض الوكيل + السحب) — راجع تعليق رأس
+     الملف لسبب هذا التوحيد.
+  ════════════════════════════════════════════════ */
+  async function _ensureArbitrum(provider) {
+    try {
+      const current = await provider.request({ method: 'eth_chainId' });
+      if (typeof current === 'string' && current.toLowerCase() === '0xa4b1') return; // أصلاً على Arbitrum
+    } catch { /* بعض المزوّدين لا يدعمون eth_chainId بلا حسابات متصلة — نتابع لمحاولة التبديل مباشرة */ }
+
+    try {
+      await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0xa4b1' }] });
+    } catch (switchErr) {
+      if (switchErr && switchErr.code === 4902) {
+        await provider.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: '0xa4b1', chainName: 'Arbitrum One',
+            rpcUrls: [ARB_RPC],
+            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+            blockExplorerUrls: ['https://arbiscan.io']
+          }]
+        });
+      } else { throw switchErr; }
+    }
+  }
+
   /* ── الاتصال الفعلي + بناء واجهة موحّدة (نفس شكل State.wallet
      سواء المصدر Privy أو مفتاح خام قديم) — بهذا auth.js/account.js
      ما يحتاجون أي معرفة خاصة بمصدر المحفظة ── */
@@ -135,27 +185,19 @@ const Wallets = (function () {
       walletName: entry.info.name,
       walletIcon: entry.info.icon,
 
-      /* يطابق ethers.Wallet.signTypedData(domain, types, value) تماماً */
-      signTypedData: function (domain, types, value) { return signer.signTypedData(domain, types, value); },
+      /* ✅ FIX — يضمن Arbitrum أولاً (بصمت لو مطابق أصلاً) قبل أي
+         eth_signTypedData_v4. يطابق حرفياً ethers.Wallet.signTypedData
+         (domain, types, value) — راجع تعليق رأس الملف. */
+      signTypedData: async function (domain, types, value) {
+        await _ensureArbitrum(provider);
+        return signer.signTypedData(domain, types, value);
+      },
 
       /* Signer متصل بـArbitrum لعقود USDC/الجسر — يبدّل الشبكة تلقائياً،
-         يضيفها لو غير موجودة أصلاً بالمحفظة */
+         يضيفها لو غير موجودة أصلاً بالمحفظة (نفس _ensureArbitrum
+         المشتركة أعلاه الآن، بدل نسخة مكرَّرة محلياً هنا). */
       getArbitrumSigner: async function () {
-        try {
-          await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0xa4b1' }] });
-        } catch (switchErr) {
-          if (switchErr && switchErr.code === 4902) {
-            await provider.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0xa4b1', chainName: 'Arbitrum One',
-                rpcUrls: [ARB_RPC],
-                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-                blockExplorerUrls: ['https://arbiscan.io']
-              }]
-            });
-          } else { throw switchErr; }
-        }
+        await _ensureArbitrum(provider);
         return new window.ethers.BrowserProvider(provider).getSigner();
       },
 

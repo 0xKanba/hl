@@ -92,12 +92,19 @@
         <button class="nav-copy-btn" id="navCopyBtn" title="نسخ العنوان">⧉</button>
       </div>
       <!--
-        ✅ زر "إلغاء الاتصال" — انتقل إلى رأس الصفحة بدل الاختباء داخل
-        ⚙️ الخيارات (سابقاً "تغيير المحفظة"، وكان فعلياً زر تسجيل خروج
-        فقط بلا أي تبديل حقيقي). مخفي افتراضياً (.hidden) — updateConnectBtn
-        بـauth.js تتكفّل بإظهاره فقط عند وجود اتصال فعلي، وإخفائه للزائر.
+        ✅ زر "اتصال" — انتقل من الفوتر إلى هنا (زاوية الشريط العلوي)،
+        ودُمج معه دور "🔌 قطع الاتصال" المستقل السابق (لم يعد عنصراً
+        منفصلاً). حالة الزائر: نقرة تفتح تسجيل الدخول. حالة الاتصال:
+        نقرة تفتح modalLogout مباشرة (تأكيد قطع الاتصال) — راجع app.js.
+        الوصول لـ"⚙️ الخيارات" يبقى متاحاً عبر زر الخيارات المستقل
+        بالفوتر، بلا أي تغيير هناك. الألوان/التسمية تتحدّث حياً عبر
+        updateConnectBtn() بـauth.js (أخضر=متصل، أصفر نابض=يحاول
+        الاتصال، أحمر=منقطع).
       -->
-      <button class="nav-disconnect-btn hidden" id="btnDisconnect" title="إلغاء الاتصال">🔌</button>
+      <button class="nav-connect-btn ws-connecting" id="btnConnect" title="الاتصال بـ Hyperliquid">
+        <span class="cb-dot"></span>
+        <span class="cb-lbl">اتصال</span>
+      </button>
     </div>
   </nav>
 
@@ -214,14 +221,13 @@
     </div>
   </main>
 
+  <!-- ✅ الفوتر أصبح بزرين فقط بعد انتقال زر "اتصال" للشريط العلوي —
+       raجع تعليق النافبار أعلاه. flex:1 على كل زر (footer-main-btn)
+       تكفّل بملء العرض تلقائياً بلا أي تعديل CSS إضافي. -->
   <footer class="footer">
     <button class="footer-main-btn" id="btnChart">
       <span class="fmb-icon">📈</span>
       <span class="fmb-lbl">رسم بياني</span>
-    </button>
-    <button class="footer-connect-btn ws-connecting" id="btnConnect" title="الاتصال بـ Hyperliquid">
-      <span class="cb-dot"></span>
-      <span class="cb-lbl">اتصال</span>
     </button>
     <button class="footer-main-btn footer-opts-btn" id="btnOptions">
       <span class="fmb-icon">⚙️</span>
@@ -244,10 +250,9 @@
      "استرداد المحفظة" أُزيل نهائياً — تصدير المحفظة (يعرض المفتاح
      الخاص/العبارة السرية مباشرة) هو المسار الوحيد الكافي للنسخ
      الاحتياطي، فكان وجود الاثنين تكراراً بلا فائدة إضافية حقيقية.
-     "تغيير المحفظة" (كانت هنا، آخر القائمة) انتقلت بالكامل إلى زر
-     "🔌 إلغاء الاتصال" برأس الصفحة — إجراء بهذا الوزن (يُنهي الجلسة)
-     يستحق وضوح وسرعة وصول لمسة واحدة، لا أن يكون مدفوناً بقائمة
-     خيارات ثانوية.
+     "تغيير المحفظة" (كانت هنا سابقاً) انتقلت للشريط العلوي، ثم اندمجت
+     بزر "اتصال" نفسه — إجراء بهذا الوزن (يُنهي الجلسة) يستحق وضوح
+     وسرعة وصول لمسة واحدة، لا أن يكون مدفوناً بقائمة خيارات ثانوية.
 -->
 <div class="opts-overlay hidden" id="optsOverlay">
   <div class="opts-menu">
@@ -476,10 +481,10 @@
 
 <!--
   ✅ modalLogout — الآن "إلغاء الاتصال" (سابقاً "تسجيل الخروج"/"تغيير
-  المحفظة")، يُفتح من زر 🔌 برأس الصفحة بدل قائمة الخيارات. النص يشرح
-  كل احتمالات النتيجة بوضوح تام: ما يُحذف محلياً، ما يبقى آمناً على
-  Hyperliquid، ما يبقى صالحاً عند إعادة الاتصال، وما يُحذف فعلياً
-  (رمز PIN) — لا مفاجآت لاحقة.
+  المحفظة")، يُفتح من زر "اتصال" المدمج بالشريط العلوي (حالة الاتصال)
+  بدل زر 🔌 مستقل. النص يشرح كل احتمالات النتيجة بوضوح تام: ما يُحذف
+  محلياً، ما يبقى آمناً على Hyperliquid، ما يبقى صالحاً عند إعادة
+  الاتصال، وما يُحذف فعلياً (رمز PIN) — لا مفاجآت لاحقة.
 -->
 <div class="modal-overlay" id="modalLogout">
   <div class="modal">
@@ -656,10 +661,24 @@
 <script src="/js/app.js"></script>
 
 <script>
+/* ✅ FIX — كانت تعيد تحميل الصفحة تلقائياً بعد ~5 ثوانٍ من فتحها لأول
+   مرة (أو أول زيارة بعد أي نشر جديد). السبب: sw.js يستدعي عمداً
+   skipWaiting()+clients.claim() (نشر جديد يسيطر فوراً — مقصود)، لكن
+   clients.claim() يُطلق controllerchange، والمستمع القديم أدناه كان
+   يعمل reload() عند *أي* حدوث له — حتى أول مرة يسيطر فيها أي SW على
+   تاب لم يكن له SW أصلاً (كل زيارة بعد نشر جديد، بما أن GitHub Action
+   يُغيّر نص sw.js بكل push). تلك المرة الأولى ليست تحديثاً حقيقياً
+   فإعادة التحميل بلا فائدة. الآن: أول controllerchange يُتجاهل لو لم
+   يكن يوجد controller أصلاً وقت التحميل — أي controllerchange بعده
+   فعلاً يعني SW أحدث حلّ محل واحد كان يعمل بالفعل أثناء الجلسة، وتلك
+   الحالة الوحيدة التي تستحق إعادة التحميل. "أحدث نشر يظهر فوراً" يبقى
+   كما هو تماماً. */
 if ('serviceWorker' in navigator) {
   let _swRefreshing = false;
+  let _hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (_swRefreshing) return;
+    if (!_hadController) { _hadController = true; return; }
     _swRefreshing = true;
     window.location.reload();
   });

@@ -1,4 +1,5 @@
-/* c.js — تقويم التداول v8 — تخزين تاريخي محلي + تحميل تدريجي بالأولوية
+/* c.js — تقويم التداول v9 — تخزين تاريخي محلي + تحميل تدريجي بالأولوية
+   + تحميل مسبق تلقائي بعد الاتصال (بلا انتظار فتح "التقويم" يدوياً)
    ✅ جديد — تخزين محلي (localStorage) لكل Fills/Funding مُجمَّعة، مفتاح
       لكل عنوان محفظة (hl_cal_cache_<address>). عند فتح التقويم:
         1. لو موجود عنوان بالكاش → عرض فوري (بلا أي هيكل تحميل) من آخر
@@ -21,6 +22,32 @@
    ✅ 'xyz' ثابت HL_DEX المشترك (config.js) بدل حرفياً بكل مكان.
    ✅ تحميل هيكلي (skeleton) بدل دوّار+نص فقط عند أول تحميل حقيقي فقط
       (لا كاش بعد لهذا العنوان).
+   ✅ جديد (v9) — فُصل منطق الجلب/التخزين عن منطق فتح الواجهة بالكامل:
+      _loadOrHydrate(addr) هي المصدر الوحيد لقرار "كاش/تحميل أول مرة/
+      جاهز أصلاً"، تستدعيها الآن كل من openCalendar() (تفتح الواجهة
+      أيضاً) وpreloadCalendarData() الجديدة (بصمت تام، بلا أي فتح
+      واجهة). آمنة بصمت بكلا الحالتين لأن كل عناصر DOM المتأثرة
+      (calStats/calGrid/calLoad/calMain) أبناء لـ#calMod نفسها، والتي
+      تبقى display:none ما لم تُضَف لها .open صراحة — فتحديثها بصمت
+      قبل فتح النافذة بلا أي أثر بصري إطلاقاً.
+   ✅ جديد (v9) — preloadCalendarData() تُستدعى من auth.js فور استقرار
+      اتصال المحفظة (بتأخير بسيط)، فيبدأ نفس الزحف الهادئ الموجود أصلاً
+      بلا انتظار فتح "التقويم" يدوياً؛ لما يفتحه المستخدم فعلاً يجده
+      جاهزاً فوراً. teardownCalendarPreload() توقف الزحف الخلفي وتصفّر
+      حالة "الجاهزية" المرتبطة بعنوان محفظة معيّن — تُستدعى من
+      doLogout() بـauth.js (لم تكن موقوفة سابقاً — تسريب صامت لمؤقت
+      يستمر لمحفظة انفصل عنها المستخدم فعلياً).
+   ✅ جديد (v9) — _readyAddr يربط حالة الذاكرة الحالية (_ready/_fills/
+      إلخ) بعنوان محفظة محدد صراحة. قبل هذا الإصلاح، لو بدّل المستخدم
+      محفظة بنفس الجلسة (بلا إعادة تحميل صفحة)، _ready كانت تبقى true
+      من المحفظة القديمة وتُظهر بياناتها تحت هوية الجديدة خطأً — ثغرة
+      كانت كامنة أصلاً لكنها صارت أوضح الآن لأن التحميل يبدأ تلقائياً
+      بكل اتصال، لا فقط بفتح يدوي نادر. أي اختلاف بالعنوان الآن يُعيد
+      ضبط الحالة بالكامل قبل المتابعة.
+   ✅ جديد (v9) — _loading يمنع تشغيل load() مرتين متزامنتين (تحميل
+      مسبق صامت بدأ لتوّه + فتح المستخدم "التقويم" يدوياً بنفس اللحظة
+      قبل أن يكتمل الأول) — بدون هذا القفل كان يمكن لطلبين متزامنين
+      لنفس النافذة الزمنية أن يتسابقا على إعادة ضبط _fills/_dayMap.
 */
 (function(){
 'use strict';
@@ -406,6 +433,12 @@ const CAL_CACHE_PREFIX    = 'hl_cal_cache_';
 const CAL_CACHE_MAX_FILLS = 4000; // سقف دفاعي لحجم localStorage
 
 let _fills=[], _fundMap={}, _dayMap={}, _cur=new Date(), _ready=false;
+/* ✅ جديد (v9) — عنوان المحفظة الذي تخصّه حالة الذاكرة الحالية (_ready/
+   _fills/...). يُقارَن قبل أي استخدام لـ_ready لمنع تسريب بيانات محفظة
+   قديمة تحت هوية محفظة جديدة بنفس الجلسة — راجع تعليق رأس الملف. */
+let _readyAddr = null;
+/* ✅ جديد (v9) — يمنع تشغيل load() مرتين متزامنتين. */
+let _loading = false;
 let _monthsCovered = new Set();
 let _crawlCoveredSinceMs = Date.now();
 let _newestCachedMs = 0; // ✅ آخر نقطة "لحقنا بها فعلياً حتى الآن" — للّحاق التدريجي بين الجلسات
@@ -534,7 +567,9 @@ function _hydrateFromCache(cache){
 }
 
 /* جلسة جديدة، عنوان له كاش سابق — يجلب فقط الفجوة (newestMs → الآن)،
-   ويُكمل الزحف الخلفي القديم من حيث توقف بالضبط (لا إعادة من الصفر). */
+   ويُكمل الزحف الخلفي القديم من حيث توقف بالضبط (لا إعادة من الصفر).
+   ✅ آمنة بصمت (showStats/showCal يكتبان بعناصر أبناء لـ#calMod التي
+   تبقى مخفية ما لم يُفتح التقويم صراحة — راجع تعليق رأس الملف). */
 async function _catchUpSinceCache(addr, cache){
   const now = Date.now();
   const floor = now - MAX_LOOKBACK_DAYS * 86400000;
@@ -778,7 +813,7 @@ function showDay(date){
   $('calDet').classList.add('open');
 }
 
-/* ══ Show Main — ✅ الآن يضيف الانتقال الأنيق (fade+slide) ══ */
+/* ══ Show Main — ✅ يضيف الانتقال الأنيق (fade+slide) ══ */
 function showMain(){
   $('calLoad').style.display='none';
   const m=$('calMain');
@@ -800,12 +835,17 @@ function _skeletonHtml(){
   </div>`;
 }
 
-/* ══ Load Data — تدريجي: نافذة فورية + زحف خلفي (لا كاش بعد لهذا العنوان) ══ */
+/* ══ Load Data — تدريجي: نافذة فورية + زحف خلفي (لا كاش بعد لهذا العنوان) ══
+   ✅ FIX (v9) — قفل _loading يمنع تشغيلين متزامنين (تحميل مسبق صامت +
+   فتح يدوي بنفس اللحظة قبل اكتمال الأول) — راجع تعليق رأس الملف. */
 function getAddr(){
   return (typeof State !== 'undefined' && State.wallet && State.wallet.address) || null;
 }
 
 async function load(addr){
+  if (_loading) return;
+  _loading = true;
+
   _fills=[]; _fundMap={}; _dayMap={};
   _monthsCovered=new Set(); _seenFillIds.clear(); _seenFundKeys.clear();
   _historyComplete=false;
@@ -822,19 +862,52 @@ async function load(addr){
 
   if(!ok){
     $('calLoad').innerHTML=`<div class="cal-load"><span style="color:#f05248;font-size:14px">❌ ${typeof errToAr==='function'?errToAr(''):'تعذّر جلب السجل'}</span></div>`;
+    _loading = false;
     return;
   }
   _crawlCoveredSinceMs = now - CHUNK_DAYS*86400000;
   _newestCachedMs = now;
 
-  _ready=true;
+  _ready=true; _readyAddr=addr;
   showStats();showCal();showMain();
   _saveCalCache(addr);
   _startBgCrawl(addr);
+  _loading = false;
+}
+
+/* ══════════════════════════════════════════════
+   ✅ جديد (v9) — منطق الجلب/التخزين المشترك، بلا أي فتح واجهة.
+   المصدر الوحيد لقرار "جاهز أصلاً / كاش محفوظ / أول تحميل" — يستدعيها
+   openCalendar() (تفتح الواجهة أيضاً بعدها) وpreloadCalendarData()
+   الجديدة (بصمت تام). آمنة دائماً حتى لو #calMod مغلقة — راجع تعليق
+   رأس الملف.
+══════════════════════════════════════════════ */
+function _loadOrHydrate(addr){
+  /* ✅ محفظة مختلفة عن آخر حالة بالذاكرة — إعادة ضبط كاملة قبل المتابعة */
+  if (_readyAddr && _readyAddr.toLowerCase() !== addr.toLowerCase()) {
+    _ready = false; _readyAddr = null;
+    _stopBgCrawl();
+  }
+
+  if (_ready) {
+    showStats(); showCal();
+    if (!_historyComplete) _startBgCrawl(addr);
+    return;
+  }
+
+  const cache = _loadCalCache(addr);
+  if (cache) {
+    _hydrateFromCache(cache);
+    _ready = true; _readyAddr = addr;
+    showStats(); showCal();
+    _catchUpSinceCache(addr, cache); /* خلفية بصمت — يجلب فقط الفجوة الجديدة */
+  } else {
+    load(addr); /* أول اتصال إطلاقاً بهذا العنوان — التسلسل التدريجي الكامل */
+  }
 }
 
 /* ══ Events ══ */
-$('calBack').onclick=()=>{ $('calMod').classList.remove('open'); _stopBgCrawl(); };
+$('calBack').onclick=()=>{ $('calMod').classList.remove('open'); };
 $('calDetClose').onclick=()=>$('calDet').classList.remove('open');
 $('calPrev').onclick=()=>{_cur=new Date(_cur.getFullYear(),_cur.getMonth()-1,1);showCal();_onNavChange();};
 $('calNext').onclick=()=>{_cur=new Date(_cur.getFullYear(),_cur.getMonth()+1,1);showCal();_onNavChange();};
@@ -842,7 +915,7 @@ $('calNext').onclick=()=>{_cur=new Date(_cur.getFullYear(),_cur.getMonth()+1,1);
 window.addEventListener('resize',()=>{if(_ready)renderDayHeaders();});
 
 $('calMod').addEventListener('click',e=>{
-  if(isDesktop()&&e.target===$('calMod')){ $('calMod').classList.remove('open'); _stopBgCrawl(); }
+  if(isDesktop()&&e.target===$('calMod')){ $('calMod').classList.remove('open'); }
 });
 
 /* ══ Public API ══ */
@@ -857,22 +930,30 @@ window.openCalendar=function(){
     $('calMain').style.display='none';
     return;
   }
-  if(_ready){
-    showStats();showCal();showMain();
-    if(!_historyComplete) _startBgCrawl(addr);
-    return;
-  }
+  _loadOrHydrate(addr);
+  /* ✅ _ready يكون true فوراً هنا فقط لو الفرع كان "جاهز أصلاً" أو
+     "كاش محفوظ" (كلاهما متزامن قبل هذه النقطة) — فرع load(addr) غير
+     متزامن ويستدعي showMain() بنفسه لما يكتمل، فلا ازدواجية هنا. */
+  if (_ready) showMain();
+};
 
-  /* ✅ جديد — كاش محلي محفوظ من جلسة سابقة لهذا العنوان بالذات */
-  const cache = _loadCalCache(addr);
-  if (cache) {
-    _hydrateFromCache(cache);
-    _ready = true;
-    showStats(); showCal(); showMain(); /* فوري — بلا أي هيكل تحميل */
-    _catchUpSinceCache(addr, cache);      /* خلفية: يجلب فقط الفجوة الجديدة */
-  } else {
-    load(addr); /* أول اتصال إطلاقاً بهذا العنوان — التسلسل القديم كاملاً */
-  }
+/* ══════════════════════════════════════════════
+   ✅ جديد (v9) — تحميل مسبق صامت بعد اتصال المحفظة (تُستدعى من
+   auth.js:_onWalletConnected). بلا أي فتح واجهة إطلاقاً — فقط تبدأ
+   نفس تسلسل الجلب/الزحف الموجود أصلاً.
+══════════════════════════════════════════════ */
+window.preloadCalendarData=function(){
+  const addr=getAddr();
+  if(!addr) return;
+  _loadOrHydrate(addr);
+};
+
+/* ✅ جديد (v9) — توقف الزحف الخلفي وتُصفّر حالة الجاهزية المرتبطة
+   بعنوان محدد. تُستدعى من auth.js:doLogout(). */
+window.teardownCalendarPreload=function(){
+  _stopBgCrawl();
+  _ready = false;
+  _readyAddr = null;
 };
 
 function bind(){const b=$('btnCalendar');if(b)b.onclick=()=>window.openCalendar();}

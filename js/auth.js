@@ -30,6 +30,19 @@
       لاحقاً بأول صفقة حقيقية عبر المسار الكسول الموجود أصلاً بـhlExchange
       (api.js) — الذي لا يمكن أن يفشل لنفس السبب، لأن أي صفقة حقيقية
       تعني ضمناً أن الحساب أصبح مموَّلاً.
+
+   ✅ FIX — زر "🔌 قطع الاتصال" المستقل حُذف نهائياً واندمج بزر "اتصال"
+      نفسه (انتقل للشريط العلوي — راجع index.html/app.js/components.css).
+      updateConnectBtn() هنا عادت أبسط: تلوين/تسمية الزر الواحد فقط،
+      بلا أي منطق إظهار/إخفاء زر ثانٍ منفصل.
+   ✅ FIX — c.js (تقويم التداول) كان لا يبدأ أي جلب/زحف خلفي إلا لو
+      المستخدم فتح "التقويم" يدوياً. الآن preloadCalendarData() تُستدعى
+      تلقائياً هنا بعد استقرار initAccountFeeds (بتأخير بسيط، حتى لا
+      تتنافس مع رصيد/صفقات/أسعار أول تحميل) — فيبدأ الزحف الهادئ
+      الموجود أصلاً بc.js بصمت، ويكون جاهزاً فوراً لو فتح المستخدم
+      التقويم لاحقاً. teardownCalendarPreload() المقابلة تُستدعى من
+      doLogout() أدناه (لم تكن موقوفة هناك سابقاً — تسريب صامت لمؤقت
+      خلفي يستمر لعنوان محفظة انفصل عنها المستخدم فعلياً).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -83,7 +96,7 @@ let _extConnecting = false; /* ✅ قفل بسيط يمنع نداءين متز�
    الثانية (نفس السباق الذي تحلّه reconnectSilently بـwallets.js بحلقة
    انتظار). كانت أول فتحة تُظهر أحياناً "لا توجد محفظة مكتشَفة" لجزء من
    ثانية قبل أن تتحدَّث تلقائياً عبر onListChanged — وميض مربك قد يدفع
-   مستخدماً للتراجع ظناً أن محفظته غير مدعومة رغم أنها موجودة فعلاً.
+   مستخداً للتراجع ظناً أن محفظته غير مدعومة رغم أنها موجودة فعلاً.
    الآن: لأول ~1.2 ثانية من فتح النافذة، قائمة فارغة تُعرَض كـ"يتم
    الاكتشاف..." هادئة بدل رسالة "غير موجودة" القطعية؛ بعد ذلك فقط تظهر
    الرسالة الأقسى لو بقيت القائمة فارغة فعلاً. */
@@ -217,6 +230,13 @@ async function _onWalletConnected(walletObj) {
      بـtry/catch كي لا يوقف عطل شبكي هنا بقية تدفّق الاتصال. */
   try { await initAccountFeeds(); } catch (e) { console.warn('[initAccountFeeds]', e); }
 
+  /* ✅ تحميل تقويم التداول تدريجياً بصمت — بلا انتظار فتح "التقويم"
+     يدوياً كما كان سابقاً. تأخير بسيط (3 ثوانٍ) حتى لا يتنافس مع
+     رصيد/صفقات/أسعار أول تحميل، وبنفس وتيرة الزحف الهادئة الموجودة
+     أصلاً بـc.js (شهر كل 5 ثوانٍ) — راجع تعليق رأس الملف وpreloadCalendarData
+     بـc.js. */
+  setTimeout(() => { if (typeof preloadCalendarData === 'function') preloadCalendarData(); }, 3000);
+
   const hasValidLocalAgent = (typeof Agents !== 'undefined') && !!Agents.getInfo(State.wallet.address)?.valid;
   const looksFunded = !!((State.balance?.total > 0) || (State.positions.length > 0) || (State.fillsCache.length > 0));
 
@@ -279,6 +299,7 @@ function doLogout() {
   clearInterval(State._clockTimer);
   clearInterval(State._sessionTimer);
   teardownAccountFeeds();
+  if (typeof teardownCalendarPreload === 'function') teardownCalendarPreload();
 
   if (State.wallet && typeof State.wallet._teardownListeners === 'function') {
     try { State.wallet._teardownListeners(); } catch {}
@@ -345,17 +366,18 @@ function _hideGuestBanner() {
 
 function openLoginModal() { connectWallet(); }
 
-/* ✅ تُحدِّث أيضاً ظهور زر "🔌 إلغاء الاتصال" برأس الصفحة — مخفي للزائر،
-   ظاهر بمجرد الاتصال، بدل بقائه دفيناً بقائمة الخيارات كما كان سابقاً. */
+/* ✅ FIX — الزر الآن مدمج (اتصال + قطع اتصال بزر واحد بالشريط العلوي).
+   updateConnectBtn تكتفي بتلوين/تسمية #btnConnect فقط — لا يوجد بعد
+   الآن أي #btnDisconnect منفصل لإظهاره/إخفاؤه. */
 function updateConnectBtn() {
   const btn = $('btnConnect');
   if (btn) {
     const hasWallet = !!State.wallet;
     if (State.wsConnected) {
-      btn.className = 'footer-connect-btn ws-connected';
+      btn.className = 'nav-connect-btn ws-connected';
     } else {
       const wasEver = btn.dataset.everConnected === '1';
-      btn.className = wasEver ? 'footer-connect-btn ws-disconnected' : 'footer-connect-btn ws-connecting';
+      btn.className = wasEver ? 'nav-connect-btn ws-disconnected' : 'nav-connect-btn ws-connecting';
     }
     if (State.wsConnected) btn.dataset.everConnected = '1';
 
@@ -367,9 +389,6 @@ function updateConnectBtn() {
     }
     btn.innerHTML = '<span class="cb-dot"></span><span class="cb-lbl">' + lbl + '</span>';
   }
-
-  const discBtn = $('btnDisconnect');
-  if (discBtn) discBtn.classList.toggle('hidden', State.isGuest || !State.wallet);
 }
 
 function updateNavAddressDisplay() {
