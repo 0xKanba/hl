@@ -40,7 +40,6 @@
 │   └── ws.js
 ├── md
 │   ├── files.json
-│   ├── tree.md
 │   └── us.md
 ├── privy-widget
 │   ├── src
