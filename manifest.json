@@ -33,21 +33,21 @@
   ],
   "screenshots": [
     {
-      "src": "/images/x1.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x1.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "سيولة - تداول"
     },
     {
-      "src": "/images/x2.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x2.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "سيولة - رسم"
     },
     {
-      "src": "/images/x3.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x3.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
