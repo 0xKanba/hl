@@ -1,10 +1,8 @@
 name: Auto Update Project Tree
- 
+
 on:
   push:
-    branches:
-       - kanba    
-    
+
 jobs:
   update-structure:
     runs-on: ubuntu-latest
@@ -14,55 +12,69 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect added/deleted files only
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE="${{ github.event.before }}"
+          HEAD="${{ github.sha }}"
+
+          # أول push أو branch جديد: شغّل بأمان
+          if [[ "$BASE" =~ ^0+$ ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED="$(git diff --name-status "$BASE" "$HEAD" || true)"
+          echo "$CHANGED"
+
+          if echo "$CHANGED" | awk '$1 ~ /^(A|D|R)/ {found=1} END {exit !found}'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop if only modified files
+        if: steps.detect.outputs.run != 'true'
+        run: echo "Only modified files. Nothing to update."
 
       - name: Update files.json map
+        if: steps.detect.outputs.run == 'true'
         run: |
           mkdir -p md
-          echo -n "[" > md/files.json
-          FIRST=true
+          shopt -s nullglob
+
+          printf '[' > md/files.json
+          first=true
+
           for f in md/*.md; do
-            if [ -f "$f" ]; then
-              NAME=$(basename "$f" .md)
-              if [ "$FIRST" = true ]; then
-                FIRST=false
-              else
-                echo -n "," >> md/files.json
-              fi
-              echo -n "\"$NAME\"" >> md/files.json
+            name=$(basename "$f" .md)
+            if $first; then
+              first=false
+            else
+              printf ',' >> md/files.json
             fi
+            printf '"%s"' "$name" >> md/files.json
           done
-          echo "]" >> md/files.json
+
+          printf ']' >> md/files.json
 
       - name: Update README.md structure
+        if: steps.detect.outputs.run == 'true'
         run: |
           tree -I '.git|.github|node_modules' --charset utf-8 > tree.txt
-          
-          # بناء الهيكل الجديد مع إضافة العنوان داخل العلامات
-          echo "<!-- TREE START -->" > new_tree.txt
-          echo "" >> new_tree.txt
-          echo "# 📂 repo tree" >> new_tree.txt
-          echo "" >> new_tree.txt
-          echo '```text' >> new_tree.txt
-          cat tree.txt >> new_tree.txt
-          echo '```' >> new_tree.txt
-          echo "<!-- TREE END -->" >> new_tree.txt
-          
-          if [ ! -f README.md ]; then
-            cat new_tree.txt > README.md
-          else
-            if grep -q "<!-- TREE START -->" README.md; then
-              sed -i '/<!-- TREE START -->/,/<!-- TREE END -->/d' README.md
-            fi
-            echo "" >> README.md
-            cat new_tree.txt >> README.md
-          fi
-          
-          rm -f tree.txt new_tree.txt
 
-      - name: Commit and push if changed
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md md/files.json
-          git diff --staged --quiet || git commit -m "🔄 Auto-update structure & map"
-          git push
+          cat > new_tree.txt <<'EOF'
+             <!-- TREE START -->
+
+              # 📂 repo tree
+
+                 ```text
+                     EOF
+              cat tree.txt >> new_tree.txt
+              cat >> new_tree.txt <<'EOF'
