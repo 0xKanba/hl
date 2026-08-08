@@ -2,12 +2,14 @@ name: Update sw.js cache version
 
 on:
   push:
+    branches:
+      - '**'
     paths:
-      - "**.html"
-      - "css/**"
-      - "js/**"
-      - "manifest.json"
-      - "!sw.js"
+      - '**.html'
+      - 'css/**'
+      - 'js/**'
+      - 'manifest.json'
+      - '!sw.js'
   workflow_dispatch:
 
 permissions:

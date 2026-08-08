@@ -33,6 +33,15 @@
       مستمع Wallets.onListChanged معلَّقاً بلا فائدة يعيد بناء قائمة
       داخل مودال مغلق كل مرة تُعلن محفظة جديدة نفسها لاحقاً. أُضيفت حالة
       خاصة لـmodalLogin بمعالج نقر الخلفية العام أدناه.
+
+   ✅ FIX (2026-08) — modalDeposit لم يكن يُظهر عنوان محفظة المستخدم
+      إطلاقاً؛ الإيداع (لبريد Privy أو محفظة خارجية على حدٍّ سواء) هو
+      تحويل USDC من نفس عنوان المحفظة المتصلة إلى الجسر — إن لم يكن
+      برصيد USDC (وETH لغاز Arbitrum) مسبقاً بذلك العنوان تحديداً،
+      زر "إيداع" لا يقدر يفعل شيئاً. العنوان كان موجوداً فقط بمكان
+      بعيد (⚙️ الخيارات ← 🤖 الوكلاء)، لا داخل نافذة الإيداع نفسها حيث
+      يحتاجه المستخدم فعلياً. _fillDepositAddr() تعرضه هنا مباشرة مع
+      زر نسخ، تُستدعى فور فتح modalDeposit.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -138,6 +147,22 @@ function _initAgentCopy() {
   setTxt('agentTtlTxt2', `${days} يوم، ويُطلب توقيع جديد عند الحاجة`);
 }
 
+/* ✅ FIX (2026-08) — يعرض عنوان محفظة المستخدم المتصلة داخل modalDeposit
+   نفسها (بريد Privy أو خارجية — كلاهما نفس المنطق: الإيداع تحويل USDC
+   من هذا العنوان بالذات للجسر). يُستدعى فور فتح النافذة (optDeposit
+   أدناه)، لا مرة واحدة عند الاتصال، حتى يعكس أي تبديل محفظة لاحق. */
+function _fillDepositAddr() {
+  const addr = State.wallet?.address || '—';
+  setTxt('depositAddrTxt', addr);
+  const btn = $('depositAddrCopy');
+  if (btn) btn.onclick = () => {
+    if (!State.wallet) return;
+    navigator.clipboard?.writeText(State.wallet.address)
+      .then(() => toast('✅ تم نسخ العنوان', 'info', 2000))
+      .catch(() => toast('تعذّر النسخ', 'err'));
+  };
+}
+
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
@@ -202,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('optBalance').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showBalance(); };
   $('optHistory').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showHistory(); };
   $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
-  $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalDeposit'); };
+  $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); _fillDepositAddr(); openModal('modalDeposit'); };
   $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
   $('optExportWallet')?.addEventListener('click', () => { closeOptions(); exportWallet(); });
   $('optAgents')?.addEventListener('click', () => { closeOptions(); if (typeof Agents !== 'undefined') Agents.openModal(); });

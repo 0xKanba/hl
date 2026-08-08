@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+  
   <meta charset="UTF-8">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -11,10 +12,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="سيولة">
   <meta name="theme-color" content="#00ccff">
-  <meta name="description" content="سيولة — منصة تداول لامركزية تعمل بالكامل من متصفحك بلا خادم وسيط. تداول الذهب والفضة والنفط الخام وناسداك 100 برافعة مالية مباشرة على Hyperliquid.">
+  <meta name="description" content="سيولة — منصة تداول لامركزية ، ذهب ، فضة ونفط .">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://hl.kanba.pw/">
-  <title>سيولة — تداول مباشر: ذهب، فضة، نفط، ناسداك</title>
+  <title>ماركت ليك — مباشر: ذهب، فضة، نفط</title>
 
 <link rel="icon" href="https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/favicon.svg">
@@ -58,7 +59,7 @@
   <meta property="og:image" content="https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-512x512.png">
   <meta property="og:url" content="https://hl.kanba.pw/">
   <meta property="og:locale" content="ar_AR">
-  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="سيولة — تداول مباشر: ذهب، فضة، نفط، ناسداك">
   <meta name="twitter:description" content="منصة تداول لامركزية بلا خادم وسيط — ذهب، فضة، نفط خام، وناسداك 100 برافعة مالية على Hyperliquid.">
   <meta name="twitter:image" content="https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-512x512.png">
@@ -435,6 +436,16 @@
   </div>
 </div>
 
+<!--
+  ✅ FIX (2026-08) — modalDeposit الآن يعرض عنوان محفظة المستخدم
+  المتصلة مباشرة (بريد Privy أو خارجية — نفس المنطق للاثنين: الإيداع
+  تحويل USDC من هذا العنوان بالذات للجسر) بدل بقائه مخفياً بمكان بعيد
+  (⚙️ الخيارات ← 🤖 الوكلاء فقط). depositAddrTxt/depositAddrCopy
+  يُملآن ويُوصَلان عبر _fillDepositAddr() بapp.js، تُستدعى فور فتح
+  النافذة. تحذير الشبكة الآن صريح لا يحتمل اللبس — الخطأ الأخطر
+  الوحيد الممكن هنا هو إرسال USDC من شبكة غير Arbitrum (يُفقد نهائياً،
+  لا يوجد استرجاع).
+-->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -443,7 +454,14 @@
       <label>المبلغ (USDC)</label>
       <input type="number" class="form-input" id="depositAmount" placeholder="10" min="5" inputmode="decimal">
     </div>
-    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال أقل من دقيقة.</p>
+    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال أقل من دقيقة · يتطلب أيضاً القليل من ETH بمحفظتك لرسوم الشبكة.</p>
+    <div class="deposit-addr-note">
+      <span class="deposit-addr-lbl">⚠️ فقط شبكة Arbitrum One — أرسل USDC لهذا العنوان (اختر Arbitrum عند السحب من Binance أو أي منصة):</span>
+      <div class="ag-addr-box">
+        <span class="ag-addr-txt" id="depositAddrTxt">—</span>
+        <button class="ag-copy-btn" id="depositAddrCopy" title="نسخ">⧉</button>
+      </div>
+    </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"              id="depositCancel">إلغاء</button>
       <button class="btn-modal btn-confirm btn-success" id="depositExecute">إيداع ✓</button>
@@ -451,6 +469,12 @@
   </div>
 </div>
 
+<!--
+  ✅ FIX (2026-08) — تسمية حقل عنوان الوجهة أصبحت أكثر تحديداً + سطر
+  توضيح صغير تحتها. نفس مخاطرة الشبكة الخاطئة تنطبق بالاتجاه المعاكس
+  هنا: عنوان إيداع USDC (Arbitrum) من منصة كـBinance تحديداً، لا أي
+  عنوان آخر.
+-->
 <div class="modal-overlay" id="modalWithdraw">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -469,8 +493,9 @@
       <div class="wp-row wp-net"><span>✅ يصلك صافي</span><span class="wp-val green" id="wpNet">—</span></div>
     </div>
     <div class="form-group">
-      <label>عنوان المحفظة (Arbitrum)</label>
+      <label>عنوان الوجهة — شبكة Arbitrum فقط</label>
       <input type="text" class="form-input" id="withdrawAddress" placeholder="0x..." dir="ltr">
+      <span class="field-hint">مثال: عنوان إيداع USDC (شبكة Arbitrum) من Binance أو أي منصة/محفظة</span>
     </div>
     <div class="modal-buttons">
       <button class="btn-modal btn-cancel"              id="withdrawCancel">إلغاء</button>
