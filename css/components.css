@@ -7,6 +7,12 @@
       المستقل الذي حُذف نهائياً — راجع .nav-connect-btn أدناه وindex.html/
       app.js/auth.js. .footer-connect-btn و.nav-disconnect-btn القديمتان
       حُذفتا بالكامل (لا عنصر يستخدمهما بعد الآن).
+   ✅ FIX (2026-08) — أُضيفت 4 كلاسات صغيرة لدعم وضوح تدفّق الإيداع/
+      السحب/التداول لمستخدم جديد كلياً: .find-wallet-btn (رابط دليل
+      ethereum.org عند عدم اكتشاف أي محفظة)، .deposit-addr-note/-lbl
+      (صندوق عنوان الإيداع داخل modalDeposit نفسها)، .confirm-hint
+      (توضيح سطر واحد تحت سعر التصفية بتأكيد الصفقة)، .field-hint
+      (تلميح صغير تحت أي حقل نموذج — يُستخدم حالياً لتوضيح شبكة السحب).
 ═══════════════════════════════════════════════════════════════ */
 
 @layer components {
@@ -105,6 +111,23 @@
   transition: all var(--dur-base) var(--ease-standard);
 }
 .create-wallet-btn:hover { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
+
+/* ✅ FIX (2026-08) — رابط صغير أنيق لدليل ethereum.org عند عدم اكتشاف
+   أي محفظة بالمتصفح (راجع auth.js:_renderExtWalletList). عرض تلقائي
+   (auto-width) لا full-width، بعكس .create-wallet-btn، ليبقى بصرياً
+   "ثانوياً" ومناسباً لوضعه كسطر منفصل تحت رسالة توضيحية. */
+.find-wallet-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 5px; padding: 7px var(--space-4);
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-elev); color: var(--ac);
+  font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  text-decoration: none; cursor: pointer;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+.find-wallet-btn:hover  { border-color: var(--ac); background: var(--ac-dim); }
+.find-wallet-btn:active { transform: scale(.95); }
 
 /* ════════════════════════════════════
    NAV
@@ -661,12 +684,30 @@
 .confirm-val.muted { color: var(--text-secondary); }
 .confirm-val.fee   { color: var(--warn); font-size: var(--fs-md); }
 
+/* ✅ FIX (2026-08) — سطر توضيح بلغة بسيطة يجلس تحت أي confirm-row
+   مباشرة (حالياً يُستخدم تحت "التصفية التقريبية" بtrading.js) بدل
+   ترك رقم مجرداً بلا أي شرح لمستخدم جديد كلياً. ليس زوج مفتاح/قيمة،
+   فقط جملة واحدة صغيرة داكنة اللون، بلا فاصل سفلي يفصله عن الصف
+   التالي (margin-bottom بدل border). */
+.confirm-hint {
+  font-size: var(--fs-sm); color: var(--text-muted); font-weight: var(--fw-regular);
+  line-height: var(--lh-base); padding: 0 2px var(--space-2);
+  margin-top: -4px;
+}
+
 .form-group { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); flex-shrink: 0; }
 .form-group label { font-size: var(--fs-base); font-weight: var(--fw-semibold); color: var(--text-secondary); letter-spacing: 1px; text-transform: uppercase; }
 .form-input {
   width: 100%; font-family: var(--font-mono);
   font-size: var(--fs-3xl); font-weight: var(--fw-bold); padding: var(--space-4) var(--space-4);
   direction: ltr; border-radius: var(--r-md);
+}
+/* ✅ FIX (2026-08) — تلميح صغير تحت أي حقل نموذج (حالياً: توضيح شبكة
+   Arbitrum تحت عنوان وجهة السحب بmodalWithdraw). لا letter-spacing/
+   uppercase مثل label الأساسي — نص عادي هادئ، ليس عنواناً. */
+.field-hint {
+  display: block; font-size: var(--fs-2xs); font-weight: var(--fw-bold);
+  color: var(--text-muted); line-height: var(--lh-base); margin-top: -2px;
 }
 .form-note {
   font-size: var(--fs-md); color: var(--text-secondary); line-height: var(--lh-loose);
@@ -675,6 +716,23 @@
   border: 1px solid color-mix(in srgb, var(--ac) 22%, transparent);
   margin-bottom: var(--space-3); font-weight: var(--fw-regular); flex-shrink: 0;
 }
+
+/* ✅ FIX (2026-08) — صندوق عنوان الإيداع داخل modalDeposit نفسها —
+   راجع تعليق index.html فوق modalDeposit وapp.js:_fillDepositAddr().
+   .ag-addr-box/.ag-addr-txt/.ag-copy-btn (المستخدمة بالداخل هنا) مُعرَّفة
+   ديناميكياً بـagents.js (يُحمَّل قبل app.js دائماً — راجع ترتيب
+   السكربتات بindex.html)، فمتاحة عالمياً بحلول أول تفاعل مستخدم ممكن؛
+   عمداً غير مكرَّرة هنا. */
+.deposit-addr-note {
+  background: var(--bg-input); border: 1.5px solid var(--warn);
+  border-radius: var(--r-sm); padding: var(--space-3);
+  margin-bottom: var(--space-3); flex-shrink: 0;
+}
+.deposit-addr-lbl {
+  display: block; font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  color: var(--warn); line-height: var(--lh-base); margin-bottom: 7px;
+}
+
 .calc-preview {
   font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: var(--fw-bold);
   color: var(--ac); padding: var(--space-3) 14px; border-radius: var(--r-sm);
@@ -804,8 +862,8 @@
 #toast.err  { border-color: var(--dn); color: var(--dn); background: color-mix(in srgb,var(--dn) 8%,var(--bg-card)); box-shadow: var(--glow-dn); }
 #toast.info { border-color: var(--ac); color: var(--ac); box-shadow: var(--glow-ac); }
 /* ✅ نوع رابع 'warn' — لتحذيرات مهمة ليست فشلاً حقيقياً (مثل "أودع
-   USDC أولاً لتفعيل حسابك") — يستخدم --warn الموجود أصلاً بthemes.css،
-   بدل إعادة استخدام 'err' لأشياء ليست خطأً حقيقياً بالتطبيق نفسه. */
+   USDC أولاً لتفعيل حسابك") — يستخدم لون --warn الموجود أصلاً بthemes.css،
+   بدل إعادة استخدام 'err' لأشياء ليست فشلاً حقيقياً بالتطبيق نفسه. */
 #toast.warn {
   border-color: var(--warn); color: var(--warn);
   background: color-mix(in srgb,var(--warn) 10%,var(--bg-card));

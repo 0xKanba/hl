@@ -1,3 +1,12 @@
+/* ═══════════════════════════════════════
+   trading.js
+   ✅ FIX (2026-08) — "التصفية التقريبية" كانت رقماً مجرداً بلا أي شرح
+      داخل تأكيد الصفقة — أكثر مصطلح يربك مستخدماً جديداً كلياً يفتح
+      أول صفقة رافعة مالية بحياته (يبدو تحذيرياً بلا توضيح "ليش" ولا
+      "شو معناه"). أُضيف سطر توضيح واحد بلغة بسيطة تحت السطر مباشرة —
+      بلا حذف أو تخفيف الرقم نفسه (معلومة مخاطرة حقيقية تحمي المستخدم،
+      لا شيء يستحق الإخفاء لمجرد التبسيط).
+═══════════════════════════════════════ */
 'use strict';
 
 /* ════ Open trade confirm ════ */
@@ -32,6 +41,7 @@ function askTrade(isBuy) {
     <div class="confirm-row"><span class="confirm-key">القيمة الكلية</span><span class="confirm-val">≈ $${usd}</span></div>
     <div class="confirm-row"><span class="confirm-key">الهامش المطلوب</span><span class="confirm-val warn">≈ $${mgn}</span></div>
     <div class="confirm-row"><span class="confirm-key">التصفية التقريبية</span><span class="confirm-val" style="color:var(--warn)">${liqInfo.text}</span></div>
+    <div class="confirm-hint">⚡ لو وصل السعر لهذا الرقم، تُغلق الصفقة تلقائياً لحماية رصيدك من خسارة أكبر</div>
     <div class="confirm-row"><span class="confirm-key">رسوم الفتح</span><span class="confirm-val fee">$${feeOpen} (${feeRatePct(State.asset)})</span></div>
     <div class="confirm-row"><span class="confirm-key">إجمالي الرسوم</span><span class="confirm-val fee">≈ $${feeTot}</span></div>`;
 
