@@ -1,9 +1,50 @@
 /* ═══════════════════════════════════════
-   app.js — تهيئة التطبيق وربط الأحداث
+   app.js — تغييرات الإقلاع فقط:
+   HL.connect() + initPriceFeeds() فوراً (زائر ومتصل)،
+   initAccountFeeds() ينتقل داخل _onWalletConnected (auth.js)،
+   _startAuthedTimers أصبحت أخف (startSessionPolling فقط)
+   ✅ حذف كامل حقلي "اسم العرض" و"صوت التنبيهات" من الأسلاك.
+   ✅ "الوكلاء" تفتح Agents.openModal() بدل enableFastTrading القديمة.
+   ✅ نصوص رسوم السحب ومدة الوكيل تُملأ ديناميكياً من الثوابت المركزية.
+   ✅ Wallets.reconnectSilently(rdns) تستقبل rdns المحفوظ فعلاً.
+   ✅ "نسيت PIN" يحذف الوكيل يدوياً قبل تسجيل الخروج.
+   ✅ حُذف زر/سلك "استرداد المحفظة".
+   ✅ FIX — إعادة الاتصال التلقائي بالبريد (Privy) عند إعادة تحميل
+      الصفحة تنتظر .ready فعلياً (حتى 6 ثوان) قبل قراءة authenticated.
+
+   ✅ FIX — فتح الرسم البياني كان محظوراً على الزوّار (`if (State.isGuest)
+      return _promptConnect();`) رغم أن بيانات الشموع/الأسعار عامة
+      بالكامل بلا أي حاجة لتوقيع (candleSnapshot وBBO لا يتطلبان مصادقة
+      — راجع chart.js). القرار الوحيد الذي يحتاج فعلاً محفظة متصلة هو
+      محاولة تنفيذ صفقة من داخل الرسم، وهذا مُتحقَّق منه أصلاً وبشكل
+      صحيح داخل _showCf بـchart.js (تُظهر توست "سجّل الدخول أولاً" بدل
+      التنفيذ). إزالة الحظر هنا تتيح للزائر تصفّح الرسم البياني كاملاً
+      قبل أي التزام بربط محفظة — بلا أي خطر تقني.
+
+   ✅ FIX — دُمج زر "🔌 إلغاء الاتصال" المستقل بزر "اتصال" نفسه (انتقل
+      للشريط العلوي — راجع index.html/auth.js/components.css). لم يعد
+      هناك عنصر #btnDisconnect منفصل: نفس الزر الآن يفتح تسجيل الدخول
+      للزائر، ويفتح مباشرة modalLogout (تأكيد قطع الاتصال) لمن هو
+      متصل بالفعل. الوصول لـ"⚙️ الخيارات" يبقى متاحاً عبر زر الخيارات
+      المستقل بالفوتر (btnOptions) كما هو — لا تغيير هناك.
+
+   ✅ FIX — إغلاق modalLogin عبر النقر على الخلفية المعتمة (لا زر
+      "إغلاق" الصريح) لم يكن يستدعي _stopWalletListWatch()، فيبقى
+      مستمع Wallets.onListChanged معلَّقاً بلا فائدة يعيد بناء قائمة
+      داخل مودال مغلق كل مرة تُعلن محفظة جديدة نفسها لاحقاً. أُضيفت حالة
+      خاصة لـmodalLogin بمعالج نقر الخلفية العام أدناه.
+
+   ✅ FIX (2026-08) — modalDeposit لم يكن يُظهر عنوان محفظة المستخدم
+      إطلاقاً؛ الإيداع (لبريد Privy أو محفظة خارجية على حدٍّ سواء) هو
+      تحويل USDC من نفس عنوان المحفظة المتصلة إلى الجسر — إن لم يكن
+      برصيد USDC (وETH لغاز Arbitrum) مسبقاً بذلك العنوان تحديداً،
+      زر "إيداع" لا يقدر يفعل شيئاً. العنوان كان موجوداً فقط بمكان
+      بعيد (⚙️ الخيارات ← 🤖 الوكلاء)، لا داخل نافذة الإيداع نفسها حيث
+      يحتاجه المستخدم فعلياً. _fillDepositAddr() تعرضه هنا مباشرة مع
+      زر نسخ، تُستدعى فور فتح modalDeposit.
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ════ ساعة عربية UTC+3 ════ */
 const _AR_MONTHS = [
   'يناير','فبراير','مارس','أبريل','مايو','يونيو',
   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'
@@ -28,7 +69,6 @@ function _startDatetimeClock() {
   setInterval(tick, 1000);
 }
 
-/* ════ جدول الأشهر ════ */
 function _initMonthsPanel() {
   const bar   = document.getElementById('datetimeBar');
   const panel = document.getElementById('monthsPanel');
@@ -40,7 +80,89 @@ function _initMonthsPanel() {
   });
 }
 
-/* ════ Options Context Menu ════ */
+function _applyTheme(theme, animate) {
+  if (animate) {
+    document.documentElement.classList.add('theme-transitioning');
+    setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 320);
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('btnTheme');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+function _initTheme() {
+  const saved = localStorage.getItem('hl_theme');
+  const sys   = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  _applyTheme(saved || sys, false);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (!localStorage.getItem('hl_theme')) _applyTheme(e.matches ? 'dark' : 'light', true);
+  });
+}
+
+function _toggleTheme() {
+  const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('hl_theme', next);
+  _applyTheme(next, true);
+}
+
+function _initQtyInput() {
+  const input = $('qtyInput');
+  if (!input) return;
+  const a = ASSETS[State.asset];
+  const defaultVal = a?.presets?.[0] ?? 1;
+  if (!input.value || +input.value <= 0) {
+    input.value = defaultVal;
+    State.qty   = defaultVal;
+  }
+  input.addEventListener('focus', () => { input.select?.(); });
+  input.addEventListener('blur', () => {
+    if (!input.value || +input.value <= 0) {
+      const asset = ASSETS[State.asset];
+      const def   = asset?.presets?.[0] ?? 1;
+      input.value = def;
+      State.qty   = def;
+    }
+  });
+  input.oninput = function () { State.qty = parseFloat(this.value) || 0; };
+}
+
+function _initWithdrawFeeUI() {
+  const fee = WITHDRAW_FEE_USDC;
+  setTxt('wFeeAmt', `$${fee.toFixed(2)}`);
+  const exSend = fee + 20;
+  setTxt('wFeeExSend', `$${exSend.toFixed(2)}`);
+  setTxt('wFeeExNet',  `$${(exSend - fee).toFixed(2)}`);
+  const amtEl = $('withdrawAmount');
+  if (amtEl) {
+    amtEl.min = String(fee + 1);
+    amtEl.placeholder = String(exSend);
+  }
+}
+
+function _initAgentCopy() {
+  if (typeof Agents === 'undefined') return;
+  const days = Math.round(Agents.TTL_MS / 86400000);
+  setTxt('agentTtlTxt1', `${days} يوم`);
+  setTxt('agentTtlTxt2', `${days} يوم، ويُطلب توقيع جديد عند الحاجة`);
+}
+
+/* ✅ FIX (2026-08) — يعرض عنوان محفظة المستخدم المتصلة داخل modalDeposit
+   نفسها (بريد Privy أو خارجية — كلاهما نفس المنطق: الإيداع تحويل USDC
+   من هذا العنوان بالذات للجسر). يُستدعى فور فتح النافذة (optDeposit
+   أدناه)، لا مرة واحدة عند الاتصال، حتى يعكس أي تبديل محفظة لاحق. */
+function _fillDepositAddr() {
+  const addr = State.wallet?.address || '—';
+  setTxt('depositAddrTxt', addr);
+  const btn = $('depositAddrCopy');
+  if (btn) btn.onclick = () => {
+    if (!State.wallet) return;
+    navigator.clipboard?.writeText(State.wallet.address)
+      .then(() => toast('✅ تم نسخ العنوان', 'info', 2000))
+      .catch(() => toast('تعذّر النسخ', 'err'));
+  };
+}
+
 function openOptions() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
@@ -53,132 +175,106 @@ function closeOptions() {
   if (!ov) return;
   ov.classList.add('closing');
   setTimeout(() => {
-    ov.classList.remove('visible', 'closing');
+    ov.classList.remove('visible','closing');
     ov.classList.add('hidden');
   }, 120);
 }
 
-/* ✅ نقر على الخلفية (خارج القائمة) يغلق */
 function _initOptsBackdrop() {
   const ov = document.getElementById('optsOverlay');
   if (!ov) return;
-  ov.addEventListener('click', e => {
-    if (e.target === ov) closeOptions();
-  });
+  ov.addEventListener('click', e => { if (e.target === ov) closeOptions(); });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
 
-  /* ── شريط التاريخ ── */
+  _initTheme();
+  const themeBtn = document.getElementById('btnTheme');
+  if (themeBtn) themeBtn.onclick = _toggleTheme;
+
   _startDatetimeClock();
   _initMonthsPanel();
   _initOptsBackdrop();
+  _initQtyInput();
+  _initWithdrawFeeUI();
+  _initAgentCopy();
 
-  /* ── تسجيل الدخول ── */
-  $('loginBtn').onclick = login;
-  $('privateKey').onkeydown = e => e.key === 'Enter' && login();
-  $('toggleKey').onclick = () => {
-    const i = $('privateKey');
-    i.type = i.type === 'password' ? 'text' : 'password';
-    $('toggleKey').textContent = i.type === 'password' ? '👁' : '🙈';
-  };
-  $('createWalletBtn')?.addEventListener('click', createNewWallet);
+  $('connectEmailBtn')?.addEventListener('click', connectEmail);
+  $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
+  $('loaderClose')?.addEventListener('click', hideLoader);
 
-  /* ── تبديل الأصول ── */
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
     t.onclick = () => switchAsset(t.dataset.asset)
   );
 
-  /* ── Footer ── */
-  $('btnChart').onclick   = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
+  /* ✅ الرسم البياني يفتح للجميع الآن — زائر أو متصل، راجع تعليق رأس الملف */
+  $('btnChart').onclick = () => {
     ChartModule.open(State.asset);
   };
+
+  /* ✅ FIX — زر "اتصال" أصبح مدمجاً: زائر → فتح تسجيل الدخول، متصل →
+     فتح modalLogout (تأكيد قطع الاتصال) مباشرة بدل فتح الخيارات —
+     راجع تعليق رأس الملف. الوصول لـ"⚙️ الخيارات" يبقى عبر btnOptions
+     المستقل بالفوتر، بلا أي تغيير هناك. */
+  $('btnConnect').onclick = () => {
+    if (State.isGuest) connectWallet();
+    else openModal('modalLogout');
+  };
+
   $('btnOptions').onclick = openOptions;
+  $('optsClose').onclick  = closeOptions;
 
-  /* ── زر الرجوع في Options ← ── */
-  $('optsClose').onclick = closeOptions;
+  $('optBalance').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showBalance(); };
+  $('optHistory').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showHistory(); };
+  $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
+  $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); _fillDepositAddr(); openModal('modalDeposit'); };
+  $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
+  $('optExportWallet')?.addEventListener('click', () => { closeOptions(); exportWallet(); });
+  $('optAgents')?.addEventListener('click', () => { closeOptions(); if (typeof Agents !== 'undefined') Agents.openModal(); });
 
-  /* ── أزرار الخيارات — تفتح modal فوق الـ overlay بدون إغلاقها ── */
-  $('optBalance').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
-    showBalance();  /* تفتح فوق الـ overlay */
-  };
-  $('optHistory').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
-    showHistory();
-  };
-  $('optCalendar').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
-    if (typeof openCalendar === 'function') openCalendar();
-  };
-  $('optDeposit').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
-    openModal('modalDeposit');
-  };
-  $('optWithdraw').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول أولاً', 'err');
-    openModal('modalWithdraw');
-  };
-  $('optLogout').onclick = () => {
-    openModal('modalLogout');
-  };
-
-  /* ── التداول ── */
-  $('btnBuy').onclick  = () => State.wallet ? askTrade(true)  : toast('سجّل الدخول أولاً', 'err');
-  $('btnSell').onclick = () => State.wallet ? askTrade(false) : toast('سجّل الدخول أولاً', 'err');
-
-  $('qtyInput').oninput = function () {
-    State.qty = parseFloat(this.value) || 0;
-  };
+  $('btnBuy').onclick  = () => askTrade(true);
+  $('btnSell').onclick = () => askTrade(false);
 
   $('qty100').onclick = () => {
-    if (!State.wallet) return toast('سجّل الدخول', 'err');
+    if (State.isGuest) return _promptConnect();
     const a   = ASSETS[State.asset];
-    const bal = State.balance?.total || 0;
+    const bal = State.balance?.available || State.balance?.total || 0;
     const px  = State.prices[State.asset]?.mid;
     if (!bal || !px) return toast('رصيد غير متاح', 'err');
-    State.qty = parseFloat(wire((bal * a.lev) / px, a.szDp));
-    $('qtyInput').value = State.qty;
-    toast(`✅ ${State.qty} ${a.unit}`, 'ok');
+    const qty100 = parseFloat(wire((bal * a.lev) / px, a.szDp));
+    State.qty = qty100;
+    $('qtyInput').value = qty100;
+    toast(`✅ ${qty100} ${a.unit}`, 'ok');
   };
 
-  /* ── تأكيد الصفقة ── */
   $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
   $('confirmExecute').onclick = () => requirePin(execTrade);
 
-  /* ── إغلاق صفقة ── */
   $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
   $('closeExecute').onclick = () => requirePin(execClose);
 
-  /* ── إغلاق الكل ── */
   $('btnCloseAll').onclick     = askCloseAll;
   $('closeAllCancel').onclick  = () => closeModal('modalCloseAll');
   $('closeAllExecute').onclick = () => requirePin(execCloseAll);
 
-  /* ── TP ── */
   $('tpCancel').onclick  = () => { closeModal('modalTP'); State.pendingTP = null; };
   $('tpExecute').onclick = () => requirePin(execTP);
   $('tpDelete').onclick  = () => requirePin(deleteTP);
   $('tpAmount').oninput  = recalcTpPreview;
 
-  /* ── SL ── */
   $('slCancel').onclick  = () => { closeModal('modalSL'); State.pendingSL = null; };
   $('slExecute').onclick = () => requirePin(execSL);
   $('slDelete').onclick  = () => requirePin(deleteSL);
   $('slAmount').oninput  = recalcSlPreview;
 
-  /* ── الرصيد ── */
   $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
-
-  /* ── التاريخ ── */
   $('historyClose').onclick = () => closeModal('modalHistory');
 
-  /* ── الإيداع ── */
+  $('posDetailClose').onclick = () => closeModal('modalPosDetail');
+
   $('depositCancel').onclick  = () => closeModal('modalDeposit');
   $('depositExecute').onclick = () => requirePin(doDeposit);
 
-  /* ── السحب ── */
   $('withdrawCancel').onclick  = () => closeModal('modalWithdraw');
   $('withdrawExecute').onclick = () => requirePin(doWithdraw);
 
@@ -188,9 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!prev) return;
     if (!amt || amt <= 0) { prev.classList.add('hidden'); return; }
     prev.classList.remove('hidden');
-    const sendEl = $('wpSend'), netEl = $('wpNet');
+    const sendEl = $('wpSend'), netEl = $('wpNet'), feeEl = $('wpFee');
     if (sendEl) sendEl.textContent = `$${amt.toFixed(2)}`;
-    if (netEl)  netEl.textContent  = `$${Math.max(0, amt - 1).toFixed(2)} USDC`;
+    if (feeEl)  feeEl.textContent  = `- $${WITHDRAW_FEE_USDC.toFixed(2)}`;
+    if (netEl)  netEl.textContent  = `$${Math.max(0, amt - WITHDRAW_FEE_USDC).toFixed(2)} USDC`;
   });
 
   $('withdrawAddress').addEventListener('click', function () { this.select(); });
@@ -199,11 +296,9 @@ document.addEventListener('DOMContentLoaded', () => {
       this.value = '0x0640F5Bfc50AC53eC68C435a60cB0ffF5C555FAD';
   });
 
-  /* ── الخروج ── */
   $('logoutCancel').onclick  = () => closeModal('modalLogout');
   $('logoutExecute').onclick = doLogout;
 
-  /* ── نسخ العنوان ── */
   function _copyAddr() {
     if (!State.wallet) return;
     navigator.clipboard?.writeText(State.wallet.address)
@@ -213,17 +308,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('navAddress').onclick = _copyAddr;
   $('navCopyBtn')?.addEventListener('click', _copyAddr);
 
-  /* ── القفل ── */
-  $('btnLock').onclick = () => lockApp(true);
+  $('btnLock').onclick = () => {
+    if (State.isGuest) return _promptConnect();
+    lockApp(true);
+  };
 
-  /* ── شعار سيولة → شرح ── */
-  $('navLogo')?.addEventListener('click', e => {
-    e.preventDefault(); e.stopPropagation();
-    openModal('modalAbout');
-  });
-  $('aboutClose').onclick = () => closeModal('modalAbout');
-
-  /* ── PIN ── */
   $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
   $('pinLogout').onclick = () => {
     $('forgotStep1').classList.remove('hidden');
@@ -235,7 +324,11 @@ document.addEventListener('DOMContentLoaded', () => {
     $('forgotStep1').classList.add('hidden');
     $('forgotStep2').classList.remove('hidden');
   };
-  $('forgotStep2').onclick  = () => { closeModal('modalForgotPIN'); doLogout(); };
+  $('forgotStep2').onclick = () => {
+    closeModal('modalForgotPIN');
+    if (typeof Agents !== 'undefined') Agents.revoke();
+    doLogout();
+  };
 
   $('setPinCancel').onclick = () => {
     closeModal('modalSetPIN');
@@ -255,18 +348,70 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ── إغلاق modals بالنقر خارجها ── */
   document.querySelectorAll('.modal-overlay').forEach(o => o.onclick = e => {
     if (e.target !== o) return;
     if (o.id === 'modalPIN' && State.isLocked) return;
     if (o.id === 'modalSetPIN') { State.currentSetPinInput = ''; updateSetPinDots(); }
+    if (o.id === 'modalLogin') _stopWalletListWatch();
     o.classList.remove('open');
   });
 
-  /* ── استعادة الجلسة ── */
-  const saved = localStorage.getItem(LS_KEY);
-  if (saved) { $('privateKey').value = saved; login(); }
+  /* ═══════════════════════════════════════
+     Boot sequence
+  ═══════════════════════════════════════ */
+  HL.connect();
+  initPriceFeeds();
+
+  function _startAuthedTimers() {
+    startSessionPolling();
+  }
+  function _fallbackToGuest() {
+    initGuestMode();
+  }
+  function _showAppOptimistically() {
+    $('loginScreen')?.classList.add('hidden');
+    $('appScreen')?.classList.remove('hidden');
+  }
+
+  function _waitPrivyReady(timeoutMs) {
+    return new Promise(resolve => {
+      const t0 = Date.now();
+      (function poll() {
+        if (window.PrivyBridge && window.PrivyBridge.ready) return resolve(true);
+        if (Date.now() - t0 > timeoutMs) return resolve(false);
+        setTimeout(poll, 80);
+      })();
+    });
+  }
+
+  if (localStorage.getItem(PRIVY_FLAG_KEY)) {
+    _showAppOptimistically();
+    _loadPrivyBridge()
+      .then(() => _waitPrivyReady(6000))
+      .then((readyOk) => {
+        const w = readyOk && window.PrivyBridge.authenticated && window.PrivyBridge.getActiveWallet();
+        if (!w) throw new Error('no active Privy session');
+        return _onWalletConnected({
+          address: w.address, walletClientType: w.walletClientType,
+          walletName: w.name, walletIcon: w.icon,
+          signTypedData: (d, t, v) => window.PrivyBridge.signTypedData(d, t, v, w.address),
+          getArbitrumSigner: () => window.PrivyBridge.getArbitrumSigner(w.address),
+        });
+      })
+      .then(_startAuthedTimers)
+      .catch(_fallbackToGuest);
+  } else if (localStorage.getItem(EXTWALLET_FLAG_KEY)) {
+    _showAppOptimistically();
+    let _extMeta = null;
+    try { _extMeta = JSON.parse(localStorage.getItem(EXTWALLET_FLAG_KEY)); } catch {}
+    (typeof Wallets !== 'undefined' ? Wallets.reconnectSilently(_extMeta?.rdns) : Promise.resolve(null))
+      .then(w => { if (!w) throw new Error('no prior wallet authorization'); return _onWalletConnected(w); })
+      .then(_startAuthedTimers)
+      .catch(_fallbackToGuest);
+  } else {
+    _fallbackToGuest();
+  }
 
   if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
-    setTimeout(() => { if (State.wallet) lockApp(); }, 500);
+    setTimeout(() => { if (State.wallet) lockApp(); }, 600);
 });

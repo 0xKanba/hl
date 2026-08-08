@@ -13,19 +13,19 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#1a1916",
-  "theme_color": "#c96442",
+  "background_color": "#040302",
+  "theme_color": "#00ccff",
   "lang": "ar",
   "dir": "rtl",
   "icons": [
     {
-      "src": "/images/icon-192x192.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/images/icon-512x512.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
@@ -33,21 +33,21 @@
   ],
   "screenshots": [
     {
-      "src": "/images/x1.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x1.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "سيولة - تداول"
     },
     {
-      "src": "/images/x2.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x2.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "سيولة - رسم"
     },
     {
-      "src": "/images/x3.png",
+      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x3.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",

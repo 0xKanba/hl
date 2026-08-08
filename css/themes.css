@@ -1,0 +1,149 @@
+/* ═══════════════════════════════════════════════════════════════
+   themes.css — HL / سيولة · Color System
+   الألوان مستخرجة كاملة من hl.css + hl2.css (البرتقالي #e07248).
+   تبديل ديناميكي عبر [data-theme="dark|light"] على <html>.
+   لا @media (prefers-color-scheme) — التبديل يدوي فقط عبر الزر.
+   ✅ FIX — --ac-soft كانت color-mix(...50%...) فتظهر أزرار (login-btn،
+      بانر الزائر، qty-100، footer-opts-btn) خافتة بكلا المظهرين رغم
+      حدّها --ac بلون مشبّع كامل. الآن 100% (اللون مباشرة بلا مزج).
+      لون النص (--text-primary) يبقى كما هو — تباينه محسوب أصلاً
+      ليعمل جيداً فوق --ac الصلب بكلا المظهرين (فاتح على الغامق،
+      شبه أسود على البرتقالي المتوسط بالفاتح، نسبة تباين ~5:1+).
+═══════════════════════════════════════════════════════════════ */
+
+@layer themes {
+
+/* ════════════════════════════════════
+   DARK — الافتراضي (من hl.css :root)
+════════════════════════════════════ */
+:root,
+[data-theme="dark"] {
+  --bg-app:        #131210;
+  --bg-card:       #1e1c18;
+  --bg-elev:       #272420;
+  --bg-input:      #302d28;
+  --bg-overlay:    rgba(19,18,16,.85);
+
+  --border:         #48443c;
+  --border-strong:  #5a554c;
+  --border-subtle:  rgba(255,255,255,.06);
+
+  /* Accent — برتقالي HL */
+  --ac:      #e07248;
+  --ac-2:    #a8502f;
+  --ac-dim:  rgba(224,114,72,.22);
+  --ac-deep: #a8502f;
+  --ac-soft: var(--ac);
+
+  /* Trading semantics */
+  --up:       #34c85a;
+  --up-2:     #1a7f37;
+  --up-dim:   rgba(52,200,90,.18);
+  --dn:       #f05248;
+  --dn-2:     #a0281e;
+  --dn-dim:   rgba(240,82,72,.18);
+  --warn:     #f0be30;
+  --warn-2:   #806b00;
+  --warn-dim: rgba(240,190,48,.18);
+  --tp:       #28d99a;
+  --tp-dim:   rgba(40,217,154,.18);
+  --sl:       #f09050;
+  --sl-dim:   rgba(240,144,80,.18);
+
+  /* Text */
+  --text-primary:   #f8f4ee;
+  --text-secondary: #d8d0c4;
+  --text-muted:     #a09890;
+
+  /* Shadows */
+  --shadow:    0 8px 32px rgba(0,0,0,.65);
+  --shadow-sm: 0 4px 16px rgba(0,0,0,.35);
+
+  /* Glows */
+  --glow-ac:  0 0 16px var(--ac-dim), 0 0 32px rgba(224,114,72,.10);
+  --glow-up:  0 0 16px var(--up-dim);
+  --glow-dn:  0 0 16px var(--dn-dim);
+  --glow-bdr: 0 0 0 1px rgba(255,255,255,.06), inset 0 1px 0 rgba(255,255,255,.04);
+  --tglow-up: 0 0 12px rgba(52,200,90,.5);
+  --tglow-dn: 0 0 12px rgba(240,82,72,.5);
+
+  /* Scrollbar */
+  --sb-thumb:       #4d443e;
+  --sb-thumb-hover: #6e6259;
+  --sb-track-hover: rgba(120,110,100,.25);
+
+  /* Legacy aliases (inline JS يستخدمها) */
+  --hc-up:   var(--up);
+  --hc-dn:   var(--dn);
+  --hc-ac:   var(--ac);
+  --hc-warn: var(--warn);
+  --hc-tp:   var(--tp);
+  --hc-sl:   var(--sl);
+
+  color-scheme: dark;
+}
+
+/* ════════════════════════════════════
+   LIGHT — من hl.css @media prefers-color-scheme: light
+   منقولة إلى [data-theme="light"] للتبديل اليدوي.
+════════════════════════════════════ */
+[data-theme="light"] {
+  --bg-app:        #eeeae4;
+  --bg-card:       #f8f4ef;
+  --bg-elev:       #e8e4de;
+  --bg-input:      #dedad4;
+  --bg-overlay:    rgba(232,228,222,.85);
+
+  --border:         #c8c4bc;
+  --border-strong:  #b0aba2;
+  --border-subtle:  rgba(0,0,0,.05);
+
+  --ac:      #c96442;
+  --ac-2:    #a8502f;
+  --ac-dim:  rgba(201,100,66,.15);
+  --ac-deep: #a8502f;
+  --ac-soft: var(--ac);
+
+  --up:       #1a8c3a;
+  --up-2:     #005c2b;
+  --up-dim:   rgba(26,140,58,.14);
+  --dn:       #cc2e24;
+  --dn-2:     #a30000;
+  --dn-dim:   rgba(204,46,36,.14);
+  --warn:     #9a6400;
+  --warn-2:   #704900;
+  --warn-dim: rgba(154,100,0,.14);
+  --tp:       #1a9e72;
+  --tp-dim:   rgba(26,158,114,.14);
+  --sl:       #c05818;
+  --sl-dim:   rgba(192,88,24,.14);
+
+  --text-primary:   #100e08;
+  --text-secondary: #3a3630;
+  --text-muted:     #605850;
+
+  --shadow:    0 4px 20px rgba(0,0,0,.14);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.09);
+
+  --glow-ac:  0 0 10px rgba(201,100,66,.20);
+  --glow-up:  0 0 8px  rgba(26,140,58,.18);
+  --glow-dn:  0 0 8px  rgba(204,46,36,.18);
+  --glow-bdr: 0 0 0 1px rgba(201,100,66,.15), inset 0 1px 0 rgba(255,255,255,.9);
+  --tglow-up: none;
+  --tglow-dn: none;
+
+  --sb-thumb:       #cdc3b8;
+  --sb-thumb-hover: #a89c8e;
+  --sb-track-hover: rgba(201,100,66,.08);
+
+  --hc-up:   var(--up);
+  --hc-dn:   var(--dn);
+  --hc-ac:   var(--ac);
+  --hc-warn: var(--warn);
+  --hc-tp:   var(--tp);
+  --hc-sl:   var(--sl);
+
+  color-scheme: light;
+}
+
+} /* @layer themes */

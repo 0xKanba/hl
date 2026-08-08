@@ -2,67 +2,150 @@ name: Auto Update Project Tree
 
 on:
   push:
-    branches:
-      - master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-update-project-tree-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  update-structure:
+  update-tree:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Update files.json map
+      - name: Detect relevant changes
+        id: changes
+        shell: bash
         run: |
-          mkdir -p md
-          echo -n "[" > md/files.json
-          FIRST=true
-          for f in md/*.md; do
-            if [ -f "$f" ]; then
-              NAME=$(basename "$f" .md)
-              if [ "$FIRST" = true ]; then
-                FIRST=false
-              else
-                echo -n "," >> md/files.json
-              fi
-              echo -n "\"$NAME\"" >> md/files.json
-            fi
-          done
-          echo "]" >> md/files.json
+          set -euo pipefail
 
-      - name: Update README.md structure
-        run: |
-          tree -I '.git|.github|node_modules' --charset utf-8 > tree.txt
-          
-          # بناء الهيكل الجديد مع إضافة العنوان داخل العلامات
-          echo "<!-- TREE START -->" > new_tree.txt
-          echo "" >> new_tree.txt
-          echo "# 📂 repo tree" >> new_tree.txt
-          echo "" >> new_tree.txt
-          echo '```text' >> new_tree.txt
-          cat tree.txt >> new_tree.txt
-          echo '```' >> new_tree.txt
-          echo "<!-- TREE END -->" >> new_tree.txt
-          
-          if [ ! -f README.md ]; then
-            cat new_tree.txt > README.md
-          else
-            if grep -q "<!-- TREE START -->" README.md; then
-              sed -i '/<!-- TREE START -->/,/<!-- TREE END -->/d' README.md
-            fi
-            echo "" >> README.md
-            cat new_tree.txt >> README.md
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          # First push / new branch / forced edge case
+          if [[ -z "${BEFORE:-}" || "$BEFORE" =~ ^0+$ ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          
-          rm -f tree.txt new_tree.txt
 
-      - name: Commit and push if changed
+          CHANGED="$(git diff --name-status "$BEFORE" "$AFTER" || true)"
+          echo "$CHANGED"
+
+          # Ignore our generated outputs only
+          if echo "$CHANGED" | awk '
+            $2 == "README.md" { next }
+            $2 == "md/files.json" { next }
+            $2 ~ /^\.github\/workflows\/.*\.ya?ml$/ { next }
+            $1 ~ /^(A|D|M|R)/ { found=1 }
+            END { exit !found }
+          '; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if only generated files changed
+        if: steps.changes.outputs.run != 'true'
+        run: echo "No relevant content changes."
+
+      - name: Build md/files.json
+        if: steps.changes.outputs.run == 'true'
+        shell: bash
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          set -euo pipefail
+          mkdir -p md
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          md = Path("md")
+          names = sorted(p.stem for p in md.glob("*.md") if p.is_file())
+          Path("md/files.json").write_text(
+              json.dumps(names, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8"
+          )
+          PY
+
+      - name: Build README tree
+        if: steps.changes.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          ignore_dirs = {".git", ".github", "node_modules"}
+          ignore_files = {"README.md"}
+
+          def walk(path: Path, prefix: str = ""):
+              items = []
+              for p in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+                  if p.name in ignore_dirs:
+                      continue
+                  if p.name in ignore_files:
+                      continue
+                  items.append(p)
+
+              lines = []
+              for i, p in enumerate(items):
+                  last = i == len(items) - 1
+                  branch = "└── " if last else "├── "
+                  lines.append(prefix + branch + p.name)
+                  if p.is_dir():
+                      ext = "    " if last else "│   "
+                      lines.extend(walk(p, prefix + ext))
+              return lines
+
+          tree_lines = ["."]
+          tree_lines.extend(walk(Path(".")))
+
+          new_block = "\n".join([
+              "<!-- TREE START -->",
+              "",
+              "# 📂 repo tree",
+              "",
+              "```text",
+              *tree_lines,
+              "```",
+              "<!-- TREE END -->",
+              ""
+          ])
+
+          readme = Path("README.md")
+          if readme.exists():
+              text = readme.read_text(encoding="utf-8")
+              text = re.sub(r"\n?<!-- TREE START -->.*?<!-- TREE END -->\n?", "\n", text, flags=re.S)
+              text = text.rstrip() + "\n\n" + new_block
+          else:
+              text = new_block
+
+          readme.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit and push
+        if: steps.changes.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git add README.md md/files.json
-          git diff --staged --quiet || git commit -m "🔄 Auto-update structure & map"
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "🔄 Auto-update project tree"
           git push

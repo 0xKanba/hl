@@ -1,25 +1,25 @@
-/* ═══════════════════════════════════════
-   sw.js — Service Worker v3.1
-   ✅ 3 استراتيجيات تخزين واضحة
-   ✅ يعمل بدون إنترنت كاملاً
-   ✅ hl2.css مضاف (كان مفقوداً — v3.0 bug)
-═══════════════════════════════════════ */
 'use strict';
 
-const CACHE_APP    = 'hltrade-app-v321';   /* JS/CSS/HTML */
-const CACHE_IMGS   = 'hltrade-img-v321';   /* صور */
-const CACHE_FONTS  = 'hltrade-fnt-v321';   /* خطوط */
+/* Version strings below are rewritten automatically on every push by
+   .github/workflows/bump-sw-version.yml — never edit by hand, never
+   needs to be remembered. A stale value here only ever means "the
+   cache tag didn't change"; it never blocks a real deploy, because
+   the app shell below is network-first, not stale-while-revalidate. */
 
-/* ══ الملفات الأساسية — تُحمَّل عند التثبيت ══ */
+const CACHE_APP   = 'hltrade-app-202608082037-b2f1935';
+const CACHE_IMGS  = 'hltrade-img-202608082037-b2f1935';
+const CACHE_FONTS = 'hltrade-fnt-202608082037-b2f1935';
+
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/hl.css',
-  '/hl2.css',          /* ✅ مضاف — كان مفقوداً في v3.0 */
+  '/css/base.css',
+  '/css/themes.css',
+  '/css/components.css',
   '/manifest.json',
-  /* JS core */
   '/js/config.js',
   '/js/state.js',
+  '/js/wallets.js',
   '/js/utils.js',
   '/js/api.js',
   '/js/ws.js',
@@ -32,22 +32,30 @@ const APP_SHELL = [
   '/js/assets.js',
   '/js/pin.js',
   '/js/auth.js',
+  '/js/agents.js',
   '/js/chart.js',
   '/js/c.js',
   '/js/app.js',
-  /* صور */
   '/images/oil.svg',
   '/images/gold.svg',
   '/images/silver.svg',
   '/images/100.png',
   '/images/btc21.png',
-
-  /* أيقونات */
   '/images/icon-192x192.png',
   '/images/icon-512x512.png'
 ];
 
-/* ══ تثبيت — pre-cache كل الـ App Shell ══ */
+/* Note: js/privy-bridge.js (~1.4MB gzip, email-login only) is
+   deliberately NOT in APP_SHELL — it's lazy-loaded by auth.js only
+   when a user picks email login, so guests and external-wallet users
+   never pay for it. The generic same-origin handler below still
+   caches it after first real use, so offline works fine after that. */
+
+/* App-shell file types — always network-first so a fresh deploy is
+   visible on the very next load while online. Cache is the offline
+   fallback, never the first stop. */
+const SHELL_EXT = /\.(html|css|js|json)$/;
+
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_APP)
@@ -56,7 +64,6 @@ self.addEventListener('install', e => {
   );
 });
 
-/* ══ تنشيط — حذف كل كاش قديم ══ */
 self.addEventListener('activate', e => {
   const CURRENT = [CACHE_APP, CACHE_IMGS, CACHE_FONTS];
   e.waitUntil(
@@ -68,47 +75,41 @@ self.addEventListener('activate', e => {
   );
 });
 
-/* ══ جلب الموارد ══ */
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-
   const url = new URL(e.request.url);
 
-  /* 1. API Hyperliquid — Network First, fallback Cache */
+  /* Live trading data — never serve stale; cache is a last-resort fallback only */
   if (url.hostname === 'api.hyperliquid.xyz' || url.hostname === 'arb1.arbitrum.io') {
-    e.respondWith(networkFirst(e.request, CACHE_APP));
+    e.respondWith(networkFirst(e.request, CACHE_APP, 8000));
     return;
   }
-
-  /* 2. خطوط Google — Cache First (لا تتغير أبداً) */
-  if (url.hostname.includes('fonts.g') || url.hostname.includes('fonts.googleapis')) {
+  /* Fonts / CDN libs — effectively immutable, cache aggressively */
+  if (url.hostname.includes('fonts.g') || url.hostname.includes('fonts.googleapis') ||
+      url.hostname === 'cdnjs.cloudflare.com' || url.hostname === 'unpkg.com') {
     e.respondWith(cacheFirst(e.request, CACHE_FONTS));
     return;
   }
-
-  /* 3. CDN مكتبات (ethers, lightweight-charts) — Cache First */
-  if (url.hostname === 'cdnjs.cloudflare.com' || url.hostname === 'unpkg.com') {
-    e.respondWith(cacheFirst(e.request, CACHE_FONTS));
-    return;
-  }
-
-  /* 4. صور — Cache First */
+  /* Images — rarely change, cache aggressively */
   if (/\.(png|jpg|jpeg|gif|svg|webp|ico)(\?.*)?$/.test(url.pathname)) {
     e.respondWith(cacheFirst(e.request, CACHE_IMGS));
     return;
   }
-
-  /* 5. App Shell (JS/CSS/HTML) — Cache First + Background Update */
-  e.respondWith(staleWhileRevalidate(e.request, CACHE_APP));
+  /* Everything same-origin (navigations + the html/css/js/json app shell,
+     including js/privy-bridge.js the one time it's actually fetched)
+     — network-first with a fast timeout. Online, you always get the
+     live file; offline or slow, you fall back to whatever was last
+     cached. This is what makes deploys show up immediately instead of
+     needing a second reload. */
+  e.respondWith(networkFirstWithTimeout(e.request, CACHE_APP, 3000));
 });
 
-/* ══════════════════════════════
-   استراتيجيات التخزين
-══════════════════════════════ */
-
-async function networkFirst(req, cacheName) {
+/* ── Straight network-first (with a generous timeout) — used for
+   trading API calls, where a slow-but-real response beats a stale
+   cached one every time. ── */
+async function networkFirst(req, cacheName, timeoutMs) {
   try {
-    const res = await fetch(req);
+    const res = await withTimeout(fetch(req), timeoutMs);
     if (res && res.ok) {
       const c = await caches.open(cacheName);
       c.put(req, res.clone()).catch(() => {});
@@ -117,10 +118,37 @@ async function networkFirst(req, cacheName) {
   } catch {
     const cached = await caches.match(req);
     return cached || new Response(JSON.stringify({ error: 'offline' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' }
+      status: 503, headers: { 'Content-Type': 'application/json' }
     });
   }
+}
+
+/* ── Network-first, raced against a short timeout, for the app shell.
+   Falls back fast on slow connections, but the network response still
+   lands in cache in the background for next time even if we already
+   answered from cache. ── */
+async function networkFirstWithTimeout(req, cacheName, timeoutMs) {
+  const cache = await caches.open(cacheName);
+  const netPromise = fetch(req).then(res => {
+    if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
+    return res;
+  }).catch(() => null);
+
+  const early = await Promise.race([
+    netPromise,
+    new Promise(resolve => setTimeout(() => resolve(null), timeoutMs))
+  ]);
+  if (early) return early;
+
+  const cached = await cache.match(req);
+  if (cached) return cached;
+
+  const late = await netPromise;
+  if (late) return late;
+
+  return req.mode === 'navigate'
+    ? (await cache.match('/index.html')) || new Response('Offline', { status: 503 })
+    : new Response('Offline', { status: 503 });
 }
 
 async function cacheFirst(req, cacheName) {
@@ -138,18 +166,9 @@ async function cacheFirst(req, cacheName) {
   }
 }
 
-async function staleWhileRevalidate(req, cacheName) {
-  const cached = await caches.match(req);
-
-  const fetchPromise = fetch(req).then(res => {
-    if (res && res.ok) {
-      caches.open(cacheName).then(c => c.put(req, res.clone())).catch(() => {});
-    }
-    return res;
-  }).catch(() => null);
-
-  if (cached) return cached;
-
-  const res = await fetchPromise;
-  return res || caches.match('/index.html') || new Response('Offline', { status: 503 });
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ]);
 }
