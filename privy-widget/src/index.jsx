@@ -138,7 +138,7 @@ createRoot(mountNode).render(
         name: 'سيولة مبسطة',
         theme: 'dark',
         accentColor: '#00ccff',
-        logo: 'https://hl.kanba.pw/images/icon-192x192.png',
+        logo: 'https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/icon-512x512.png',
       },
     }}
   >
