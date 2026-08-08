@@ -1,58 +1,56 @@
 
 
-
-
-
-
-
-
 <!-- TREE START -->
 
 # 📂 repo tree
 
 ```text
 .
-├── README.md
-├── hl.css
-├── hl2.css
+├── css
+│   ├── base.css
+│   ├── components.css
+│   └── themes.css
 ├── images
-│   ├── 100.png
-│   ├── btc21.png
-│   ├── gold.svg
-│   ├── icon-192x192.png
-│   ├── icon-512x512.png
-│   ├── oil.svg
-│   ├── silver.svg
-│   ├── x1.png
-│   ├── x2.png
-│   └── x3.png
-├── index.html
+│   ├── 100.png
+│   ├── gold.svg
+│   ├── oil.svg
+│   ├── silver.svg
+│   ├── x1.png
+│   ├── x2.png
+│   └── x3.png
 ├── js
-│   ├── account.js
-│   ├── api.js
-│   ├── app.js
-│   ├── assets.js
-│   ├── auth.js
-│   ├── c.js
-│   ├── chart.js
-│   ├── config.js
-│   ├── pin.js
-│   ├── positions.js
-│   ├── prices.js
-│   ├── session.js
-│   ├── state.js
-│   ├── tpsl.js
-│   ├── trading.js
-│   ├── utils.js
-│   └── ws.js
-├── manifest.json
+│   ├── account.js
+│   ├── agents.js
+│   ├── api.js
+│   ├── app.js
+│   ├── assets.js
+│   ├── auth.js
+│   ├── c.js
+│   ├── chart.js
+│   ├── config.js
+│   ├── pin.js
+│   ├── positions.js
+│   ├── prices.js
+│   ├── session.js
+│   ├── state.js
+│   ├── tpsl.js
+│   ├── trading.js
+│   ├── utils.js
+│   ├── wallets.js
+│   └── ws.js
 ├── md
-│   ├── files.json
-│   └── us.md
+│   ├── files.json
+│   └── us.md
+├── privy-widget
+│   ├── src
+│   │   └── index.jsx
+│   ├── build.mjs
+│   ├── package-lock.json
+│   └── package.json
+├── .gitattributes
+├── index.html
+├── manifest.json
 ├── md.html
-├── sw.js
-└── tree.txt
-
-4 directories, 37 files
+└── sw.js
 ```
 <!-- TREE END -->
