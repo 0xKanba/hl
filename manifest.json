@@ -1,12 +1,12 @@
 {
-  "name": "سيولة",
-  "short_name": "سيولة",
-  "description": "سيولة وبساطة للاستثمار والتداول",
+  "name": "ماركت ليك",
+  "short_name": "ماركت ليك",
+  "description": "اسواق: نفط وذهب وفضة وغيرها",
   "name_localized": {
     "en": {
-      "name": "HL Simple",
-      "short_name": "HLSimple",
-      "description": "HL simple invest or trading"
+      "name": "Market Liqk",
+      "short_name": "Market Liq",
+      "description": "Markets: oil, gold, silver, and more"
     }
   },
   "start_url": "/",
@@ -19,13 +19,13 @@
   "dir": "rtl",
   "icons": [
     {
-      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-192x192.png",
+      "src": "https://hl.kanba.pw/images/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/favicon/web-app-manifest-512x512.png",
+      "src": "https://hl.kanba.pw/images/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
@@ -33,25 +33,25 @@
   ],
   "screenshots": [
     {
-      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x1.png",
+      "src": "https://hl.kanba.pw/images/x1.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "سيولة - تداول"
+      "label": "ماركت ليك - تداول"
     },
     {
-      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x2.png",
+      "src": "https://hl.kanba.pw/images/x2.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "سيولة - رسم"
+      "label": "ماركت ليك - رسم"
     },
     {
-      "src": "https://cdn.jsdelivr.net/gh/0xKanba/assets@master/hl/images/x3.png",
+      "src": "https://hl.kanba.pw/images/x3.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "سيولة - محفظة"
+      "label": "ماركت ليك - محفظة"
     }
   ],
   "categories": ["finance"],
