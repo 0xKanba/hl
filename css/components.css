@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   components.css — سيولة (Suyula) · Component Library
+   components.css — ماركت ليك (Market Leak) · Component Library
    Every rule here consumes tokens from base.css / themes.css.
    No color literals, no [data-theme] blocks — theme-agnostic by design.
    ✅ FIX — زر "اتصال" انتقل من الفوتر (دائرة 54px) للشريط العلوي
@@ -13,6 +13,12 @@
       (صندوق عنوان الإيداع داخل modalDeposit نفسها)، .confirm-hint
       (توضيح سطر واحد تحت سعر التصفية بتأكيد الصفقة)، .field-hint
       (تلميح صغير تحت أي حقل نموذج — يُستخدم حالياً لتوضيح شبكة السحب).
+   ✅ FIX (2026-08) — إعادة تسمية العلامة التجارية إلى "ماركت ليك" +
+      .nav-docs-btn جديد بجانب تبديل المظهر (رابط خارجي ثابت لـkanba.pw،
+      دعم ووثائق). نص التسمية (.nav-docs-lbl) يظهر فقط ≥400px — نفس نمط
+      .tvh-name بـchart.js — لتفادي ازدحام الشريط العلوي على الشاشات
+      الضيقة، خصوصاً بعد أن صار اسم التطبيق أطول من "سيولة" القديم.
+      الأيقونة وحدها (📄 + tooltip) تكفي بالشاشات الأضيق من ذلك.
 ═══════════════════════════════════════════════════════════════ */
 
 @layer components {
@@ -165,6 +171,28 @@
 }
 .nav-theme-btn:hover  { border-color: var(--ac); background: var(--ac-dim); }
 .nav-theme-btn:active { transform: scale(.88); }
+
+/* ✅ NEW (2026-08) — زر "الوثائق" صغير بجانب تبديل المظهر، يفتح
+   https://kanba.pw/ بتبويب خارجي (دعم + وثائق). نص التسمية مخفي تحت
+   400px (نفس نمط .tvh-name بـchart.js) لتفادي ازدحام الشريط العلوي
+   على الشاشات الضيقة جداً بعد أن صار اسم التطبيق أطول — الأيقونة تبقى
+   ظاهرة دائماً مع tooltip فلا فقدان وظيفي على أي مقاس شاشة. */
+.nav-docs-btn {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--bg-elev);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  color: var(--text-secondary); text-decoration: none;
+  cursor: pointer; flex-shrink: 0; line-height: 1;
+  transition: border-color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.nav-docs-btn:hover  { border-color: var(--ac); background: var(--ac-dim); color: var(--ac); }
+.nav-docs-btn:active { transform: scale(.9); }
+.nav-docs-icon { font-size: var(--fs-lg); line-height: 1; }
+.nav-docs-lbl  { display: none; white-space: nowrap; }
+@media (min-width: 400px) { .nav-docs-lbl { display: inline; } }
 
 #btnLock {
   background: none; border: none;
