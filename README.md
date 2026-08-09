@@ -12,7 +12,13 @@
 │   └── themes.css
 ├── images
 │   ├── 100.png
+│   ├── apple-touch-icon.png
+│   ├── favicon-96x96.png
+│   ├── favicon.ico
+│   ├── favicon.svg
 │   ├── gold.svg
+│   ├── icon-192x192.png
+│   ├── icon-512x512.png
 │   ├── oil.svg
 │   ├── silver.svg
 │   ├── x1.png
