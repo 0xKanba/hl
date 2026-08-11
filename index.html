@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="ماركت ليك">
-  <meta name="theme-color" content="#00ccff">
+  <meta name="theme-color" content="#e07248">
   <meta name="description" content="ماركت ليك — اسواق: نفط وذهب وفضة وغيرها. تداول لحظي برافعة مالية على Hyperliquid، توقيع وتنفيذ مباشر من متصفحك بلا وسيط.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://hl.kanba.pw/">
@@ -77,49 +77,34 @@
 </head>
 <body>
 
-<div class="screen" id="appScreen">
+<!--
+  ════════════════════════════════════════════════════════════════
+  ✅ إعادة هيكلة UI/UX (2026-08) — بنية تطبيق أصلي:
+     appbar ثابت (☰ + عنوان الشاشة + اتصال) → شاشتان (الرئيسية/الأسواق)
+     → tabbar سفلي 3 أزرار (رسم | رئيسية (افتراضي) | أسواق).
+     ترتيب أزرار tabbar بالـDOM [رسم، رئيسية، أسواق] + dir="rtl" على
+     <html> يعطي تلقائياً: يمين=رسم، وسط=رئيسية، يسار=أسواق — بلا
+     الحاجة لأي row-reverse. الرسم البياني يبقى overlay منفصل تماماً
+     (#chartScreen، كما كان بالضبط، بلا أي تعديل بمنطقه).
+     كل خيارات "⚙️ الخيارات" السابقة (إيداع/سحب/تأريخ/تقويم/وكلاء/
+     تصدير محفظة) + القفل + المظهر + الوثائق + العنوان/النسخ انتقلت
+     لدرج هامبرغر واحد (نفس الـIDs القديمة تماماً — راجع app.js).
+     "الرصيد" لم يعد نافذة منفصلة — بطاقة دائمة أعلى الرئيسية.
+  ════════════════════════════════════════════════════════════════
+-->
+<div class="app-shell" id="appScreen">
 
-  <!-- NAV -->
-  <nav class="nav">
-    <div class="nav-left">
-      <div class="nav-logo-btn" id="navLogo">
-        <span class="nav-logo-icon">💧</span>
-        <span class="nav-logo-text">ماركت ليك</span>
-      </div>
-      <button class="nav-theme-btn" id="btnTheme" title="تبديل المظهر">🌙</button>
-      <!-- ✅ جديد — زر "الوثائق" بجانب تبديل المظهر (زاوية يمين بRTL،
-           .nav-left هو أول عنصر DOM فيصير على يمين الشاشة تلقائياً).
-           رابط خارجي ثابت لـkanba.pw (دعم + وثائق)، تبويب جديد، بلا أي
-           اعتماد JS — نفس نمط rel="noopener noreferrer" المستخدم أصلاً
-           بـauth.js لرابط ethereum.org. نص التسمية يظهر فقط ≥400px
-           (راجع .nav-docs-lbl بcomponents.css) — الأيقونة وحدها كافية
-           بالشاشات الأضيق. -->
-      <a class="nav-docs-btn" id="btnDocs" href="https://kanba.pw/" target="_blank" rel="noopener noreferrer" title="الوثائق والدعم">
-        <span class="nav-docs-icon">📄</span><span class="nav-docs-lbl">الوثائق</span>
-      </a>
-    </div>
-    <div class="nav-right">
-      <button id="btnLock" title="قفل التطبيق">🔒</button>
-      <div class="nav-address-wrap">
-        <div class="nav-address" id="navAddress" title="انقر للنسخ">—</div>
-        <button class="nav-copy-btn" id="navCopyBtn" title="نسخ العنوان">⧉</button>
-      </div>
-      <!--
-        ✅ زر "اتصال" — انتقل من الفوتر إلى هنا (زاوية الشريط العلوي)،
-        ودُمج معه دور "🔌 قطع الاتصال" المستقل السابق (لم يعد عنصراً
-        منفصلاً). حالة الزائر: نقرة تفتح تسجيل الدخول. حالة الاتصال:
-        نقرة تفتح modalLogout مباشرة (تأكيد قطع الاتصال) — راجع app.js.
-        الوصول لـ"⚙️ الخيارات" يبقى متاحاً عبر زر الخيارات المستقل
-        بالفوتر، بلا أي تغيير هناك. الألوان/التسمية تتحدّث حياً عبر
-        updateConnectBtn() بـauth.js (أخضر=متصل، أصفر نابض=يحاول
-        الاتصال، أحمر=منقطع).
-      -->
-      <button class="nav-connect-btn ws-connecting" id="btnConnect" title="الاتصال بـ Hyperliquid">
-        <span class="cb-dot"></span>
-        <span class="cb-lbl">اتصال</span>
-      </button>
-    </div>
-  </nav>
+  <!-- APPBAR -->
+  <header class="appbar">
+    <button class="appbar-menu-btn" id="btnMenu" aria-label="القائمة">
+      <span class="hamburger-icon"><span></span><span></span><span></span></span>
+    </button>
+    <h1 class="appbar-title" id="appbarTitle">الرئيسية</h1>
+    <button class="nav-connect-btn ws-connecting" id="btnConnect" title="الاتصال بـ Hyperliquid">
+      <span class="cb-dot"></span>
+      <span class="cb-lbl">اتصال</span>
+    </button>
+  </header>
 
   <!-- شريط التاريخ والوقت -->
   <div class="datetime-bar" id="datetimeBar" title="انقر لعرض أسماء الأشهر">
@@ -145,108 +130,209 @@
     </div>
   </div>
 
-  <!-- تابات الأصول -->
-  <div class="tabs">
-    <button class="tab" data-asset="XAU">
-      <div class="tab-left">
-        <img class="tab-img" src="/images/gold.svg" alt="XAU" loading="eager"
-             style="filter:sepia(1) saturate(2) hue-rotate(10deg)">
-      </div>
-      <div class="tab-right"><span class="tab-price" id="priceXAU">—</span></div>
-    </button>
-    <button class="tab" data-asset="NQ">
-      <div class="tab-left"><img class="tab-img" src="/images/100.png" alt="NQ" loading="eager"></div>
-      <div class="tab-right"><span class="tab-price" id="priceNQ">—</span></div>
-    </button>
-    <button class="tab" data-asset="GOLD">
-      <div class="tab-left"><img class="tab-img" src="/images/gold.svg" alt="GOLD" loading="eager"></div>
-      <div class="tab-right"><span class="tab-price" id="priceGOLD">—</span></div>
-    </button>
-    <button class="tab" data-asset="SILVER">
-      <div class="tab-left"><img class="tab-img" src="/images/silver.svg" alt="SILVER" loading="eager"></div>
-      <div class="tab-right"><span class="tab-price" id="priceSILVER">—</span></div>
-    </button>
-    <button class="tab active" data-asset="CL">
-      <div class="tab-left"><img class="tab-img" src="/images/oil.svg" alt="CL" loading="eager"></div>
-      <div class="tab-right"><span class="tab-price" id="priceCL">—</span></div>
-    </button>
-  </div>
+  <!-- SCREENS -->
+  <main class="screens-viewport" id="screensViewport">
 
-  <main class="main">
-    <div class="col-left">
+    <!-- ══ شاشة الرئيسية (افتراضية) ══ -->
+    <section class="app-screen" data-screen="home" id="screenHome">
+      <div class="screen-scroll">
 
-      <!-- بطاقة السعر -->
-      <div class="price-card" id="priceCard">
-        <div class="price-img-wrap" id="priceImgWrap">
-          <img id="priceAssetImg" src="/images/oil.svg" alt="asset" loading="eager">
-        </div>
-        <div class="price-data">
-          <div class="price-asset" id="priceAssetName">نفط خام</div>
-          <div class="price-value n" id="priceValue">—</div>
-          <div class="price-delta n" id="priceDelta"></div>
-          <div class="price-session hidden" id="priceSession">
-            <span class="ps-chg n" id="psChg"></span>
-            <span class="ps-divider">|</span>
-            <span class="ps-h" id="psH"></span>
-            <span class="ps-divider">|</span>
-            <span class="ps-l" id="psL"></span>
+        <!-- guestBanner يُدرَج هنا ديناميكياً (أعلى الشاشة) بواسطة
+             auth.js:_showGuestBanner عند عدم الاتصال -->
+
+        <!-- ✅ بطاقة الرصيد الدائمة — تُغذّى من account.js:_renderBalanceFromState -->
+        <div class="balance-card" id="balanceCard">
+          <div class="bc-primary">
+            <span class="bc-primary-label">الرصيد الإجمالي</span>
+            <span class="bc-primary-value" id="bcTotal">—</span>
+            <span class="bc-primary-pnl" id="bcPnl">—</span>
           </div>
-          <div class="price-meta-row">
-            <span class="price-bid-ask" id="priceBidAsk"></span>
-            <span class="price-timer"   id="priceTimer">↻ —</span>
+          <div class="bc-secondary">
+            <div class="bc-stat">
+              <span class="bc-stat-label">✅ المتاح</span>
+              <span class="bc-stat-value" id="bcAvail">—</span>
+            </div>
+            <div class="bc-stat-divider"></div>
+            <div class="bc-stat">
+              <span class="bc-stat-label">🔒 الهامش</span>
+              <span class="bc-stat-value" id="bcMargin">—</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- لوحة التداول -->
-      <div class="trade-panel">
-        <div class="qty-input-row">
-          <input type="number" class="qty-input" id="qtyInput"
-                 placeholder="0.00" min="0" step="any" inputmode="decimal">
-          <button class="qty-100" id="qty100">100%</button>
-          <span class="qty-unit" id="qtyUnit">برميل</span>
-        </div>
-        <div class="trade-buttons">
-          <button class="btn-trade btn-buy" id="btnBuy">
-            <span class="btn-label">شراء ↑</span>
-            <span class="btn-price" id="buyPrice">—</span>
+        <!-- تابات تبديل الأصل السريعة -->
+        <div class="tabs">
+          <button class="tab" data-asset="XAU">
+            <div class="tab-left">
+              <img class="tab-img" src="/images/gold.svg" alt="XAU" loading="eager"
+                   style="filter:sepia(1) saturate(2) hue-rotate(10deg)">
+            </div>
+            <div class="tab-right"><span class="tab-price" id="priceXAU">—</span></div>
           </button>
-          <button class="btn-trade btn-sell" id="btnSell">
-            <span class="btn-label">بيع ↓</span>
-            <span class="btn-price" id="sellPrice">—</span>
+          <button class="tab" data-asset="NQ">
+            <div class="tab-left"><img class="tab-img" src="/images/100.png" alt="NQ" loading="eager"></div>
+            <div class="tab-right"><span class="tab-price" id="priceNQ">—</span></div>
+          </button>
+          <button class="tab" data-asset="GOLD">
+            <div class="tab-left"><img class="tab-img" src="/images/gold.svg" alt="GOLD" loading="eager"></div>
+            <div class="tab-right"><span class="tab-price" id="priceGOLD">—</span></div>
+          </button>
+          <button class="tab" data-asset="SILVER">
+            <div class="tab-left"><img class="tab-img" src="/images/silver.svg" alt="SILVER" loading="eager"></div>
+            <div class="tab-right"><span class="tab-price" id="priceSILVER">—</span></div>
+          </button>
+          <button class="tab active" data-asset="CL">
+            <div class="tab-left"><img class="tab-img" src="/images/oil.svg" alt="CL" loading="eager"></div>
+            <div class="tab-right"><span class="tab-price" id="priceCL">—</span></div>
           </button>
         </div>
-      </div>
-    </div>
 
-    <div class="col-right">
-      <div class="positions-card">
-        <div class="positions-header">
-          <span class="positions-title">الصفقات المفتوحة</span>
-          <span class="positions-count" id="positionsCount">0</span>
-          <span class="positions-pnl"   id="totalPnl"></span>
-          <button class="btn-close-all hidden" id="btnCloseAll">إغلاق الكل ✕</button>
+        <!-- بطاقة السعر -->
+        <div class="price-card" id="priceCard">
+          <div class="price-img-wrap" id="priceImgWrap">
+            <img id="priceAssetImg" src="/images/oil.svg" alt="asset" loading="eager">
+          </div>
+          <div class="price-data">
+            <div class="price-asset" id="priceAssetName">نفط خام</div>
+            <div class="price-value n" id="priceValue">—</div>
+            <div class="price-delta n" id="priceDelta"></div>
+            <div class="price-session hidden" id="priceSession">
+              <span class="ps-chg n" id="psChg"></span>
+              <span class="ps-divider">|</span>
+              <span class="ps-h" id="psH"></span>
+              <span class="ps-divider">|</span>
+              <span class="ps-l" id="psL"></span>
+            </div>
+            <div class="price-meta-row">
+              <span class="price-bid-ask" id="priceBidAsk"></span>
+              <span class="price-timer"   id="priceTimer">↻ —</span>
+            </div>
+          </div>
         </div>
-        <div class="positions-list" id="positionsList">
-          <div class="positions-empty">📂 لا توجد صفقات مفتوحة</div>
+
+        <!-- لوحة التداول -->
+        <div class="trade-panel">
+          <div class="qty-input-row">
+            <input type="number" class="qty-input" id="qtyInput"
+                   placeholder="0.00" min="0" step="any" inputmode="decimal">
+            <button class="qty-100" id="qty100">100%</button>
+            <span class="qty-unit" id="qtyUnit">برميل</span>
+          </div>
+          <div class="trade-buttons">
+            <button class="btn-trade btn-buy" id="btnBuy">
+              <span class="btn-label">شراء ↑</span>
+              <span class="btn-price" id="buyPrice">—</span>
+            </button>
+            <button class="btn-trade btn-sell" id="btnSell">
+              <span class="btn-label">بيع ↓</span>
+              <span class="btn-price" id="sellPrice">—</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- الصفقات المفتوحة -->
+        <div class="positions-card">
+          <div class="positions-header">
+            <span class="positions-title">الصفقات المفتوحة</span>
+            <span class="positions-count" id="positionsCount">0</span>
+            <span class="positions-pnl"   id="totalPnl"></span>
+            <button class="btn-close-all hidden" id="btnCloseAll">إغلاق الكل ✕</button>
+          </div>
+          <div class="positions-list" id="positionsList">
+            <div class="positions-empty">📂 لا توجد صفقات مفتوحة</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══ شاشة الأسواق ══ -->
+    <section class="app-screen hidden" data-screen="markets" id="screenMarkets">
+      <div class="screen-scroll">
+        <div class="markets-list" id="marketsList">
+
+          <button class="market-card" data-asset="XAU">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/gold.svg" alt="XAU" loading="lazy" style="filter:sepia(1) saturate(2) hue-rotate(10deg)"></div>
+            <div class="market-card-info">
+              <span class="market-card-name">ذهب/غرام</span>
+              <span class="market-card-sub">XAU · رافعة 25x</span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceXAU">—</span>
+              <span class="market-card-chg n" id="mktChgXAU">—</span>
+            </div>
+          </button>
+
+          <button class="market-card" data-asset="NQ">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/100.png" alt="NQ" loading="lazy"></div>
+            <div class="market-card-info">
+              <span class="market-card-name">ناسداك 100</span>
+              <span class="market-card-sub">NQ · رافعة 30x</span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceNQ">—</span>
+              <span class="market-card-chg n" id="mktChgNQ">—</span>
+            </div>
+          </button>
+
+          <button class="market-card" data-asset="GOLD">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/gold.svg" alt="GOLD" loading="lazy"></div>
+            <div class="market-card-info">
+              <span class="market-card-name">ذهب (أونصة)</span>
+              <span class="market-card-sub">GOLD · رافعة 25x</span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceGOLD">—</span>
+              <span class="market-card-chg n" id="mktChgGOLD">—</span>
+            </div>
+          </button>
+
+          <button class="market-card" data-asset="SILVER">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/silver.svg" alt="SILVER" loading="lazy"></div>
+            <div class="market-card-info">
+              <span class="market-card-name">فضة</span>
+              <span class="market-card-sub">SILVER · رافعة 25x</span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceSILVER">—</span>
+              <span class="market-card-chg n" id="mktChgSILVER">—</span>
+            </div>
+          </button>
+
+          <button class="market-card active" data-asset="CL">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/oil.svg" alt="CL" loading="lazy"></div>
+            <div class="market-card-info">
+              <span class="market-card-name">نفط خام</span>
+              <span class="market-card-sub">CL · رافعة 20x</span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceCL">—</span>
+              <span class="market-card-chg n" id="mktChgCL">—</span>
+            </div>
+          </button>
+
         </div>
       </div>
-    </div>
+    </section>
+
   </main>
 
-  <!-- ✅ الفوتر أصبح بزرين فقط بعد انتقال زر "اتصال" للشريط العلوي —
-       raجع تعليق النافبار أعلاه. flex:1 على كل زر (footer-main-btn)
-       تكفّل بملء العرض تلقائياً بلا أي تعديل CSS إضافي. -->
-  <footer class="footer">
-    <button class="footer-main-btn" id="btnChart">
-      <span class="fmb-icon">📈</span>
-      <span class="fmb-lbl">رسم بياني</span>
+  <!-- ✅ TABBAR — ترتيب DOM [رسم، رئيسية، أسواق] → RTL يعطي يمين=رسم/وسط=رئيسية/يسار=أسواق -->
+  <nav class="tabbar">
+    <button class="tab-btn" data-tab="chart" id="tabChart">
+      <span class="tab-btn-icon-wrap"><span class="tab-btn-icon">📈</span></span>
+      <span class="tab-btn-lbl">الرسم</span>
     </button>
-    <button class="footer-main-btn footer-opts-btn" id="btnOptions">
-      <span class="fmb-icon">⚙️</span>
-      <span class="fmb-lbl">الخيارات</span>
+    <button class="tab-btn active" data-tab="home" id="tabHome">
+      <span class="tab-btn-icon-wrap"><span class="tab-btn-icon">🏠</span></span>
+      <span class="tab-btn-lbl">الرئيسية</span>
     </button>
-  </footer>
+    <button class="tab-btn" data-tab="markets" id="tabMarkets">
+      <span class="tab-btn-icon-wrap"><span class="tab-btn-icon">🛒</span></span>
+      <span class="tab-btn-lbl">الأسواق</span>
+    </button>
+  </nav>
+
 </div>
 
 <div class="screen hidden" id="loginScreen">
@@ -256,28 +342,43 @@
   </div>
 </div>
 
-<!--
-  ✅ ترتيب القائمة يعكس تدفق المشروع الفعلي بوضوح:
-     إيداع → سحب (حركة الأموال) ثم الرصيد/التأريخ/التقويم (متابعة)
-     ثم الوكلاء/تصدير المحفظة (أمان وتقني).
-     "استرداد المحفظة" أُزيل نهائياً — تصدير المحفظة (يعرض المفتاح
-     الخاص/العبارة السرية مباشرة) هو المسار الوحيد الكافي للنسخ
-     الاحتياطي، فكان وجود الاثنين تكراراً بلا فائدة إضافية حقيقية.
-     "تغيير المحفظة" (كانت هنا سابقاً) انتقلت للشريط العلوي، ثم اندمجت
-     بزر "اتصال" نفسه — إجراء بهذا الوزن (يُنهي الجلسة) يستحق وضوح
-     وسرعة وصول لمسة واحدة، لا أن يكون مدفوناً بقائمة خيارات ثانوية.
--->
-<div class="opts-overlay hidden" id="optsOverlay">
-  <div class="opts-menu">
-    <button class="opts-item" id="optDeposit">💵 ايداع</button>
-    <button class="opts-item" id="optWithdraw">📤 سحب</button>
-    <button class="opts-item" id="optBalance">💰 الرصيد</button>
-    <button class="opts-item" id="optHistory">📜 التأريخ</button>
-    <button class="opts-item" id="optCalendar">📅 التقويم الشهري</button>
-    <button class="opts-item" id="optAgents">🤖 الوكلاء</button>
-    <button class="opts-item" id="optExportWallet">🔑 تصدير المحفظة</button>
-    <button class="opts-item opts-item-cancel" id="optsClose">إلغاء</button>
-  </div>
+<!-- ✅ درج هامبرغر — يحل محل opts-overlay القديمة بالكامل. كل الأزرار
+     بنفس الـIDs السابقة تماماً (optDeposit/optWithdraw/...) فانتقلت
+     مكانياً فقط — app.js لا يحتاج أي تغيير بربطها. -->
+<div class="drawer-overlay hidden" id="drawerOverlay">
+  <aside class="drawer" id="drawer">
+
+    <div class="drawer-header">
+      <div class="drawer-brand">
+        <span class="drawer-logo-icon">💧</span>
+        <span class="drawer-logo-text">ماركت ليك</span>
+      </div>
+      <button class="drawer-close-btn" id="drawerClose" aria-label="إغلاق">✕</button>
+    </div>
+
+    <div class="drawer-account-card">
+      <div class="nav-address-wrap">
+        <div class="nav-address" id="navAddress" title="انقر للنسخ">—</div>
+        <button class="nav-copy-btn" id="navCopyBtn" title="نسخ العنوان">⧉</button>
+      </div>
+    </div>
+
+    <nav class="drawer-menu">
+      <button class="drawer-item" id="btnLock"><span class="di-icon">🔒</span><span class="di-lbl">قفل التطبيق</span></button>
+      <button class="drawer-item" id="btnTheme"><span class="di-icon">🌙</span><span class="di-lbl">تبديل المظهر</span></button>
+      <a class="drawer-item" id="btnDocs" href="https://kanba.pw/" target="_blank" rel="noopener noreferrer"><span class="di-icon">📄</span><span class="di-lbl">الوثائق والدعم</span></a>
+
+      <div class="drawer-divider"></div>
+
+      <button class="drawer-item" id="optDeposit"><span class="di-icon">💵</span><span class="di-lbl">إيداع</span></button>
+      <button class="drawer-item" id="optWithdraw"><span class="di-icon">📤</span><span class="di-lbl">سحب</span></button>
+      <button class="drawer-item" id="optHistory"><span class="di-icon">📜</span><span class="di-lbl">التأريخ</span></button>
+      <button class="drawer-item" id="optCalendar"><span class="di-icon">📅</span><span class="di-lbl">التقويم الشهري</span></button>
+      <button class="drawer-item" id="optAgents"><span class="di-icon">🤖</span><span class="di-lbl">الوكلاء</span></button>
+      <button class="drawer-item" id="optExportWallet"><span class="di-icon">🔑</span><span class="di-lbl">تصدير المحفظة</span></button>
+    </nav>
+
+  </aside>
 </div>
 
 <!--
@@ -285,6 +386,9 @@
   CHART SCREEN — built dynamically by /js/chart.js
   TradingView Advanced Charts renders inside #_tvC (injected
   by chart.js into this div at runtime via ChartModule.open())
+  بلا أي تعديل — يبقى overlay كامل الشاشة يغطي appbar/tabbar تلقائياً
+  (z-index أعلى)، أنيميشن دخول خفيفة أُضيفت بـCSS فقط (chart-screen
+  :not(.hidden)) بلا لمس منطق chart.js إطلاقاً.
   ════════════════════════════════════════════════════════════
 -->
 <div id="chartScreen" class="chart-screen hidden"></div>
@@ -422,19 +526,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modalBalance">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <h3 class="modal-title">💰 الرصيد والحساب</h3>
-    <div class="balance-content" id="balanceContent">
-      <div class="balance-loading">⏳ جاري جلب الرصيد...</div>
-    </div>
-    <div class="modal-buttons modal-buttons-center">
-      <button class="btn-modal btn-cancel" id="balanceClose">إغلاق</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="modalHistory">
   <div class="modal" style="display:flex;flex-direction:column;">
     <h3 class="modal-title">📜 سجل الصفقات</h3>
@@ -449,14 +540,10 @@
 </div>
 
 <!--
-  ✅ FIX (2026-08) — modalDeposit الآن يعرض عنوان محفظة المستخدم
-  المتصلة مباشرة (بريد Privy أو خارجية — نفس المنطق للاثنين: الإيداع
-  تحويل USDC من هذا العنوان بالذات للجسر) بدل بقائه مخفياً بمكان بعيد
-  (⚙️ الخيارات ← 🤖 الوكلاء فقط). depositAddrTxt/depositAddrCopy
-  يُملآن ويُوصَلان عبر _fillDepositAddr() بapp.js، تُستدعى فور فتح
-  النافذة. تحذير الشبكة الآن صريح لا يحتمل اللبس — الخطأ الأخطر
-  الوحيد الممكن هنا هو إرسال USDC من شبكة غير Arbitrum (يُفقد نهائياً،
-  لا يوجد استرجاع).
+  modalDeposit يعرض عنوان محفظة المستخدم المتصلة مباشرة (بريد Privy أو
+  خارجية — نفس المنطق للاثنين: الإيداع تحويل USDC من هذا العنوان بالذات
+  للجسر). depositAddrTxt/depositAddrCopy يُملآن ويُوصَلان عبر
+  _fillDepositAddr() بapp.js، تُستدعى فور فتح النافذة من الدرج.
 -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
@@ -481,12 +568,6 @@
   </div>
 </div>
 
-<!--
-  ✅ FIX (2026-08) — تسمية حقل عنوان الوجهة أصبحت أكثر تحديداً + سطر
-  توضيح صغير تحتها. نفس مخاطرة الشبكة الخاطئة تنطبق بالاتجاه المعاكس
-  هنا: عنوان إيداع USDC (Arbitrum) من منصة كـBinance تحديداً، لا أي
-  عنوان آخر.
--->
 <div class="modal-overlay" id="modalWithdraw">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -517,11 +598,8 @@
 </div>
 
 <!--
-  ✅ modalLogout — الآن "إلغاء الاتصال" (سابقاً "تسجيل الخروج"/"تغيير
-  المحفظة")، يُفتح من زر "اتصال" المدمج بالشريط العلوي (حالة الاتصال)
-  بدل زر 🔌 مستقل. النص يشرح كل احتمالات النتيجة بوضوح تام: ما يُحذف
-  محلياً، ما يبقى آمناً على Hyperliquid، ما يبقى صالحاً عند إعادة
-  الاتصال، وما يُحذف فعلياً (رمز PIN) — لا مفاجآت لاحقة.
+  modalLogout — "إلغاء الاتصال"، يُفتح من زر "اتصال" بالـappbar (حالة
+  الاتصال). النص يشرح كل احتمالات النتيجة بوضوح تام.
 -->
 <div class="modal-overlay" id="modalLogout">
   <div class="modal">
@@ -656,7 +734,7 @@
 
   NOTE: js/agents.js (إدارة وكيل التنفيذ — إنشاء/تدوير/حذف، 180 يوم)
   يُحمَّل بعد auth.js مباشرة — يستدعيه auth.js (Agents.ensure) وapi.js
-  (hlExchange lazy-heal) وapp.js (زر "الوكلاء" بالخيارات). يُحقن واجهته
+  (hlExchange lazy-heal) وapp.js (زر "الوكلاء" بالدرج). يُحقن واجهته
   الخاصة ديناميكياً بنفس أسلوب c.js — لا حاجة لأي HTML إضافي هنا.
 
   NOTE: js/privy-bridge.js (React island, ~1.4MB gzip, email login only)
@@ -698,18 +776,6 @@
 <script src="/js/app.js"></script>
 
 <script>
-/* ✅ FIX — كانت تعيد تحميل الصفحة تلقائياً بعد ~5 ثوانٍ من فتحها لأول
-   مرة (أو أول زيارة بعد أي نشر جديد). السبب: sw.js يستدعي عمداً
-   skipWaiting()+clients.claim() (نشر جديد يسيطر فوراً — مقصود)، لكن
-   clients.claim() يُطلق controllerchange، والمستمع القديم أدناه كان
-   يعمل reload() عند *أي* حدوث له — حتى أول مرة يسيطر فيها أي SW على
-   تاب لم يكن له SW أصلاً (كل زيارة بعد نشر جديد، بما أن GitHub Action
-   يُغيّر نص sw.js بكل push). تلك المرة الأولى ليست تحديثاً حقيقياً
-   فإعادة التحميل بلا فائدة. الآن: أول controllerchange يُتجاهل لو لم
-   يكن يوجد controller أصلاً وقت التحميل — أي controllerchange بعده
-   فعلاً يعني SW أحدث حلّ محل واحد كان يعمل بالفعل أثناء الجلسة، وتلك
-   الحالة الوحيدة التي تستحق إعادة التحميل. "أحدث نشر يظهر فوراً" يبقى
-   كما هو تماماً. */
 if ('serviceWorker' in navigator) {
   let _swRefreshing = false;
   let _hadController = !!navigator.serviceWorker.controller;
