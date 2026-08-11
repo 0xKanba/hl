@@ -35,6 +35,17 @@
       Arbitrum داخل رسالة الخطأ التوضيحية (كانت المشكلة الفعلية —
       خصوصاً لمحافظ البريد/Privy الجديدة كلياً بلا أي ETH — تظهر فقط
       بعد محاولة فاشلة، بلا أي توضيح مسبق أين تذهب أو كم تحتاج).
+   ✅ جديد (إعادة هيكلة UI) — الرصيد لم يعد مودال منفصل (modalBalance/
+      showBalance محذوفتان بالكامل). بطاقة دائمة أعلى شاشة الرئيسية
+      (#balanceCard) تُحدَّث مباشرة من نفس push handlers الموجودة أصلاً
+      (_onClearinghouseStatePush/_onSpotStatePush) — أُزيل شرط
+      "$('modalBalance')?.classList.contains('open')" فالبطاقة تتحدّث
+      دائماً بلا حاجة لأي نافذة مفتوحة. floatPnl يُحسَب أيضاً باللقطة
+      الأولية بـinitAccountFeeds نفسها (لم يكن يُحسَب هناك سابقاً، يبقى
+      0 لحظياً حتى أول push) — الآن يظهر صحيحاً من أول رسم للبطاقة.
+      _renderBalanceFromState تعرض "—" تلقائياً لو State.isGuest، فلا
+      حاجة لتصفير State.balance يدوياً عند تسجيل الخروج — فقط استدعاء
+      الدالة بعد ضبط isGuest=true كافٍ (auth.js:doLogout).
 ════════════════════════════════════════════════ */
 'use strict';
 
@@ -86,12 +97,16 @@ async function initAccountFeeds() {
     if (coin === 'USDC' || coin === 'USDC:0') spotUSDC += parseFloat(b.total || 0);
   }
   const margin = parseFloat(chs?.marginSummary?.totalMarginUsed || 0);
-  State.balance = { total: spotUSDC, margin, floatPnl: 0, available: Math.max(0, spotUSDC - margin) };
+  const rawPos = (chs?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
+  /* ✅ جديد — floatPnl محسوب هنا أيضاً (كان يبقى 0 حتى أول push) —
+     البطاقة الدائمة الجديدة تُرسَم فوراً بأرقام صحيحة من أول لحظة. */
+  const floatPnl = rawPos.reduce((s, p) => s + parseFloat(p.position?.unrealizedPnl || 0), 0);
+  State.balance = { total: spotUSDC, margin, floatPnl, available: Math.max(0, spotUSDC - margin) };
   State.fillsCache  = Array.isArray(fills) ? fills.slice(0, 300) : [];
   State.openOrders  = Array.isArray(orders) ? orders : [];
 
-  const rawPos = (chs?.assetPositions || []).filter(p => parseFloat(p.position?.szi || 0) !== 0);
   _applyPositions(rawPos);
+  _renderBalanceFromState();
 
   _acctUnsubs.push(HL.subscribe({ type: 'allDexsClearinghouseState', user }, _onClearinghouseStatePush));
   _acctUnsubs.push(HL.subscribe({ type: 'spotState', user }, _onSpotStatePush));
@@ -139,7 +154,7 @@ function _onClearinghouseStatePush(data) {
     }
     _applyPositions(rawPos);
   }
-  if ($('modalBalance')?.classList.contains('open')) _renderBalanceFromState();
+  _renderBalanceFromState();
 }
 
 /* ════ Push: رصيد USDC الفعلي (Spot — مصدر الرصيد الوحيد) ════ */
@@ -152,7 +167,7 @@ function _onSpotStatePush(data) {
   const margin   = State.balance?.margin || 0;
   const floatPnl = State.balance?.floatPnl || 0;
   State.balance  = { total: spotUSDC, margin, floatPnl, available: Math.max(0, spotUSDC - margin) };
-  if ($('modalBalance')?.classList.contains('open')) _renderBalanceFromState();
+  _renderBalanceFromState();
 }
 
 /* ════ Push: Fills حية — تُغذّي fillsCache + تُعيد دمج الصفقات فوراً ════ */
@@ -222,42 +237,35 @@ function _trackOpenTimes(rawPos) {
   State._openTimes = times;
 }
 
-/* ════ Balance Modal — يرسم من State الحي، بلا أي fetch أثناء الفتح ════ */
-function showBalance() {
-  openModal('modalBalance');
-  _renderBalanceFromState();
-  clearInterval(State._balTimer);
-  State._balTimer = setInterval(() => {
-    if (!$('modalBalance')?.classList.contains('open')) { clearInterval(State._balTimer); return; }
-    _renderBalanceFromState();
-  }, 1000); // إعادة رسم محلية فقط (لا شبكة) — تحديث فوري أصلاً عبر spotState/clearinghouseState push
-}
-
+/* ════════════════════════════════════════════════
+   ✅ بطاقة الرصيد الدائمة (أعلى شاشة الرئيسية) — بديل modalBalance/
+   showBalance المحذوفتين بالكامل. تُستدعى من initAccountFeeds()
+   وكل push handler أعلاه، وأيضاً من auth.js:doLogout() لإعادة ضبط
+   العرض فوراً لحالة "—" عند قطع الاتصال.
+════════════════════════════════════════════════ */
 function _renderBalanceFromState() {
-  const el = $('balanceContent'); if (!el) return;
-  const b = State.balance;
-  if (!b) { el.innerHTML = '<div class="balance-loading">⏳ جاري جلب الرصيد...</div>'; return; }
-  const pCls = b.floatPnl >= 0 ? 'green' : 'red';
-  el.innerHTML = `
-    <div class="balance-grid">
-      <div class="balance-item">
-        <span class="balance-label">💰 رصيد Spot USDC</span>
-        <span class="balance-value blue">$${fmt(b.total, 2)}</span>
-      </div>
-      <div class="balance-item">
-        <span class="balance-label">✅ المتاح للتداول</span>
-        <span class="balance-value green">$${fmt(b.available, 2)}</span>
-      </div>
-      <div class="balance-item">
-        <span class="balance-label">🔒 الهامش المستخدم</span>
-        <span class="balance-value warn">$${fmt(b.margin, 2)}</span>
-      </div>
-      <div class="balance-item">
-        <span class="balance-label">📊 ربح / خسارة عائمة</span>
-        <span class="balance-value ${pCls}">${b.floatPnl >= 0 ? '+' : ''}$${fmt(b.floatPnl, 2)}</span>
-      </div>
-    </div>
-    <div class="balance-auto-note">↻ تحديث حي (WebSocket)</div>`;
+  const totalEl  = $('bcTotal');
+  const availEl  = $('bcAvail');
+  const marginEl = $('bcMargin');
+  const pnlEl    = $('bcPnl');
+  if (!totalEl) return; // البطاقة غير موجودة بالـDOM لأي سبب — تجاهل بصمت
+
+  const b = !State.isGuest ? State.balance : null;
+  if (!b) {
+    totalEl.textContent = '—';
+    if (availEl)  availEl.textContent  = '—';
+    if (marginEl) marginEl.textContent = '—';
+    if (pnlEl) { pnlEl.textContent = '—'; pnlEl.className = 'bc-primary-pnl'; }
+    return;
+  }
+
+  totalEl.textContent = `$${fmt(b.total, 2)}`;
+  if (availEl)  availEl.textContent  = `$${fmt(b.available, 2)}`;
+  if (marginEl) marginEl.textContent = `$${fmt(b.margin, 2)}`;
+  if (pnlEl) {
+    pnlEl.textContent = `${b.floatPnl >= 0 ? '+' : ''}$${fmt(b.floatPnl, 2)}`;
+    pnlEl.className   = `bc-primary-pnl ${b.floatPnl >= 0 ? 'pos' : 'neg'}`;
+  }
 }
 
 /* ════ Trade History — يستخدم fillsCache الحي أولاً (مصدر وحيد)، لا يُعيد
