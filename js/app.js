@@ -1,47 +1,17 @@
 /* ═══════════════════════════════════════
-   app.js — تغييرات الإقلاع فقط:
-   HL.connect() + initPriceFeeds() فوراً (زائر ومتصل)،
-   initAccountFeeds() ينتقل داخل _onWalletConnected (auth.js)،
-   _startAuthedTimers أصبحت أخف (startSessionPolling فقط)
-   ✅ حذف كامل حقلي "اسم العرض" و"صوت التنبيهات" من الأسلاك.
-   ✅ "الوكلاء" تفتح Agents.openModal() بدل enableFastTrading القديمة.
-   ✅ نصوص رسوم السحب ومدة الوكيل تُملأ ديناميكياً من الثوابت المركزية.
-   ✅ Wallets.reconnectSilently(rdns) تستقبل rdns المحفوظ فعلاً.
-   ✅ "نسيت PIN" يحذف الوكيل يدوياً قبل تسجيل الخروج.
-   ✅ حُذف زر/سلك "استرداد المحفظة".
-   ✅ FIX — إعادة الاتصال التلقائي بالبريد (Privy) عند إعادة تحميل
-      الصفحة تنتظر .ready فعلياً (حتى 6 ثوان) قبل قراءة authenticated.
-
-   ✅ FIX — فتح الرسم البياني كان محظوراً على الزوّار (`if (State.isGuest)
-      return _promptConnect();`) رغم أن بيانات الشموع/الأسعار عامة
-      بالكامل بلا أي حاجة لتوقيع (candleSnapshot وBBO لا يتطلبان مصادقة
-      — راجع chart.js). القرار الوحيد الذي يحتاج فعلاً محفظة متصلة هو
-      محاولة تنفيذ صفقة من داخل الرسم، وهذا مُتحقَّق منه أصلاً وبشكل
-      صحيح داخل _showCf بـchart.js (تُظهر توست "سجّل الدخول أولاً" بدل
-      التنفيذ). إزالة الحظر هنا تتيح للزائر تصفّح الرسم البياني كاملاً
-      قبل أي التزام بربط محفظة — بلا أي خطر تقني.
-
-   ✅ FIX — دُمج زر "🔌 إلغاء الاتصال" المستقل بزر "اتصال" نفسه (انتقل
-      للشريط العلوي — راجع index.html/auth.js/components.css). لم يعد
-      هناك عنصر #btnDisconnect منفصل: نفس الزر الآن يفتح تسجيل الدخول
-      للزائر، ويفتح مباشرة modalLogout (تأكيد قطع الاتصال) لمن هو
-      متصل بالفعل. الوصول لـ"⚙️ الخيارات" يبقى متاحاً عبر زر الخيارات
-      المستقل بالفوتر (btnOptions) كما هو — لا تغيير هناك.
-
-   ✅ FIX — إغلاق modalLogin عبر النقر على الخلفية المعتمة (لا زر
-      "إغلاق" الصريح) لم يكن يستدعي _stopWalletListWatch()، فيبقى
-      مستمع Wallets.onListChanged معلَّقاً بلا فائدة يعيد بناء قائمة
-      داخل مودال مغلق كل مرة تُعلن محفظة جديدة نفسها لاحقاً. أُضيفت حالة
-      خاصة لـmodalLogin بمعالج نقر الخلفية العام أدناه.
-
-   ✅ FIX (2026-08) — modalDeposit لم يكن يُظهر عنوان محفظة المستخدم
-      إطلاقاً؛ الإيداع (لبريد Privy أو محفظة خارجية على حدٍّ سواء) هو
-      تحويل USDC من نفس عنوان المحفظة المتصلة إلى الجسر — إن لم يكن
-      برصيد USDC (وETH لغاز Arbitrum) مسبقاً بذلك العنوان تحديداً،
-      زر "إيداع" لا يقدر يفعل شيئاً. العنوان كان موجوداً فقط بمكان
-      بعيد (⚙️ الخيارات ← 🤖 الوكلاء)، لا داخل نافذة الإيداع نفسها حيث
-      يحتاجه المستخدم فعلياً. _fillDepositAddr() تعرضه هنا مباشرة مع
-      زر نسخ، تُستدعى فور فتح modalDeposit.
+   app.js — إعادة هيكلة UI/UX: appbar + tabbar سفلي (3 أزرار) + درج هامبرغر
+   ✅ راوتر شاشات بسيط: الرئيسية / الأسواق (data-screen) + الرسم البياني
+      كـoverlay منفصل (كما كان، بلا تغيير بـchart.js — راقَب فقط عبر
+      MutationObserver على #chartScreen لإعادة ضبط تفعيل تاب الرسم).
+   ✅ الخيارات (الإيداع/السحب/التأريخ/التقويم/الوكلاء/تصدير المحفظة) +
+      القفل + المظهر + الوثائق + العنوان/النسخ — كلها انتقلت لدرج هامبرغر
+      واحد (نفس الـIDs القديمة تماماً، فقط تغيّر مكانها بالـHTML).
+   ✅ "الرصيد" حُذف من القائمة نهائياً — بطاقة دائمة أعلى الرئيسية الآن
+      (راجع account.js:_renderBalanceFromState).
+   ✅ بطاقات الأسواق (شاشة الأسواق) تُحدَّث بمؤقّت خفيف كل ثانية من
+      State.prices/State.prevDayPx مباشرة — بلا أي لمس لـprices.js/
+      session.js (تبقيان كما هما بالضبط، الأسعار نفسها تبقى حيّة 100%
+      عبر WS الموجود أصلاً؛ هذا فقط مؤقّت عرض لشاشة التصفح).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -80,14 +50,17 @@ function _initMonthsPanel() {
   });
 }
 
+/* ✅ الآيقونة الآن عنصر فرعي (.di-icon) داخل زر درج، لا الزر نفسه —
+   استهداف مباشر بدل الكتابة فوق textContent الزر كاملاً (كان سيمحو
+   تسمية "تبديل المظهر"). */
 function _applyTheme(theme, animate) {
   if (animate) {
     document.documentElement.classList.add('theme-transitioning');
     setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 320);
   }
   document.documentElement.setAttribute('data-theme', theme);
-  const btn = document.getElementById('btnTheme');
-  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  const icon = document.querySelector('#btnTheme .di-icon');
+  if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
 }
 
 function _initTheme() {
@@ -147,10 +120,7 @@ function _initAgentCopy() {
   setTxt('agentTtlTxt2', `${days} يوم، ويُطلب توقيع جديد عند الحاجة`);
 }
 
-/* ✅ FIX (2026-08) — يعرض عنوان محفظة المستخدم المتصلة داخل modalDeposit
-   نفسها (بريد Privy أو خارجية — كلاهما نفس المنطق: الإيداع تحويل USDC
-   من هذا العنوان بالذات للجسر). يُستدعى فور فتح النافذة (optDeposit
-   أدناه)، لا مرة واحدة عند الاتصال، حتى يعكس أي تبديل محفظة لاحق. */
+/* عنوان محفظة المستخدم داخل modalDeposit نفسها — بلا تغيير */
 function _fillDepositAddr() {
   const addr = State.wallet?.address || '—';
   setTxt('depositAddrTxt', addr);
@@ -163,74 +133,174 @@ function _fillDepositAddr() {
   };
 }
 
-function openOptions() {
-  const ov = document.getElementById('optsOverlay');
+/* ═══════════════════════════════════════
+   ✅ جديد — راوتر الشاشات (الرئيسية / الأسواق)
+   الرسم البياني ليس "شاشة" بهذا المعنى — يبقى overlay منفصل تماماً
+   (chart.js بلا أي تعديل) يغطي كامل الواجهة بما فيها appbar/tabbar.
+═══════════════════════════════════════ */
+const SCREEN_TITLES = { home: 'الرئيسية', markets: 'الأسواق' };
+let _activeScreen = 'home';
+
+function switchScreen(name) {
+  if (name === _activeScreen) return;
+  const next = document.querySelector(`.app-screen[data-screen="${name}"]`);
+  if (!next) return;
+  const current = document.querySelector(`.app-screen[data-screen="${_activeScreen}"]`);
+  if (current) current.classList.add('hidden');
+
+  next.classList.remove('hidden');
+  /* إعادة تشغيل أنيميشن الدخول حتى لو الشاشة كانت مبنية أصلاً */
+  next.classList.remove('screen-anim');
+  void next.offsetWidth; /* إجبار reflow */
+  next.classList.add('screen-anim');
+
+  _activeScreen = name;
+  setTxt('appbarTitle', SCREEN_TITLES[name] || '');
+  _syncTabbarActive();
+
+  const scroller = next.querySelector('.screen-scroll');
+  if (scroller) scroller.scrollTop = 0;
+}
+
+function _syncTabbarActive() {
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === _activeScreen)
+  );
+}
+
+/* ✅ يراقب إغلاق شاشة الرسم البياني (بلا أي تعديل بـchart.js) — عند
+   إغلاقها (فقدان زر الرجوع لعنصرها لـ.hidden) نعيد تفعيل تاب الشاشة
+   الحقيقية الحالية (الرئيسية أو الأسواق) بدل بقاء تاب "الرسم" مضيئاً. */
+function _initChartCloseWatcher() {
+  const el = document.getElementById('chartScreen');
+  if (!el || typeof MutationObserver === 'undefined') return;
+  let wasHidden = el.classList.contains('hidden');
+  const obs = new MutationObserver(() => {
+    const isHidden = el.classList.contains('hidden');
+    if (isHidden && !wasHidden) _syncTabbarActive();
+    wasHidden = isHidden;
+  });
+  obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+}
+
+/* ═══════════════════════════════════════
+   ✅ جديد — درج هامبرغر (يحل محل opts-overlay القديمة بالكامل)
+═══════════════════════════════════════ */
+function openDrawer() {
+  const ov = $('drawerOverlay');
   if (!ov) return;
   ov.classList.remove('hidden');
-  ov.classList.add('visible');
+  requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.add('open')));
+}
+function closeDrawer() {
+  const ov = $('drawerOverlay');
+  if (!ov) return;
+  ov.classList.remove('open');
+  setTimeout(() => { if (!ov.classList.contains('open')) ov.classList.add('hidden'); }, 320);
+}
+function _drawerAction(fn) {
+  return () => { closeDrawer(); fn(); };
+}
+function _initDrawer() {
+  $('btnMenu')?.addEventListener('click', openDrawer);
+  $('drawerClose')?.addEventListener('click', closeDrawer);
+  $('drawerOverlay')?.addEventListener('click', e => { if (e.target === $('drawerOverlay')) closeDrawer(); });
 }
 
+/* ═══════════════════════════════════════
+   ✅ جديد — تحديث بطاقات شاشة الأسواق (سعر + تغيّر 24س)
+   يقرأ فقط من State.prices/State.prevDayPx الحيّة أصلاً عبر WS —
+   لا يلمس prices.js إطلاقاً، مجرّد "نافذة عرض" خفيفة لهذي الشاشة.
+═══════════════════════════════════════ */
+let _marketsRefreshTimer = null;
+
+function _refreshMarketCards() {
+  Object.keys(ASSETS).forEach(sym => {
+    const p = State.prices[sym];
+    const priceEl = $(`mktPrice${sym}`);
+    if (priceEl && p?.mid) priceEl.textContent = fmt(p.mid, ASSETS[sym].pxDp);
+
+    const prevDay = State.prevDayPx[sym];
+    const chgEl = $(`mktChg${sym}`);
+    if (chgEl && p?.mid && prevDay > 0) {
+      const chg = ((p.mid - prevDay) / prevDay) * 100;
+      chgEl.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
+      chgEl.className   = `market-card-chg ${chg > 0.005 ? 'up' : chg < -0.005 ? 'dn' : 'n'}`;
+    }
+  });
+  document.querySelectorAll('.market-card[data-asset]').forEach(c =>
+    c.classList.toggle('active', c.dataset.asset === State.asset)
+  );
+}
+function _startMarketsRefresh() {
+  clearInterval(_marketsRefreshTimer);
+  _refreshMarketCards();
+  _marketsRefreshTimer = setInterval(_refreshMarketCards, 1000);
+}
+
+function openOptions() {
+  /* إبقاء الاسم للتوافق لو استُدعيت من أي مكان قديم — الآن تفتح الدرج */
+  openDrawer();
+}
 function closeOptions() {
-  const ov = document.getElementById('optsOverlay');
-  if (!ov) return;
-  ov.classList.add('closing');
-  setTimeout(() => {
-    ov.classList.remove('visible','closing');
-    ov.classList.add('hidden');
-  }, 120);
-}
-
-function _initOptsBackdrop() {
-  const ov = document.getElementById('optsOverlay');
-  if (!ov) return;
-  ov.addEventListener('click', e => { if (e.target === ov) closeOptions(); });
+  closeDrawer();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
 
   _initTheme();
-  const themeBtn = document.getElementById('btnTheme');
-  if (themeBtn) themeBtn.onclick = _toggleTheme;
-
   _startDatetimeClock();
   _initMonthsPanel();
-  _initOptsBackdrop();
+  _initDrawer();
+  _initChartCloseWatcher();
   _initQtyInput();
   _initWithdrawFeeUI();
   _initAgentCopy();
+  _startMarketsRefresh();
 
   $('connectEmailBtn')?.addEventListener('click', connectEmail);
   $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
   $('loaderClose')?.addEventListener('click', hideLoader);
 
+  /* تبويبات تبديل الأصل السريعة — تبقى بالرئيسية بلا أي تغيير */
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
     t.onclick = () => switchAsset(t.dataset.asset)
   );
 
-  /* ✅ الرسم البياني يفتح للجميع الآن — زائر أو متصل، راجع تعليق رأس الملف */
-  $('btnChart').onclick = () => {
-    ChartModule.open(State.asset);
-  };
+  /* بطاقات شاشة الأسواق — الضغط يبدّل الأصل ويعود للرئيسية */
+  document.querySelectorAll('.market-card[data-asset]').forEach(c =>
+    c.onclick = () => { switchAsset(c.dataset.asset); switchScreen('home'); }
+  );
 
-  /* ✅ FIX — زر "اتصال" أصبح مدمجاً: زائر → فتح تسجيل الدخول، متصل →
-     فتح modalLogout (تأكيد قطع الاتصال) مباشرة بدل فتح الخيارات —
-     راجع تعليق رأس الملف. الوصول لـ"⚙️ الخيارات" يبقى عبر btnOptions
-     المستقل بالفوتر، بلا أي تغيير هناك. */
+  /* ✅ Tabbar السفلي — 3 أزرار فقط: رسم / رئيسية (افتراضي) / أسواق */
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      if (tab === 'chart') {
+        document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.toggle('active', b === btn));
+        ChartModule.open(State.asset);
+        return;
+      }
+      switchScreen(tab);
+    });
+  });
+
   $('btnConnect').onclick = () => {
     if (State.isGuest) connectWallet();
     else openModal('modalLogout');
   };
 
-  $('btnOptions').onclick = openOptions;
-  $('optsClose').onclick  = closeOptions;
+  /* ✅ محتويات الدرج — نفس الـIDs القديمة تماماً، فقط انتقلت مكانياً */
+  $('btnTheme').onclick = _drawerAction(_toggleTheme);
+  $('btnLock').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); lockApp(true); });
+  $('btnDocs')?.addEventListener('click', () => closeDrawer());
 
-  $('optBalance').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showBalance(); };
-  $('optHistory').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); showHistory(); };
-  $('optCalendar').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); };
-  $('optDeposit').onclick  = () => { closeOptions(); if (State.isGuest) return _promptConnect(); _fillDepositAddr(); openModal('modalDeposit'); };
-  $('optWithdraw').onclick = () => { closeOptions(); if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); };
-  $('optExportWallet')?.addEventListener('click', () => { closeOptions(); exportWallet(); });
-  $('optAgents')?.addEventListener('click', () => { closeOptions(); if (typeof Agents !== 'undefined') Agents.openModal(); });
+  $('optHistory').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); showHistory(); });
+  $('optCalendar').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); });
+  $('optDeposit').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); _fillDepositAddr(); openModal('modalDeposit'); });
+  $('optWithdraw').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); });
+  $('optExportWallet')?.addEventListener('click', _drawerAction(exportWallet));
+  $('optAgents')?.addEventListener('click', _drawerAction(() => { if (typeof Agents !== 'undefined') Agents.openModal(); }));
 
   $('btnBuy').onclick  = () => askTrade(true);
   $('btnSell').onclick = () => askTrade(false);
@@ -267,7 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('slDelete').onclick  = () => requirePin(deleteSL);
   $('slAmount').oninput  = recalcSlPreview;
 
-  $('balanceClose').onclick = () => { clearInterval(State._balTimer); closeModal('modalBalance'); };
   $('historyClose').onclick = () => closeModal('modalHistory');
 
   $('posDetailClose').onclick = () => closeModal('modalPosDetail');
@@ -307,11 +376,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   $('navAddress').onclick = _copyAddr;
   $('navCopyBtn')?.addEventListener('click', _copyAddr);
-
-  $('btnLock').onclick = () => {
-    if (State.isGuest) return _promptConnect();
-    lockApp(true);
-  };
 
   $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
   $('pinLogout').onclick = () => {
