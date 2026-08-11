@@ -2,29 +2,28 @@
    components.css — ماركت ليك (Market Leak) · Component Library
    Every rule here consumes tokens from base.css / themes.css.
    No color literals, no [data-theme] blocks — theme-agnostic by design.
-   ✅ FIX — زر "اتصال" انتقل من الفوتر (دائرة 54px) للشريط العلوي
-      (حبّة مضغوطة تلائم ارتفاع النافبار)، ودُمج مع زر "🔌 قطع الاتصال"
-      المستقل الذي حُذف نهائياً — راجع .nav-connect-btn أدناه وindex.html/
-      app.js/auth.js. .footer-connect-btn و.nav-disconnect-btn القديمتان
-      حُذفتا بالكامل (لا عنصر يستخدمهما بعد الآن).
-   ✅ FIX (2026-08) — أُضيفت 4 كلاسات صغيرة لدعم وضوح تدفّق الإيداع/
-      السحب/التداول لمستخدم جديد كلياً: .find-wallet-btn (رابط دليل
-      ethereum.org عند عدم اكتشاف أي محفظة)، .deposit-addr-note/-lbl
-      (صندوق عنوان الإيداع داخل modalDeposit نفسها)، .confirm-hint
-      (توضيح سطر واحد تحت سعر التصفية بتأكيد الصفقة)، .field-hint
-      (تلميح صغير تحت أي حقل نموذج — يُستخدم حالياً لتوضيح شبكة السحب).
-   ✅ FIX (2026-08) — إعادة تسمية العلامة التجارية إلى "ماركت ليك" +
-      .nav-docs-btn جديد بجانب تبديل المظهر (رابط خارجي ثابت لـkanba.pw،
-      دعم ووثائق). نص التسمية (.nav-docs-lbl) يظهر فقط ≥400px — نفس نمط
-      .tvh-name بـchart.js — لتفادي ازدحام الشريط العلوي على الشاشات
-      الضيقة، خصوصاً بعد أن صار اسم التطبيق أطول من "سيولة" القديم.
-      الأيقونة وحدها (📄 + tooltip) تكفي بالشاشات الأضيق من ذلك.
+
+   ✅ إعادة هيكلة UI/UX (2026-08) — بنية تطبيق أصلي بالكامل:
+      .nav (top bar) → .appbar (☰ + عنوان + اتصال)
+      .footer (رسم/خيارات) → .tabbar سفلي 3 أزرار (رسم|رئيسية|أسواق)
+      .opts-overlay (قائمة منبثقة وسط الشاشة) → .drawer ينزلق من اليمين
+      .main (عمودين) → .screens-viewport بشاشتين (رئيسية/أسواق) +
+      أنيميشن دخول لكل شاشة (fade+lift خفيف، لا سحب أفقي — يطابق نمط
+      تبديل التابات بالتطبيقات الأصلية أكثر من الدفع الأفقي المحجوز
+      عادة للتنقل الهرمي/التفصيلي).
+      .balance-grid/.balance-item/.balance-value (كانت داخل modalBalance
+      المحذوفة) → .balance-card بطاقة دائمة أعلى الرئيسية.
+      جديد كلياً: .market-card لشاشة الأسواق.
+      .balance-loading أُبقيت (تُستخدم أيضاً بمودال التأريخ).
+      كل الأنيميشن الجديدة GPU-friendly (transform/opacity فقط)، بمدد
+      قصيرة (180-320ms) وeasing متسق مع --ease-out/--ease-bounce
+      الموجودين أصلاً بـbase.css — لا مكتبات خارجية.
 ═══════════════════════════════════════════════════════════════ */
 
 @layer components {
 
 /* ════════════════════════════════════
-   SCREENS
+   SCREENS (login legacy container — still used by #loginScreen)
 ════════════════════════════════════ */
 .screen {
   position: fixed; inset: 0;
@@ -42,9 +41,20 @@
   background: var(--bg-app);
 }
 .chart-screen.hidden { display: none !important; }
+/* ✅ جديد — دخول ناعم لشاشة الرسم البياني (تكبير+تلاشي خفيف)، بلا أي
+   لمس لمنطق chart.js: يعمل تلقائياً بمجرد إزالة .hidden (chart.js
+   يفعل هذا أصلاً بالضبط)، لأن CSS animation يُعاد تشغيله تلقائياً كلما
+   تغيّر display من none لغير-none. */
+.chart-screen:not(.hidden) {
+  animation: chartScreenIn 260ms cubic-bezier(.22,1,.36,1);
+}
+@keyframes chartScreenIn {
+  from { opacity: 0; transform: scale(.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
 
 /* ════════════════════════════════════
-   LOGIN
+   LOGIN (inert today — kept intact, zero risk)
 ════════════════════════════════════ */
 #loginScreen {
   align-items: center; justify-content: center;
@@ -118,10 +128,6 @@
 }
 .create-wallet-btn:hover { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
 
-/* ✅ FIX (2026-08) — رابط صغير أنيق لدليل ethereum.org عند عدم اكتشاف
-   أي محفظة بالمتصفح (راجع auth.js:_renderExtWalletList). عرض تلقائي
-   (auto-width) لا full-width، بعكس .create-wallet-btn، ليبقى بصرياً
-   "ثانوياً" ومناسباً لوضعه كسطر منفصل تحت رسالة توضيحية. */
 .find-wallet-btn {
   display: inline-flex; align-items: center; justify-content: center;
   gap: 5px; padding: 7px var(--space-4);
@@ -136,77 +142,284 @@
 .find-wallet-btn:active { transform: scale(.95); }
 
 /* ════════════════════════════════════
-   NAV
+   ✅ APP SHELL — الحاوية الجذرية الجديدة (بديل .screen على #appScreen)
 ════════════════════════════════════ */
-.nav {
+.app-shell {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  z-index: var(--z-screen);
+  background: var(--bg-app);
+  overflow: hidden;
+  max-width: 100vw;
+  height: 100dvh;
+}
+.app-shell.hidden { display: none !important; }
+
+/* ════════════════════════════════════
+   ✅ APPBAR — ثابت أعلى الشاشة: ☰ | عنوان الشاشة | اتصال
+════════════════════════════════════ */
+.appbar {
   display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
+  padding-top: max(var(--space-2), env(safe-area-inset-top));
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
-  flex-shrink: 0; overflow: hidden; min-width: 0;
+  flex-shrink: 0; position: relative; z-index: 10;
 }
-.nav-left  { display: flex; align-items: center; gap: 7px; flex-shrink: 0; min-width: 0; }
-.nav-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; min-width: 0; overflow: hidden; }
+.appbar-menu-btn {
+  width: 36px; height: 36px; border-radius: var(--r-sm);
+  background: var(--bg-elev); border: 1.5px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: border-color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.appbar-menu-btn:hover  { border-color: var(--ac); background: var(--ac-dim); }
+.appbar-menu-btn:active { transform: scale(.88); }
+.hamburger-icon { display: flex; flex-direction: column; gap: 4px; width: 17px; flex-shrink: 0; }
+.hamburger-icon span { display: block; height: 2px; border-radius: 2px; background: var(--text-primary); }
 
-.nav-logo-btn {
-  display: flex; align-items: center; gap: 6px;
-  background: none; border: none; cursor: pointer;
-  padding: var(--space-1) 6px; border-radius: var(--r-xs);
-  transition: background var(--dur-base) var(--ease-standard); flex-shrink: 0;
+.appbar-title {
+  flex: 1; min-width: 0; text-align: center;
+  font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: .2px;
 }
-.nav-logo-btn:hover  { background: var(--ac-dim); }
-.nav-logo-btn:active { opacity: .7; }
-.nav-logo-icon { font-size: var(--fs-2xl); line-height: 1; filter: drop-shadow(0 0 7px color-mix(in srgb, var(--ac) 80%, transparent)); flex-shrink: 0; }
-.nav-logo-text { font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary); letter-spacing: .4px; white-space: nowrap; }
-
-.nav-theme-btn {
-  background: var(--bg-elev);
-  border: 1.5px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  padding: var(--space-1) var(--space-2); font-size: var(--fs-lg); line-height: 1;
-  cursor: pointer;
-  transition: border-color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
-  flex-shrink: 0;
-}
-.nav-theme-btn:hover  { border-color: var(--ac); background: var(--ac-dim); }
-.nav-theme-btn:active { transform: scale(.88); }
-
-/* ✅ NEW (2026-08) — زر "الوثائق" صغير بجانب تبديل المظهر، يفتح
-   https://kanba.pw/ بتبويب خارجي (دعم + وثائق). نص التسمية مخفي تحت
-   400px (نفس نمط .tvh-name بـchart.js) لتفادي ازدحام الشريط العلوي
-   على الشاشات الضيقة جداً بعد أن صار اسم التطبيق أطول — الأيقونة تبقى
-   ظاهرة دائماً مع tooltip فلا فقدان وظيفي على أي مقاس شاشة. */
-.nav-docs-btn {
-  display: flex; align-items: center; gap: 4px;
-  background: var(--bg-elev);
-  border: 1.5px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--fs-sm); font-weight: var(--fw-bold);
-  color: var(--text-secondary); text-decoration: none;
-  cursor: pointer; flex-shrink: 0; line-height: 1;
-  transition: border-color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
-}
-.nav-docs-btn:hover  { border-color: var(--ac); background: var(--ac-dim); color: var(--ac); }
-.nav-docs-btn:active { transform: scale(.9); }
-.nav-docs-icon { font-size: var(--fs-lg); line-height: 1; }
-.nav-docs-lbl  { display: none; white-space: nowrap; }
-@media (min-width: 400px) { .nav-docs-lbl { display: inline; } }
-
-#btnLock {
-  background: none; border: none;
-  color: var(--text-secondary); font-size: var(--fs-lg);
-  padding: 3px; cursor: pointer; transition: color var(--dur-base) var(--ease-standard); flex-shrink: 0;
-}
-#btnLock:hover { color: var(--text-primary); }
 
 /* ════════════════════════════════════
-   NAV CONNECT — زر "اتصال" مدمج (حالة + اتصال + قطع اتصال بزر واحد).
-   انتقل من الفوتر (كان دائرة 54px قائمة بذاتها) لحبّة مضغوطة تلائم
-   ارتفاع الشريط العلوي، وامتصّ دور "🔌 قطع الاتصال" المستقل السابق —
-   المستخدم متصل → نقرة تفتح modalLogout مباشرة (راجع app.js). نفس
-   منطق الألوان القديم بالضبط (أخضر=متصل، أصفر نابض=يحاول، أحمر=منقطع).
+   SCREENS VIEWPORT — الرئيسية / الأسواق
+════════════════════════════════════ */
+.screens-viewport { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+
+.app-screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.app-screen.hidden { display: none; }
+
+@keyframes screenEnter {
+  from { opacity: 0; transform: translateY(10px) scale(.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.app-screen.screen-anim { animation: screenEnter 240ms cubic-bezier(.22,1,.36,1); }
+
+.screen-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--space-3) 8px calc(var(--space-6) + 4px);
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+
+/* ════════════════════════════════════
+   ✅ TABBAR سفلي — 3 أزرار فقط (رسم | رئيسية | أسواق)
+   ترتيب DOM [رسم، رئيسية، أسواق] + dir="rtl" الافتراضي على <html>
+   → يمين=رسم، وسط=رئيسية، يسار=أسواق، بلا أي row-reverse.
+════════════════════════════════════ */
+.tabbar {
+  display: flex; align-items: stretch;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  padding-bottom: max(4px, env(safe-area-inset-bottom));
+  flex-shrink: 0;
+  box-shadow: 0 -4px 16px rgba(0,0,0,.18);
+  position: relative; z-index: 10;
+}
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 8px 4px 6px;
+  background: none; border: none; color: var(--text-muted);
+  transition: color 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-btn-icon-wrap {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 26px; border-radius: var(--r-pill);
+  transition: background 220ms ease, transform 220ms cubic-bezier(.34,1.56,.64,1);
+}
+.tab-btn-icon { font-size: 19px; line-height: 1; }
+.tab-btn-lbl  { font-size: 10px; font-weight: var(--fw-bold); transition: color 180ms ease; }
+.tab-btn.active { color: var(--ac); }
+.tab-btn.active .tab-btn-icon-wrap { background: var(--ac-dim); transform: translateY(-1px); }
+.tab-btn:active .tab-btn-icon-wrap { transform: scale(.86); }
+
+/* ════════════════════════════════════
+   ✅ DRAWER — يحل محل .opts-overlay القديمة بالكامل، ينزلق من اليمين
+   (نفس جهة زر ☰ بالـappbar) مع خلفية معتمة تتلاشى بالتزامن.
+════════════════════════════════════ */
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: var(--z-opts);
+  background: rgba(0,0,0,0);
+  display: none;
+  transition: background 300ms ease;
+}
+.drawer-overlay:not(.hidden) { display: block; }
+.drawer-overlay.open { background: rgba(0,0,0,.65); }
+
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(84vw, 320px);
+  background: var(--bg-card);
+  border-left: 1.5px solid var(--border);
+  box-shadow: -14px 0 44px rgba(0,0,0,.5);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 300ms cubic-bezier(.22,1,.36,1);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
+}
+.drawer-overlay.open .drawer { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.drawer-logo-icon {
+  width: 34px; height: 34px; border-radius: var(--r-sm);
+  background: linear-gradient(140deg, var(--ac), var(--ac-2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--fs-xl); flex-shrink: 0; box-shadow: var(--glow-ac);
+}
+.drawer-logo-text {
+  font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.drawer-close-btn {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: var(--bg-elev); border: 1.5px solid var(--border-strong);
+  color: var(--text-secondary); font-size: var(--fs-lg);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+.drawer-close-btn:hover  { border-color: var(--ac); color: var(--ac); }
+.drawer-close-btn:active { transform: scale(.88); }
+
+.drawer-account-card {
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-3);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  flex-shrink: 0;
+}
+.drawer-account-card .nav-address-wrap { width: 100%; justify-content: center; }
+.drawer-account-card .nav-address { flex: 1; max-width: none; text-align: center; font-size: var(--fs-md); padding: 8px 10px; }
+
+.drawer-menu {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: var(--space-3) var(--space-3) var(--space-5);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.drawer-item {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 13px 12px;
+  border-radius: var(--r-md); border: none; background: none;
+  color: var(--text-primary); font-size: var(--fs-lg); font-weight: var(--fw-semibold);
+  text-align: right; text-decoration: none; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard);
+  -webkit-tap-highlight-color: transparent;
+}
+.drawer-item:hover  { background: var(--bg-elev); }
+.drawer-item:active { background: var(--ac-dim); }
+.di-icon { font-size: var(--fs-xl); width: 26px; text-align: center; flex-shrink: 0; line-height: 1; }
+.di-lbl  { flex: 1; min-width: 0; }
+.drawer-divider { height: 1px; background: var(--border); margin: var(--space-2) 10px; flex-shrink: 0; }
+
+/* ════════════════════════════════════
+   ✅ BALANCE CARD — بطاقة دائمة أعلى الرئيسية (بديل modalBalance)
+════════════════════════════════════ */
+.balance-card {
+  background: linear-gradient(155deg, var(--bg-card), var(--bg-elev));
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  box-shadow: var(--shadow), var(--glow-bdr);
+  display: flex; flex-direction: column; gap: var(--space-4);
+  position: relative; overflow: hidden; flex-shrink: 0;
+}
+.balance-card::before {
+  content: ''; position: absolute; top: -50%; right: -15%;
+  width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(circle, var(--ac-dim), transparent 70%);
+  pointer-events: none;
+}
+.bc-primary { display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; position: relative; }
+.bc-primary-label { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-secondary); letter-spacing: 1.2px; text-transform: uppercase; }
+.bc-primary-value {
+  font-family: var(--font-mono); font-size: clamp(27px, 8.5vw, 34px);
+  font-weight: var(--fw-black); color: var(--text-primary); line-height: 1.1;
+  transition: color 200ms ease;
+}
+.bc-primary-pnl {
+  font-family: var(--font-mono); font-size: var(--fs-md); font-weight: var(--fw-bold);
+  padding: 3px 13px; border-radius: var(--r-pill); margin-top: 2px;
+  color: var(--text-muted); background: var(--bg-input);
+  transition: color 200ms ease, background 200ms ease;
+}
+.bc-primary-pnl.pos { color: var(--up); background: var(--up-dim); }
+.bc-primary-pnl.neg { color: var(--dn); background: var(--dn-dim); }
+
+.bc-secondary {
+  display: flex; align-items: center;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: var(--space-3);
+  position: relative;
+}
+.bc-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.bc-stat-label { font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: .4px; }
+.bc-stat-value { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary); }
+.bc-stat-divider { width: 1px; align-self: stretch; background: var(--border-strong); margin: 0 var(--space-2); }
+
+/* ════════════════════════════════════
+   ✅ MARKETS SCREEN — بطاقات أنيقة لكل سوق
+════════════════════════════════════ */
+.markets-list { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.market-card {
+  display: flex; align-items: center; gap: var(--space-3);
+  background: var(--bg-card); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); padding: var(--space-3);
+  text-align: right; cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, transform 120ms ease;
+  animation: mcIn 320ms cubic-bezier(.22,1,.36,1) backwards;
+  -webkit-tap-highlight-color: transparent;
+}
+.market-card:nth-child(1) { animation-delay: 0ms;   }
+.market-card:nth-child(2) { animation-delay: 40ms;  }
+.market-card:nth-child(3) { animation-delay: 80ms;  }
+.market-card:nth-child(4) { animation-delay: 120ms; }
+.market-card:nth-child(5) { animation-delay: 160ms; }
+@keyframes mcIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+.market-card:active { transform: scale(.97); }
+.market-card.active { border-color: var(--ac); box-shadow: var(--glow-ac); background: var(--bg-input); }
+
+.market-card-img-wrap {
+  width: 46px; height: 46px; border-radius: var(--r-md); flex-shrink: 0;
+  background: var(--bg-input); display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.market-card-img { width: 66%; height: 66%; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
+
+.market-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.market-card-name { font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.market-card-sub  { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-muted); font-family: var(--font-mono); }
+
+.market-card-price { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+.market-card-value { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary); white-space: nowrap; }
+.market-card-chg   { font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: var(--fw-bold); padding: 2px 8px; border-radius: var(--r-pill); white-space: nowrap; }
+.market-card-chg.up { color: var(--up); background: var(--up-dim); }
+.market-card-chg.dn { color: var(--dn); background: var(--dn-dim); }
+.market-card-chg.n  { color: var(--text-muted); background: var(--bg-input); }
+
+/* ════════════════════════════════════
+   NAV CONNECT — زر "اتصال" مدمج (حالة + اتصال + قطع اتصال بزر واحد)،
+   يعيش الآن بالـappbar. نفس منطق الألوان بالضبط (أخضر=متصل، أصفر
+   نابض=يحاول، أحمر=منقطع).
 ════════════════════════════════════ */
 .nav-connect-btn {
   display: flex; align-items: center; justify-content: center;
@@ -254,7 +467,7 @@
 }
 .nav-connect-btn.ws-disconnected .cb-dot { background: #fff; box-shadow: 0 0 4px rgba(255,255,255,.7); }
 
-.nav-address-wrap { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.nav-address-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .nav-address {
   font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: var(--fw-bold);
   color: var(--text-secondary); padding: 3px 6px;
@@ -309,8 +522,7 @@
 ════════════════════════════════════ */
 .tabs {
   display: flex; gap: 3px;
-  padding: var(--space-1) 6px;
-  background: var(--bg-app);
+  padding: var(--space-1) 0;
   flex-shrink: 0; overflow: hidden;
 }
 .tab {
@@ -352,26 +564,6 @@
 .tab-price.dn { color: var(--dn); }
 
 /* ════════════════════════════════════
-   MAIN LAYOUT
-════════════════════════════════════ */
-.main {
-  flex: 1; min-height: 0; overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  display: flex; flex-direction: column;
-  gap: var(--space-2); padding: var(--space-2) 7px var(--space-1);
-}
-.col-left, .col-right { display: flex; flex-direction: column; gap: var(--space-2); }
-
-@media (min-width: 680px) {
-  .main {
-    flex-direction: row; align-items: flex-start;
-    gap: var(--space-2); overflow: hidden; padding: var(--space-2);
-  }
-  .col-left  { flex: 1.1; min-width: 0; overflow-y: auto; max-height: 100%; }
-  .col-right { flex: 1;   min-width: 0; overflow-y: auto; max-height: 100%; }
-}
-
-/* ════════════════════════════════════
    PRICE CARD
 ════════════════════════════════════ */
 .price-card {
@@ -409,6 +601,7 @@
   font-size: clamp(18px,5vw,26px);
   font-weight: var(--fw-black); line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;
+  transition: color 160ms ease;
 }
 .price-value.up { color: var(--up); text-shadow: var(--tglow-up); }
 .price-value.dn { color: var(--dn); text-shadow: var(--tglow-dn); }
@@ -563,53 +756,14 @@
 .btn-pos-close:hover { background: var(--dn); color: #fff; box-shadow: var(--glow-dn); }
 
 /* ════════════════════════════════════
-   FOOTER
-════════════════════════════════════ */
-.footer {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  gap: var(--space-2) !important;
-  padding: 6px var(--space-3) max(8px, env(safe-area-inset-bottom)) !important;
-  background: var(--bg-card) !important;
-  border-top: 1px solid var(--border) !important;
-  flex-shrink: 0 !important;
-}
-
-.footer-main-btn {
-  flex: 1;
-  display: flex; align-items: center; justify-content: center; gap: var(--space-2);
-  padding: 7px var(--space-4);
-  border-radius: var(--r-pill);
-  border: 1.5px solid var(--border-strong);
-  background: var(--bg-elev);
-  color: var(--text-secondary);
-  font-size: var(--fs-xl); font-weight: var(--fw-bold);
-  cursor: pointer; transition: all var(--dur-base) var(--ease-standard);
-  white-space: nowrap; overflow: hidden;
-}
-.footer-main-btn:active { transform: scale(.95); }
-.footer-main-btn:hover  { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
-
-.footer-opts-btn {
-  background: var(--ac-soft) !important;
-  border: 1.5px solid var(--ac) !important;
-  color: var(--text-primary) !important;
-}
-.footer-opts-btn:hover  { filter: brightness(1.08); color: var(--text-primary) !important; }
-.footer-opts-btn:active { transform: scale(.96); }
-
-.fmb-icon { font-size: var(--fs-2xl); line-height: 1; flex-shrink: 0; }
-.fmb-lbl  { font-size: var(--fs-xl); font-weight: var(--fw-bold); }
-
-/* ════════════════════════════════════
-   GUEST BANNER
+   GUEST BANNER — يُدرَج ديناميكياً أعلى شاشة الرئيسية (auth.js)
 ════════════════════════════════════ */
 .guest-banner {
   display: flex; align-items: center; justify-content: space-between;
-  gap: var(--space-3); padding: 9px var(--space-4);
+  gap: var(--space-3); padding: 11px var(--space-4);
   background: color-mix(in srgb, var(--ac) 12%, var(--bg-elev));
-  border-bottom: 1.5px solid color-mix(in srgb, var(--ac) 40%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--ac) 40%, transparent);
+  border-radius: var(--r-lg);
   flex-shrink: 0; animation: slideDownBanner var(--dur-base) var(--ease-out);
 }
 .guest-banner.hidden { display: none !important; }
@@ -624,47 +778,6 @@
 }
 .gb-btn:hover  { filter: brightness(1.08); }
 .gb-btn:active { transform: scale(.94); }
-
-/* ════════════════════════════════════
-   OPTIONS OVERLAY
-════════════════════════════════════ */
-.opts-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.60);
-  display: flex; align-items: center; justify-content: center;
-  z-index: var(--z-opts);
-}
-.opts-overlay.hidden  { display: none; }
-.opts-overlay.visible { animation: optsFadeIn var(--dur-base) var(--ease-standard); }
-.opts-overlay.closing { animation: optsFadeOut var(--dur-fast) var(--ease-standard) forwards; }
-@keyframes optsFadeIn  { from{opacity:0} to{opacity:1} }
-@keyframes optsFadeOut { from{opacity:1} to{opacity:0} }
-
-.opts-menu {
-  background: var(--bg-card);
-  border: 1.5px solid var(--border-strong);
-  border-radius: var(--r-xl);
-  overflow: hidden;
-  width: min(88vw, 320px);
-  box-shadow: 0 16px 56px rgba(0,0,0,.7), var(--glow-bdr);
-}
-.opts-item {
-  display: block; width: 100%;
-  padding: 15px var(--space-5);
-  background: none; border: none;
-  border-bottom: 1px solid var(--border);
-  font-size: var(--fs-xl); font-weight: var(--fw-bold);
-  color: var(--text-primary); text-align: center; cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
-}
-.opts-item:last-child   { border-bottom: none; }
-.opts-item:active       { background: var(--bg-elev); }
-.opts-item:hover        { color: var(--ac); }
-.opts-item-logout       { color: var(--dn); font-weight: var(--fw-bold); }
-.opts-item-logout:hover { color: var(--dn); filter: brightness(1.15); }
-.opts-item-logout:active{ background: var(--dn-dim); }
-.opts-item-cancel { color: var(--text-secondary); font-weight: var(--fw-bold); background: var(--bg-elev); border-top: 2px solid var(--border) !important; }
-.opts-item-cancel:active { background: var(--bg-input); }
 
 /* ════════════════════════════════════
    MODALS
@@ -712,11 +825,6 @@
 .confirm-val.muted { color: var(--text-secondary); }
 .confirm-val.fee   { color: var(--warn); font-size: var(--fs-md); }
 
-/* ✅ FIX (2026-08) — سطر توضيح بلغة بسيطة يجلس تحت أي confirm-row
-   مباشرة (حالياً يُستخدم تحت "التصفية التقريبية" بtrading.js) بدل
-   ترك رقم مجرداً بلا أي شرح لمستخدم جديد كلياً. ليس زوج مفتاح/قيمة،
-   فقط جملة واحدة صغيرة داكنة اللون، بلا فاصل سفلي يفصله عن الصف
-   التالي (margin-bottom بدل border). */
 .confirm-hint {
   font-size: var(--fs-sm); color: var(--text-muted); font-weight: var(--fw-regular);
   line-height: var(--lh-base); padding: 0 2px var(--space-2);
@@ -730,9 +838,6 @@
   font-size: var(--fs-3xl); font-weight: var(--fw-bold); padding: var(--space-4) var(--space-4);
   direction: ltr; border-radius: var(--r-md);
 }
-/* ✅ FIX (2026-08) — تلميح صغير تحت أي حقل نموذج (حالياً: توضيح شبكة
-   Arbitrum تحت عنوان وجهة السحب بmodalWithdraw). لا letter-spacing/
-   uppercase مثل label الأساسي — نص عادي هادئ، ليس عنواناً. */
 .field-hint {
   display: block; font-size: var(--fs-2xs); font-weight: var(--fw-bold);
   color: var(--text-muted); line-height: var(--lh-base); margin-top: -2px;
@@ -745,12 +850,6 @@
   margin-bottom: var(--space-3); font-weight: var(--fw-regular); flex-shrink: 0;
 }
 
-/* ✅ FIX (2026-08) — صندوق عنوان الإيداع داخل modalDeposit نفسها —
-   راجع تعليق index.html فوق modalDeposit وapp.js:_fillDepositAddr().
-   .ag-addr-box/.ag-addr-txt/.ag-copy-btn (المستخدمة بالداخل هنا) مُعرَّفة
-   ديناميكياً بـagents.js (يُحمَّل قبل app.js دائماً — راجع ترتيب
-   السكربتات بindex.html)، فمتاحة عالمياً بحلول أول تفاعل مستخدم ممكن؛
-   عمداً غير مكرَّرة هنا. */
 .deposit-addr-note {
   background: var(--bg-input); border: 1.5px solid var(--warn);
   border-radius: var(--r-sm); padding: var(--space-3);
@@ -759,6 +858,20 @@
 .deposit-addr-lbl {
   display: block; font-size: var(--fs-sm); font-weight: var(--fw-bold);
   color: var(--warn); line-height: var(--lh-base); margin-bottom: 7px;
+}
+.ag-addr-box {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px; padding: 9px 11px; margin-top: 8px;
+}
+.ag-addr-txt {
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-primary);
+  direction: ltr; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ag-copy-btn {
+  flex-shrink: 0; background: var(--ac-dim); border: 1.5px solid var(--ac);
+  color: var(--ac); border-radius: 8px; width: 30px; height: 30px; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
 }
 
 .calc-preview {
@@ -804,17 +917,8 @@
 .hist-lbl { font-size: var(--fs-2xs); color: var(--text-muted); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: .7px; }
 .hist-val { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text-primary); }
 
-/* Balance */
-.balance-grid { display: flex; flex-direction: column; gap: 9px; margin-bottom: var(--space-4); }
-.balance-item { background: var(--bg-input); border: 1.5px solid var(--border); border-radius: var(--r-md); padding: var(--space-4); display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); overflow: hidden; }
-.balance-label { font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text-secondary); }
-.balance-value { font-family: var(--font-mono); font-size: var(--fs-2xl); font-weight: var(--fw-black); white-space: nowrap; }
-.balance-value.green { color: var(--up); text-shadow: var(--tglow-up); }
-.balance-value.red   { color: var(--dn); text-shadow: var(--tglow-dn); }
-.balance-value.blue  { color: var(--ac); }
-.balance-value.warn  { color: var(--warn); }
-.balance-auto-note   { text-align: center; font-size: var(--fs-sm); color: var(--text-muted); padding-bottom: 4px; font-weight: var(--fw-bold); }
-.balance-loading     { text-align: center; padding: 22px; color: var(--text-secondary); font-size: var(--fs-md); font-weight: var(--fw-bold); }
+/* Loading text — shared by history list AND (formerly) balance modal */
+.balance-loading { text-align: center; padding: 22px; color: var(--text-secondary); font-size: var(--fs-md); font-weight: var(--fw-bold); }
 
 /* Logout */
 .logout-content { text-align: center; padding: 10px 0 8px; }
@@ -876,7 +980,7 @@
    TOAST
 ════════════════════════════════════ */
 #toast {
-  position: fixed; bottom: 82px; left: 50%;
+  position: fixed; bottom: calc(78px + env(safe-area-inset-bottom)); left: 50%;
   transform: translateX(-50%) translateY(14px);
   background: var(--bg-card); border: 1.5px solid var(--border-strong);
   border-radius: var(--r-pill); padding: 8px var(--space-5);
@@ -889,9 +993,6 @@
 #toast.ok   { border-color: var(--up); color: var(--up); background: color-mix(in srgb,var(--up) 8%,var(--bg-card)); box-shadow: var(--glow-up); }
 #toast.err  { border-color: var(--dn); color: var(--dn); background: color-mix(in srgb,var(--dn) 8%,var(--bg-card)); box-shadow: var(--glow-dn); }
 #toast.info { border-color: var(--ac); color: var(--ac); box-shadow: var(--glow-ac); }
-/* ✅ نوع رابع 'warn' — لتحذيرات مهمة ليست فشلاً حقيقياً (مثل "أودع
-   USDC أولاً لتفعيل حسابك") — يستخدم لون --warn الموجود أصلاً بthemes.css،
-   بدل إعادة استخدام 'err' لأشياء ليست فشلاً حقيقياً بالتطبيق نفسه. */
 #toast.warn {
   border-color: var(--warn); color: var(--warn);
   background: color-mix(in srgb,var(--warn) 10%,var(--bg-card));
@@ -904,7 +1005,7 @@
 ════════════════════════════════════ */
 #loader {
   position: fixed;
-  bottom: max(84px, calc(env(safe-area-inset-bottom) + 78px));
+  bottom: calc(86px + env(safe-area-inset-bottom));
   left: 12px;
   z-index: var(--z-loader);
   display: none;
@@ -967,7 +1068,7 @@
    PERFORMANCE HINTS
 ════════════════════════════════════ */
 .tab, .price-card, .position-item, .btn-trade, .positions-card,
-.nav-connect-btn, .modal {
+.nav-connect-btn, .modal, .balance-card, .market-card, .drawer, .app-screen {
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -975,25 +1076,27 @@
 .price-value, .pos-pnl, .tab-price { contain: layout style paint; }
 
 /* ════════════════════════════════════
-   DESKTOP BREAKPOINTS
+   DESKTOP BREAKPOINTS — تركيز التصميم على الموبايل؛ هنا فقط نمنع
+   تمدد المحتوى لعرض غير معقول على شاشات كبيرة (appbar/tabbar يبقيان
+   كامل العرض — نمط شائع بتطبيقات الويب التقدمية).
 ════════════════════════════════════ */
 @media (min-width: 640px) {
   .modal { max-width: 480px; max-height: 90dvh; border-radius: var(--r-xl); margin: auto; height: auto; }
   .modal-overlay { padding: var(--space-5); }
   .overlay-fs .modal { max-width: 100%; max-height: 100dvh; border-radius: 0; margin: 0; height: 100dvh; }
-  .nav-address { max-width: 120px; }
+  .drawer { width: min(60vw, 320px); }
   .price-value { font-size: var(--fs-6xl); }
   .btn-trade   { min-height: 48px; }
   .nav-connect-btn { height: 30px; max-width: 140px; }
   #loader { left: 20px; bottom: max(24px, env(safe-area-inset-bottom)); }
+
+  .screen-scroll, .markets-list { max-width: 520px; margin: 0 auto; width: 100%; }
+  .appbar-title { font-size: var(--fs-2xl); }
 }
 @media (min-width: 900px) {
-  .nav { padding: 7px var(--space-4); }
-  .nav-logo-text { font-size: var(--fs-2xl); }
   .nav-connect-btn .cb-lbl { max-width: 100px; }
-  .tabs { padding: 5px var(--space-2); gap: 4px; }
+  .tabs { gap: 4px; }
   .tab-price { font-size: clamp(10px,1.4vw,13px); }
-  .main { padding: var(--space-3) 14px 6px; }
 }
 
 } /* @layer components */
