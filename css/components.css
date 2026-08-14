@@ -18,6 +18,20 @@
       كل الأنيميشن الجديدة GPU-friendly (transform/opacity فقط)، بمدد
       قصيرة (180-320ms) وeasing متسق مع --ease-out/--ease-bounce
       الموجودين أصلاً بـbase.css — لا مكتبات خارجية.
+
+   ✅ جولة ثانية (2026-08) — رأس/تذييل موحّدان بالثلاث شاشات (راجع
+      index.html للشرح الكامل):
+      - .appbar-menu-btn → .appbar-icon-btn (مشترك بين ☰ و🔒 الآن)
+      - .appbar-title (عنوان شاشة ديناميكي) → .appbar-brand (اسم ثابت)
+      - جديد: .addr-popover (نافذة صغيرة عند نقر عنوان الحساب بالرأس)
+      - .chart-screen (overlay منفصل كامل الشاشة) حُذفت بالكامل —
+        الرسم البياني الآن .app-screen عادية (نفس home/markets)
+      - .drawer-close-btn وdrawer-account-card حُذفتا (لا حاجة لهما،
+        راجع index.html)؛ .drawer بلا transition (فوري)؛ جديد
+        .drawer-theme-toggle (شعاران ثابتان أسفل الدرج)
+      - .nav-address/.nav-address-wrap/.nav-copy-btn حُذفت (كانت حصراً
+        لبطاقة العنوان المحذوفة من الدرج؛ popover الرأس يعيد استخدام
+        .ag-addr-box/.ag-addr-txt/.ag-copy-btn الموجودة أصلاً)
 ═══════════════════════════════════════════════════════════════ */
 
 @layer components {
@@ -34,24 +48,6 @@
   max-width: 100vw;
 }
 .screen.hidden { display: none !important; }
-
-.chart-screen {
-  position: fixed; inset: 0; z-index: var(--z-chart);
-  display: flex; flex-direction: column;
-  background: var(--bg-app);
-}
-.chart-screen.hidden { display: none !important; }
-/* ✅ جديد — دخول ناعم لشاشة الرسم البياني (تكبير+تلاشي خفيف)، بلا أي
-   لمس لمنطق chart.js: يعمل تلقائياً بمجرد إزالة .hidden (chart.js
-   يفعل هذا أصلاً بالضبط)، لأن CSS animation يُعاد تشغيله تلقائياً كلما
-   تغيّر display من none لغير-none. */
-.chart-screen:not(.hidden) {
-  animation: chartScreenIn 260ms cubic-bezier(.22,1,.36,1);
-}
-@keyframes chartScreenIn {
-  from { opacity: 0; transform: scale(.97); }
-  to   { opacity: 1; transform: scale(1); }
-}
 
 /* ════════════════════════════════════
    LOGIN (inert today — kept intact, zero risk)
@@ -156,7 +152,7 @@
 .app-shell.hidden { display: none !important; }
 
 /* ════════════════════════════════════
-   ✅ APPBAR — ثابت أعلى الشاشة: ☰ | عنوان الشاشة | اتصال
+   ✅ APPBAR — ثابت أعلى الشاشة: [☰ هامبرغر][🔒 قفل] | ماركت ليك | عنوان/اتصال
 ════════════════════════════════════ */
 .appbar {
   display: flex; align-items: center; justify-content: space-between;
@@ -168,26 +164,61 @@
   box-shadow: var(--shadow-sm);
   flex-shrink: 0; position: relative; z-index: 10;
 }
-.appbar-menu-btn {
+.appbar-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.appbar-right { position: relative; }
+
+.appbar-icon-btn {
   width: 36px; height: 36px; border-radius: var(--r-sm);
   background: var(--bg-elev); border: 1.5px solid var(--border-strong);
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: border-color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+  font-size: var(--fs-lg); flex-shrink: 0;
+  transition: border-color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
 }
-.appbar-menu-btn:hover  { border-color: var(--ac); background: var(--ac-dim); }
-.appbar-menu-btn:active { transform: scale(.88); }
+.appbar-icon-btn:hover  { border-color: var(--ac); background: var(--ac-dim); }
+.appbar-icon-btn:active { transform: scale(.88); }
 .hamburger-icon { display: flex; flex-direction: column; gap: 4px; width: 17px; flex-shrink: 0; }
 .hamburger-icon span { display: block; height: 2px; border-radius: 2px; background: var(--text-primary); }
 
-.appbar-title {
-  flex: 1; min-width: 0; text-align: center;
-  font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.appbar-brand {
+  flex: 1; min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.appbar-brand-ar {
+  font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary);
+  line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
   letter-spacing: .2px;
+}
+.appbar-brand-en {
+  font-size: 9px; font-weight: var(--fw-bold); color: var(--text-muted);
+  letter-spacing: .8px; text-transform: uppercase; line-height: 1.2;
+  white-space: nowrap;
 }
 
 /* ════════════════════════════════════
-   SCREENS VIEWPORT — الرئيسية / الأسواق
+   ✅ ADDRESS POPOVER — عند نقر زر الحساب المتصل بالـappbar
+   (ضيف غير متصل: btnConnect يفتح modalLogin مباشرة، بلا popover)
+════════════════════════════════════ */
+.addr-popover {
+  position: absolute; top: calc(100% + 8px); left: 0;
+  min-width: 220px; max-width: min(80vw, 260px);
+  background: var(--bg-card); border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-md); box-shadow: var(--shadow), var(--glow-bdr);
+  padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2);
+  z-index: 20;
+}
+.addr-popover.hidden { display: none; }
+.addr-popover:not(.hidden) { animation: popIn 160ms var(--ease-out); }
+.addr-popover .ag-addr-box { margin-top: 0; }
+.addr-popover-disconnect {
+  border: 1.5px solid var(--dn); background: var(--dn-dim); color: var(--dn);
+  border-radius: var(--r-sm); padding: 9px 0; font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  text-align: center; transition: all var(--dur-base) var(--ease-standard);
+}
+.addr-popover-disconnect:hover { background: var(--dn); color: #fff; }
+.addr-popover-disconnect:active { transform: scale(.96); }
+
+/* ════════════════════════════════════
+   SCREENS VIEWPORT — الرئيسية / الأسواق / الرسم البياني
 ════════════════════════════════════ */
 .screens-viewport { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 
@@ -215,6 +246,7 @@
    ✅ TABBAR سفلي — 3 أزرار فقط (رسم | رئيسية | أسواق)
    ترتيب DOM [رسم، رئيسية، أسواق] + dir="rtl" الافتراضي على <html>
    → يمين=رسم، وسط=رئيسية، يسار=أسواق، بلا أي row-reverse.
+   ثابت الآن على الشاشات الثلاث كلها (بما فيها الرسم البياني).
 ════════════════════════════════════ */
 .tabbar {
   display: flex; align-items: stretch;
@@ -245,13 +277,13 @@
 
 /* ════════════════════════════════════
    ✅ DRAWER — يحل محل .opts-overlay القديمة بالكامل، ينزلق من اليمين
-   (نفس جهة زر ☰ بالـappbar) مع خلفية معتمة تتلاشى بالتزامن.
+   (نفس جهة زر ☰ بالـappbar) مع خلفية معتمة. فوري بالكامل (بلا أي
+   transition) — لا وقت انتظار عند الفتح أو الإغلاق.
 ════════════════════════════════════ */
 .drawer-overlay {
   position: fixed; inset: 0; z-index: var(--z-opts);
   background: rgba(0,0,0,0);
   display: none;
-  transition: background 300ms ease;
 }
 .drawer-overlay:not(.hidden) { display: block; }
 .drawer-overlay.open { background: rgba(0,0,0,.65); }
@@ -264,7 +296,6 @@
   box-shadow: -14px 0 44px rgba(0,0,0,.5);
   display: flex; flex-direction: column;
   transform: translateX(100%);
-  transition: transform 300ms cubic-bezier(.22,1,.36,1);
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   overflow: hidden;
@@ -272,7 +303,7 @@
 .drawer-overlay.open .drawer { transform: translateX(0); }
 
 .drawer-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: center;
   padding: var(--space-4);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -288,26 +319,6 @@
   font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.drawer-close-btn {
-  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
-  background: var(--bg-elev); border: 1.5px solid var(--border-strong);
-  color: var(--text-secondary); font-size: var(--fs-lg);
-  display: flex; align-items: center; justify-content: center;
-  transition: all var(--dur-base) var(--ease-standard);
-}
-.drawer-close-btn:hover  { border-color: var(--ac); color: var(--ac); }
-.drawer-close-btn:active { transform: scale(.88); }
-
-.drawer-account-card {
-  margin: var(--space-3) var(--space-4) 0;
-  padding: var(--space-3);
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  flex-shrink: 0;
-}
-.drawer-account-card .nav-address-wrap { width: 100%; justify-content: center; }
-.drawer-account-card .nav-address { flex: 1; max-width: none; text-align: center; font-size: var(--fs-md); padding: 8px 10px; }
 
 .drawer-menu {
   flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -328,6 +339,24 @@
 .di-icon { font-size: var(--fs-xl); width: 26px; text-align: center; flex-shrink: 0; line-height: 1; }
 .di-lbl  { flex: 1; min-width: 0; }
 .drawer-divider { height: 1px; background: var(--border); margin: var(--space-2) 10px; flex-shrink: 0; }
+
+/* ════════════════════════════════════
+   ✅ DRAWER THEME TOGGLE — شعاران ثابتان (☀️/🌙) أسفل الدرج، خارج
+   القائمة القابلة للتمرير. اختيار صريح بدل زر واحد يقلب الحالة.
+════════════════════════════════════ */
+.drawer-theme-toggle {
+  display: flex; gap: 8px; padding: var(--space-3);
+  border-top: 1px solid var(--border); flex-shrink: 0;
+}
+.theme-opt {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  height: 42px; border-radius: var(--r-md);
+  border: 1.5px solid var(--border-strong); background: var(--bg-elev);
+  font-size: var(--fs-xl);
+  transition: all var(--dur-base) var(--ease-standard);
+}
+.theme-opt.active { border-color: var(--ac); background: var(--ac-dim); box-shadow: var(--glow-ac); }
+.theme-opt:active { transform: scale(.92); }
 
 /* ════════════════════════════════════
    ✅ BALANCE CARD — بطاقة دائمة أعلى الرئيسية (بديل modalBalance)
@@ -419,7 +448,9 @@
 /* ════════════════════════════════════
    NAV CONNECT — زر "اتصال" مدمج (حالة + اتصال + قطع اتصال بزر واحد)،
    يعيش الآن بالـappbar. نفس منطق الألوان بالضبط (أخضر=متصل، أصفر
-   نابض=يحاول، أحمر=منقطع).
+   نابض=يحاول، أحمر=منقطع). عند الاتصال، النقر يفتح .addr-popover
+   بدل مودال منفصل مباشرة (راجع أعلاه) — الضغط على "إلغاء الاتصال"
+   بداخله هو ما يفتح modalLogout.
 ════════════════════════════════════ */
 .nav-connect-btn {
   display: flex; align-items: center; justify-content: center;
@@ -466,24 +497,6 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--dn) 30%, transparent), 0 0 10px color-mix(in srgb, var(--dn) 55%, transparent);
 }
 .nav-connect-btn.ws-disconnected .cb-dot { background: #fff; box-shadow: 0 0 4px rgba(255,255,255,.7); }
-
-.nav-address-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.nav-address {
-  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: var(--fw-bold);
-  color: var(--text-secondary); padding: 3px 6px;
-  border: 1px solid var(--border); border-radius: var(--r-sm);
-  cursor: pointer; transition: color var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;
-}
-.nav-address:hover { color: var(--text-primary); border-color: var(--border-strong); }
-.nav-copy-btn {
-  background: var(--bg-input); border: 1px solid var(--border);
-  border-radius: var(--r-sm); color: var(--text-muted);
-  font-size: var(--fs-base); padding: 3px 6px; line-height: 1;
-  cursor: pointer; transition: all var(--dur-base) var(--ease-standard); flex-shrink: 0;
-}
-.nav-copy-btn:hover  { color: var(--ac); border-color: var(--ac); background: var(--ac-dim); box-shadow: var(--glow-ac); }
-.nav-copy-btn:active { transform: scale(.88); }
 
 /* ════════════════════════════════════
    DATETIME BAR
@@ -1091,7 +1104,7 @@
   #loader { left: 20px; bottom: max(24px, env(safe-area-inset-bottom)); }
 
   .screen-scroll, .markets-list { max-width: 520px; margin: 0 auto; width: 100%; }
-  .appbar-title { font-size: var(--fs-2xl); }
+  .appbar-brand-ar { font-size: var(--fs-2xl); }
 }
 @media (min-width: 900px) {
   .nav-connect-btn .cb-lbl { max-width: 100px; }
