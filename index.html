@@ -79,31 +79,68 @@
 
 <!--
   ════════════════════════════════════════════════════════════════
-  ✅ إعادة هيكلة UI/UX (2026-08) — بنية تطبيق أصلي:
-     appbar ثابت (☰ + عنوان الشاشة + اتصال) → شاشتان (الرئيسية/الأسواق)
-     → tabbar سفلي 3 أزرار (رسم | رئيسية (افتراضي) | أسواق).
+  ✅ إعادة هيكلة UI/UX (2026-08) — بنية تطبيق أصلي، جولة أولى:
+     appbar + شاشتان (الرئيسية/الأسواق) + tabbar سفلي + درج هامبرغر
+     (opts-overlay القديمة) + بطاقة رصيد دائمة بدل مودال. الرسم
+     البياني كان overlay منفصل تماماً كامل الشاشة فوق كل شيء.
+
+  ✅ جولة ثانية (2026-08) — رأس/تذييل موحّدان فعلياً على الشاشات
+     الثلاث كلها بما فيها الرسم البياني:
+     - appbar الآن: [☰ هامبرغر][🔒 قفل] ← ماركت ليك/Market Liq →
+       [عنوان الحساب/اتصال]. لا عنوان شاشة ديناميكي بعد الآن (الاسم
+       ثابت). نقر عنوان الحساب المتصل يفتح addr-popover صغير (العنوان
+       الكامل + نسخ + "إلغاء الاتصال" يفتح نفس modalLogout بنصه
+       التوضيحي)؛ ضيف غير متصل = فقط زر "اتصال" (connectWallet()).
+     - الرسم البياني لم يعد overlay منفصلاً — شاشة ثالثة
+       (data-screen="chart") داخل نفس #screensViewport، فتبقى
+       appbar/tabbar ظاهرين حوله دائماً (راجع chart.js: open/close
+       الآن يديران فقط محتوى الشاشة، وswitchScreen بـapp.js هي
+       المسؤول الوحيد عن إظهار/إخفاء .app-screen، بما فيها chart).
+       رأسه الداخلي الخاص (#_tvHdr) فقد زر "← رجوع" فقط (التنقل صار
+       عبر tabbar/الدرج) — سعر/اسم الأصل/ملء الشاشة/نقطة الاتصال
+       بقوا كشريط داخلي فوق الشارت مباشرة.
+     - الدرج الآن: فوري الفتح/الإغلاق (بلا transition إطلاقاً)، بلا
+       زر ✕ (أي نقر خارجه أو على عنصر بداخله يُغلقه، والهامبرغر نفسه
+       يعمل كمفتاح تبديل). محتواه يبدأ بنفس أزرار التذييل
+       (الرئيسية←الأسواق←الرسم البياني)، ثم باقي الخيارات كما هي.
+       بطاقة العنوان وزر "قفل التطبيق" انتقلا لـappbar. تبديل المظهر
+       أصبح شعارين ثابتين (☀️/🌙) أسفل الدرج، خارج القائمة القابلة
+       للتمرير، بدل زر واحد يقلب الحالة.
      ترتيب أزرار tabbar بالـDOM [رسم، رئيسية، أسواق] + dir="rtl" على
-     <html> يعطي تلقائياً: يمين=رسم، وسط=رئيسية، يسار=أسواق — بلا
-     الحاجة لأي row-reverse. الرسم البياني يبقى overlay منفصل تماماً
-     (#chartScreen، كما كان بالضبط، بلا أي تعديل بمنطقه).
-     كل خيارات "⚙️ الخيارات" السابقة (إيداع/سحب/تأريخ/تقويم/وكلاء/
-     تصدير محفظة) + القفل + المظهر + الوثائق + العنوان/النسخ انتقلت
-     لدرج هامبرغر واحد (نفس الـIDs القديمة تماماً — راجع app.js).
-     "الرصيد" لم يعد نافذة منفصلة — بطاقة دائمة أعلى الرئيسية.
+     <html> يعطي تلقائياً: يمين=رسم، وسط=رئيسية، يسار=أسواق.
+     تصميم سطح المكتب (أعمدة ثلاثة متزامنة) مؤجَّل لجزء منفصل لاحقاً —
+     الهامبرغر يبقى كما هو بالموبايل على كل عرض شاشة حالياً.
   ════════════════════════════════════════════════════════════════
 -->
 <div class="app-shell" id="appScreen">
 
   <!-- APPBAR -->
   <header class="appbar">
-    <button class="appbar-menu-btn" id="btnMenu" aria-label="القائمة">
-      <span class="hamburger-icon"><span></span><span></span><span></span></span>
-    </button>
-    <h1 class="appbar-title" id="appbarTitle">الرئيسية</h1>
-    <button class="nav-connect-btn ws-connecting" id="btnConnect" title="الاتصال بـ Hyperliquid">
-      <span class="cb-dot"></span>
-      <span class="cb-lbl">اتصال</span>
-    </button>
+    <div class="appbar-side appbar-left">
+      <button class="appbar-icon-btn" id="btnMenu" aria-label="القائمة">
+        <span class="hamburger-icon"><span></span><span></span><span></span></span>
+      </button>
+      <button class="appbar-icon-btn" id="btnLock" aria-label="قفل التطبيق">🔒</button>
+    </div>
+
+    <div class="appbar-brand">
+      <span class="appbar-brand-ar">ماركت ليك</span>
+      <span class="appbar-brand-en">Market Liq</span>
+    </div>
+
+    <div class="appbar-side appbar-right">
+      <button class="nav-connect-btn ws-connecting" id="btnConnect" title="الحساب">
+        <span class="cb-dot"></span>
+        <span class="cb-lbl">اتصال</span>
+      </button>
+      <div class="addr-popover hidden" id="addrPopover">
+        <div class="ag-addr-box">
+          <span class="ag-addr-txt" id="addrPopoverTxt">—</span>
+          <button class="ag-copy-btn" id="addrPopoverCopy" title="نسخ">⧉</button>
+        </div>
+        <button class="addr-popover-disconnect" id="addrPopoverDisconnect">🔌 إلغاء الاتصال</button>
+      </div>
+    </div>
   </header>
 
   <!-- شريط التاريخ والوقت -->
@@ -315,6 +352,12 @@
       </div>
     </section>
 
+    <!-- ══ شاشة الرسم البياني — تُبنى ديناميكياً بواسطة js/chart.js داخل
+         هذا العنصر بالضبط (نفس أسلوب ChartModule القديم). الفرق الوحيد
+         الآن: شاشة ثالثة تشارك appbar/tabbar عبر switchScreen('chart')
+         بدل overlay منفصل كامل الشاشة يغطيهما ══ -->
+    <section class="app-screen hidden" data-screen="chart" id="chartScreen"></section>
+
   </main>
 
   <!-- ✅ TABBAR — ترتيب DOM [رسم، رئيسية، أسواق] → RTL يعطي يمين=رسم/وسط=رئيسية/يسار=أسواق -->
@@ -342,9 +385,9 @@
   </div>
 </div>
 
-<!-- ✅ درج هامبرغر — يحل محل opts-overlay القديمة بالكامل. كل الأزرار
-     بنفس الـIDs السابقة تماماً (optDeposit/optWithdraw/...) فانتقلت
-     مكانياً فقط — app.js لا يحتاج أي تغيير بربطها. -->
+<!-- ✅ درج هامبرغر — فوري الفتح/الإغلاق، بلا زر ✕ (النقر خارجه أو على
+     أي عنصر بداخله يُغلقه). كل الأزرار بنفس الـIDs السابقة تماماً
+     (optDeposit/optWithdraw/...) — app.js لا يحتاج أي تغيير بربطها. -->
 <div class="drawer-overlay hidden" id="drawerOverlay">
   <aside class="drawer" id="drawer">
 
@@ -353,20 +396,12 @@
         <span class="drawer-logo-icon">💧</span>
         <span class="drawer-logo-text">ماركت ليك</span>
       </div>
-      <button class="drawer-close-btn" id="drawerClose" aria-label="إغلاق">✕</button>
-    </div>
-
-    <div class="drawer-account-card">
-      <div class="nav-address-wrap">
-        <div class="nav-address" id="navAddress" title="انقر للنسخ">—</div>
-        <button class="nav-copy-btn" id="navCopyBtn" title="نسخ العنوان">⧉</button>
-      </div>
     </div>
 
     <nav class="drawer-menu">
-      <button class="drawer-item" id="btnLock"><span class="di-icon">🔒</span><span class="di-lbl">قفل التطبيق</span></button>
-      <button class="drawer-item" id="btnTheme"><span class="di-icon">🌙</span><span class="di-lbl">تبديل المظهر</span></button>
-      <a class="drawer-item" id="btnDocs" href="https://kanba.pw/" target="_blank" rel="noopener noreferrer"><span class="di-icon">📄</span><span class="di-lbl">الوثائق والدعم</span></a>
+      <button class="drawer-item" data-nav-screen="home"><span class="di-icon">🏠</span><span class="di-lbl">الرئيسية</span></button>
+      <button class="drawer-item" data-nav-screen="markets"><span class="di-icon">🛒</span><span class="di-lbl">الأسواق</span></button>
+      <button class="drawer-item" data-nav-screen="chart"><span class="di-icon">📈</span><span class="di-lbl">الرسم البياني</span></button>
 
       <div class="drawer-divider"></div>
 
@@ -376,22 +411,19 @@
       <button class="drawer-item" id="optCalendar"><span class="di-icon">📅</span><span class="di-lbl">التقويم الشهري</span></button>
       <button class="drawer-item" id="optAgents"><span class="di-icon">🤖</span><span class="di-lbl">الوكلاء</span></button>
       <button class="drawer-item" id="optExportWallet"><span class="di-icon">🔑</span><span class="di-lbl">تصدير المحفظة</span></button>
+
+      <div class="drawer-divider"></div>
+
+      <a class="drawer-item" id="btnDocs" href="https://kanba.pw/" target="_blank" rel="noopener noreferrer"><span class="di-icon">📄</span><span class="di-lbl">الوثائق والدعم</span></a>
     </nav>
+
+    <div class="drawer-theme-toggle">
+      <button class="theme-opt" data-theme-set="light" aria-label="المظهر الفاتح">☀️</button>
+      <button class="theme-opt" data-theme-set="dark" aria-label="المظهر الداكن">🌙</button>
+    </div>
 
   </aside>
 </div>
-
-<!--
-  ════════════════════════════════════════════════════════════
-  CHART SCREEN — built dynamically by /js/chart.js
-  TradingView Advanced Charts renders inside #_tvC (injected
-  by chart.js into this div at runtime via ChartModule.open())
-  بلا أي تعديل — يبقى overlay كامل الشاشة يغطي appbar/tabbar تلقائياً
-  (z-index أعلى)، أنيميشن دخول خفيفة أُضيفت بـCSS فقط (chart-screen
-  :not(.hidden)) بلا لمس منطق chart.js إطلاقاً.
-  ════════════════════════════════════════════════════════════
--->
-<div id="chartScreen" class="chart-screen hidden"></div>
 
 <!-- ══ MODALS ══ -->
 
