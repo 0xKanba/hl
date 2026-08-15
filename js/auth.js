@@ -244,7 +244,7 @@ async function _onWalletConnected(walletObj) {
     localStorage.removeItem(PRIVY_FLAG_KEY);
   }
 
-  updateNavAddressDisplay();
+  updateAddrPopoverText();
   $('withdrawAddress').value = State.wallet.address;
 
   closeModal('modalLogin');
@@ -362,6 +362,7 @@ function doLogout() {
 
   _showGuestBanner();
   updateConnectBtn();
+  if (typeof _toggleAddrPopover === 'function') _toggleAddrPopover(false);
   resetPosFingerprint();
   renderPositions();
   /* ✅ جديد — يعيد بطاقة الرصيد الدائمة إلى حالة "—" فوراً (بدل بقاء
@@ -400,8 +401,10 @@ function _hideGuestBanner() {
 
 function openLoginModal() { connectWallet(); }
 
-/* ✅ الزر الآن مدمج (اتصال + قطع اتصال بزر واحد بالـappbar).
-   updateConnectBtn تكتفي بتلوين/تسمية #btnConnect فقط. */
+/* ✅ الزر الآن مدمج بالـappbar — متصل: يعرض العنوان المختصر ويفتح
+   .addr-popover عند النقر (راجع app.js:_toggleAddrPopover)؛ ضيف: يعرض
+   "اتصال" ويفتح modalLogin مباشرة. updateConnectBtn تكتفي بتلوين/
+   تسمية #btnConnect فقط. */
 function updateConnectBtn() {
   const btn = $('btnConnect');
   if (btn) {
@@ -416,15 +419,16 @@ function updateConnectBtn() {
 
     let lbl = 'اتصال';
     if (hasWallet) {
-      lbl = State.wallet.walletClientType === 'privy'
-        ? '📧 بريد'
-        : (State.wallet.walletName || 'متصل');
+      lbl = State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4);
     }
     btn.innerHTML = '<span class="cb-dot"></span><span class="cb-lbl">' + lbl + '</span>';
   }
 }
 
-function updateNavAddressDisplay() {
+/* ✅ العنوان الكامل الآن يُعرَض بداخل .addr-popover بالـappbar (نسخ +
+   إلغاء اتصال) بدل بطاقة الدرج المحذوفة — العنوان المختصر بالزر نفسه
+   يُدار من updateConnectBtn أعلاه. */
+function updateAddrPopoverText() {
   if (!State.wallet) return;
-  setTxt('navAddress', State.wallet.address.slice(0,6) + '...' + State.wallet.address.slice(-4));
+  setTxt('addrPopoverTxt', State.wallet.address);
 }

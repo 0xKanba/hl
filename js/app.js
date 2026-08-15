@@ -1,11 +1,17 @@
 /* ═══════════════════════════════════════
-   app.js — إعادة هيكلة UI/UX: appbar + tabbar سفلي (3 أزرار) + درج هامبرغر
-   ✅ راوتر شاشات بسيط: الرئيسية / الأسواق (data-screen) + الرسم البياني
-      كـoverlay منفصل (كما كان، بلا تغيير بـchart.js — راقَب فقط عبر
-      MutationObserver على #chartScreen لإعادة ضبط تفعيل تاب الرسم).
-   ✅ الخيارات (الإيداع/السحب/التأريخ/التقويم/الوكلاء/تصدير المحفظة) +
-      القفل + المظهر + الوثائق + العنوان/النسخ — كلها انتقلت لدرج هامبرغر
-      واحد (نفس الـIDs القديمة تماماً، فقط تغيّر مكانها بالـHTML).
+   app.js — appbar + tabbar سفلي (3 أزرار) + درج هامبرغر
+   ✅ راوتر شاشات: الرئيسية / الأسواق / الرسم البياني (data-screen)
+      — switchScreen() المسؤول الوحيد عن إظهار/إخفاء أي من الثلاث،
+      بما فيها الرسم البياني الآن (لم يعد overlay منفصلاً — راجع
+      index.html/chart.js). تستدعي ChartModule.open()/close() فقط
+      عند الدخول/الخروج من شاشة الرسم تحديداً، بلا أي منطق إضافي.
+   ✅ الدرج فوري 100% (بلا transition) — الهامبرغر نفسه مفتاح تبديل
+      (لا زر ✕). محتواه يبدأ بنفس أزرار التذييل (رئيسية/أسواق/رسم)،
+      ثم إيداع/سحب/تأريخ/تقويم/وكلاء/تصدير محفظة/وثائق كما هي.
+      القفل انتقل لـappbar، وتبديل المظهر أصبح شعارين ثابتين أسفل
+      الدرج (☀️/🌙) بدل زر واحد يقلب الحالة.
+   ✅ عنوان الحساب المتصل بالـappbar الآن popover صغير (نسخ + إلغاء
+      اتصال يفتح modalLogout) بدل مودال منفصل مباشرة عند نقر الزر.
    ✅ "الرصيد" حُذف من القائمة نهائياً — بطاقة دائمة أعلى الرئيسية الآن
       (راجع account.js:_renderBalanceFromState).
    ✅ بطاقات الأسواق (شاشة الأسواق) تُحدَّث بمؤقّت خفيف كل ثانية من
@@ -50,17 +56,15 @@ function _initMonthsPanel() {
   });
 }
 
-/* ✅ الآيقونة الآن عنصر فرعي (.di-icon) داخل زر درج، لا الزر نفسه —
-   استهداف مباشر بدل الكتابة فوق textContent الزر كاملاً (كان سيمحو
-   تسمية "تبديل المظهر"). */
+/* ✅ الآن شعاران ثابتان (☀️/🌙) أسفل الدرج بدل زر واحد يقلب الحالة —
+   _syncThemeToggleUI() تُبرز الحالة النشطة، _setTheme() تختار صراحة. */
 function _applyTheme(theme, animate) {
   if (animate) {
     document.documentElement.classList.add('theme-transitioning');
     setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 320);
   }
   document.documentElement.setAttribute('data-theme', theme);
-  const icon = document.querySelector('#btnTheme .di-icon');
-  if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+  _syncThemeToggleUI();
 }
 
 function _initTheme() {
@@ -72,11 +76,18 @@ function _initTheme() {
   });
 }
 
-function _toggleTheme() {
-  const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
-  const next = cur === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('hl_theme', next);
-  _applyTheme(next, true);
+function _syncThemeToggleUI() {
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  document.querySelectorAll('.theme-opt').forEach(b => b.classList.toggle('active', b.dataset.themeSet === cur));
+}
+function _setTheme(theme) {
+  if (theme === (document.documentElement.getAttribute('data-theme') || 'dark')) return;
+  localStorage.setItem('hl_theme', theme);
+  _applyTheme(theme, true);
+}
+function _initThemeToggle() {
+  document.querySelectorAll('.theme-opt').forEach(b => b.onclick = () => _setTheme(b.dataset.themeSet));
+  _syncThemeToggleUI();
 }
 
 function _initQtyInput() {
@@ -134,11 +145,13 @@ function _fillDepositAddr() {
 }
 
 /* ═══════════════════════════════════════
-   ✅ جديد — راوتر الشاشات (الرئيسية / الأسواق)
-   الرسم البياني ليس "شاشة" بهذا المعنى — يبقى overlay منفصل تماماً
-   (chart.js بلا أي تعديل) يغطي كامل الواجهة بما فيها appbar/tabbar.
+   ✅ راوتر الشاشات — الرئيسية / الأسواق / الرسم البياني
+   الرسم البياني شاشة ثالثة عادية الآن (data-screen="chart") — هذه
+   الدالة وحدها مسؤولة عن إظهار/إخفاء أي من الثلاث (.hidden)؛ فقط
+   تستدعي ChartModule.open()/close() لإدارة محتواها الداخلي (الودجت/
+   اشتراك BBO/الساعة) عند الدخول/الخروج تحديداً — لا علاقة له بإظهار
+   العنصر نفسه، فلا حاجة لمراقب DOM منفصل كما سابقاً.
 ═══════════════════════════════════════ */
-const SCREEN_TITLES = { home: 'الرئيسية', markets: 'الأسواق' };
 let _activeScreen = 'home';
 
 function switchScreen(name) {
@@ -148,6 +161,8 @@ function switchScreen(name) {
   const current = document.querySelector(`.app-screen[data-screen="${_activeScreen}"]`);
   if (current) current.classList.add('hidden');
 
+  if (_activeScreen === 'chart' && typeof ChartModule !== 'undefined') ChartModule.close();
+
   next.classList.remove('hidden');
   /* إعادة تشغيل أنيميشن الدخول حتى لو الشاشة كانت مبنية أصلاً */
   next.classList.remove('screen-anim');
@@ -155,11 +170,14 @@ function switchScreen(name) {
   next.classList.add('screen-anim');
 
   _activeScreen = name;
-  setTxt('appbarTitle', SCREEN_TITLES[name] || '');
   _syncTabbarActive();
 
-  const scroller = next.querySelector('.screen-scroll');
-  if (scroller) scroller.scrollTop = 0;
+  if (name === 'chart' && typeof ChartModule !== 'undefined') {
+    ChartModule.open(State.asset);
+  } else {
+    const scroller = next.querySelector('.screen-scroll');
+    if (scroller) scroller.scrollTop = 0;
+  }
 }
 
 function _syncTabbarActive() {
@@ -168,43 +186,62 @@ function _syncTabbarActive() {
   );
 }
 
-/* ✅ يراقب إغلاق شاشة الرسم البياني (بلا أي تعديل بـchart.js) — عند
-   إغلاقها (فقدان زر الرجوع لعنصرها لـ.hidden) نعيد تفعيل تاب الشاشة
-   الحقيقية الحالية (الرئيسية أو الأسواق) بدل بقاء تاب "الرسم" مضيئاً. */
-function _initChartCloseWatcher() {
-  const el = document.getElementById('chartScreen');
-  if (!el || typeof MutationObserver === 'undefined') return;
-  let wasHidden = el.classList.contains('hidden');
-  const obs = new MutationObserver(() => {
-    const isHidden = el.classList.contains('hidden');
-    if (isHidden && !wasHidden) _syncTabbarActive();
-    wasHidden = isHidden;
-  });
-  obs.observe(el, { attributes: true, attributeFilter: ['class'] });
-}
-
 /* ═══════════════════════════════════════
-   ✅ جديد — درج هامبرغر (يحل محل opts-overlay القديمة بالكامل)
+   ✅ درج هامبرغر — فوري 100% (بلا أي transition/انتظار). الهامبرغر
+   نفسه مفتاح تبديل (لا زر ✕ منفصل) — أي نقر خارج اللوحة أو على عنصر
+   بداخلها يُغلقها أيضاً.
 ═══════════════════════════════════════ */
 function openDrawer() {
   const ov = $('drawerOverlay');
   if (!ov) return;
   ov.classList.remove('hidden');
-  requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.add('open')));
+  ov.classList.add('open');
 }
 function closeDrawer() {
   const ov = $('drawerOverlay');
   if (!ov) return;
   ov.classList.remove('open');
-  setTimeout(() => { if (!ov.classList.contains('open')) ov.classList.add('hidden'); }, 320);
+  ov.classList.add('hidden');
 }
 function _drawerAction(fn) {
   return () => { closeDrawer(); fn(); };
 }
 function _initDrawer() {
-  $('btnMenu')?.addEventListener('click', openDrawer);
-  $('drawerClose')?.addEventListener('click', closeDrawer);
+  $('btnMenu')?.addEventListener('click', () => {
+    const ov = $('drawerOverlay');
+    if (ov && ov.classList.contains('open')) closeDrawer(); else openDrawer();
+  });
   $('drawerOverlay')?.addEventListener('click', e => { if (e.target === $('drawerOverlay')) closeDrawer(); });
+}
+
+/* ═══════════════════════════════════════
+   ✅ عنوان الحساب بالـappbar — popover صغير بدل مودال منفصل مباشرة.
+   الزر نفسه (btnConnect) يُلوَّن/يُسمّى عادةً عبر auth.js:updateConnectBtn؛
+   هنا فقط التبديل + الإغلاق بالنقر خارجه + النسخ/إلغاء الاتصال.
+═══════════════════════════════════════ */
+function _toggleAddrPopover(forceOpen) {
+  const pop = $('addrPopover');
+  if (!pop) return;
+  const open = forceOpen !== undefined ? forceOpen : pop.classList.contains('hidden');
+  pop.classList.toggle('hidden', !open);
+}
+function _initAddrPopover() {
+  $('addrPopoverCopy')?.addEventListener('click', () => {
+    if (!State.wallet) return;
+    navigator.clipboard?.writeText(State.wallet.address)
+      .then(() => toast('✅ تم نسخ العنوان', 'info', 2000))
+      .catch(() => toast('تعذّر النسخ', 'err'));
+  });
+  $('addrPopoverDisconnect')?.addEventListener('click', () => {
+    _toggleAddrPopover(false);
+    openModal('modalLogout');
+  });
+  document.addEventListener('click', e => {
+    const pop = $('addrPopover');
+    if (!pop || pop.classList.contains('hidden')) return;
+    if (pop.contains(e.target) || $('btnConnect')?.contains(e.target)) return;
+    _toggleAddrPopover(false);
+  });
 }
 
 /* ═══════════════════════════════════════
@@ -252,7 +289,8 @@ document.addEventListener('DOMContentLoaded', () => {
   _startDatetimeClock();
   _initMonthsPanel();
   _initDrawer();
-  _initChartCloseWatcher();
+  _initAddrPopover();
+  _initThemeToggle();
   _initQtyInput();
   _initWithdrawFeeUI();
   _initAgentCopy();
@@ -272,27 +310,28 @@ document.addEventListener('DOMContentLoaded', () => {
     c.onclick = () => { switchAsset(c.dataset.asset); switchScreen('home'); }
   );
 
-  /* ✅ Tabbar السفلي — 3 أزرار فقط: رسم / رئيسية (افتراضي) / أسواق */
+  /* ✅ Tabbar السفلي — 3 أزرار: رسم / رئيسية (افتراضي) / أسواق —
+     الثلاثة الآن تمر عبر switchScreen() نفسها (راجع تعليقها أعلاه) —
+     لا حاجة لأي حالة خاصة بالرسم البياني هنا بعد الآن. */
   document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      if (tab === 'chart') {
-        document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.toggle('active', b === btn));
-        ChartModule.open(State.asset);
-        return;
-      }
-      switchScreen(tab);
-    });
+    btn.addEventListener('click', () => switchScreen(btn.dataset.tab));
   });
 
-  $('btnConnect').onclick = () => {
-    if (State.isGuest) connectWallet();
-    else openModal('modalLogout');
+  $('btnConnect').onclick = e => {
+    if (State.isGuest) { connectWallet(); return; }
+    e.stopPropagation();
+    _toggleAddrPopover();
   };
 
-  /* ✅ محتويات الدرج — نفس الـIDs القديمة تماماً، فقط انتقلت مكانياً */
-  $('btnTheme').onclick = _drawerAction(_toggleTheme);
-  $('btnLock').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); lockApp(true); });
+  /* ✅ نفس أزرار التذييل، كأول خيارات بالدرج */
+  document.querySelectorAll('.drawer-item[data-nav-screen]').forEach(btn => {
+    btn.onclick = _drawerAction(() => switchScreen(btn.dataset.navScreen));
+  });
+
+  /* ✅ محتويات الدرج — نفس الـIDs القديمة تماماً. القفل انتقل لـappbar
+     (لم يعد بداخل الدرج، فلا حاجة لـ_drawerAction هنا). المظهر أصبح
+     شعارين ثابتين أسفل الدرج (راجع _initThemeToggle). */
+  $('btnLock').onclick = () => { if (State.isGuest) return _promptConnect(); lockApp(true); };
   $('btnDocs')?.addEventListener('click', () => closeDrawer());
 
   $('optHistory').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); showHistory(); });
@@ -367,15 +406,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('logoutCancel').onclick  = () => closeModal('modalLogout');
   $('logoutExecute').onclick = doLogout;
-
-  function _copyAddr() {
-    if (!State.wallet) return;
-    navigator.clipboard?.writeText(State.wallet.address)
-      .then(() => toast('✅ تم نسخ العنوان', 'info', 2000))
-      .catch(() => toast('تعذّر النسخ', 'err'));
-  }
-  $('navAddress').onclick = _copyAddr;
-  $('navCopyBtn')?.addEventListener('click', _copyAddr);
 
   $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
   $('pinLogout').onclick = () => {
