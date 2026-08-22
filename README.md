@@ -25,6 +25,12 @@
 │   ├── x2.png
 │   └── x3.png
 ├── js
+│   ├── chart
+│   │   ├── datafeed.js
+│   │   ├── index.js
+│   │   ├── state.js
+│   │   ├── trading.js
+│   │   └── ui.js
 │   ├── account.js
 │   ├── agents.js
 │   ├── api.js
@@ -53,6 +59,7 @@
 │   ├── build.mjs
 │   ├── package-lock.json
 │   └── package.json
+├── .c
 ├── .gitattributes
 ├── index.html
 ├── manifest.json
