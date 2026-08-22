@@ -59,7 +59,6 @@
 │   ├── build.mjs
 │   ├── package-lock.json
 │   └── package.json
-├── .c
 ├── .gitattributes
 ├── index.html
 ├── manifest.json
