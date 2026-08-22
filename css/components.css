@@ -259,18 +259,18 @@
 }
 .tab-btn {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; padding: 8px 4px 6px;
+  gap: 2px; padding: 5px 4px 4px;
   background: none; border: none; color: var(--text-muted);
   transition: color 180ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 .tab-btn-icon-wrap {
   display: flex; align-items: center; justify-content: center;
-  width: 44px; height: 26px; border-radius: var(--r-pill);
+  width: 36px; height: 20px; border-radius: var(--r-pill);
   transition: background 220ms ease, transform 220ms cubic-bezier(.34,1.56,.64,1);
 }
-.tab-btn-icon { font-size: 19px; line-height: 1; }
-.tab-btn-lbl  { font-size: 10px; font-weight: var(--fw-bold); transition: color 180ms ease; }
+.tab-btn-icon { font-size: 15px; line-height: 1; }
+.tab-btn-lbl  { font-size: 9px; font-weight: var(--fw-bold); transition: color 180ms ease; }
 .tab-btn.active { color: var(--ac); }
 .tab-btn.active .tab-btn-icon-wrap { background: var(--ac-dim); transform: translateY(-1px); }
 .tab-btn:active .tab-btn-icon-wrap { transform: scale(.86); }
@@ -290,7 +290,7 @@
 
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0;
-  width: min(84vw, 320px);
+  width: min(58vw, 300px);
   background: var(--bg-card);
   border-left: 1.5px solid var(--border);
   box-shadow: -14px 0 44px rgba(0,0,0,.5);
@@ -345,14 +345,14 @@
    القائمة القابلة للتمرير. اختيار صريح بدل زر واحد يقلب الحالة.
 ════════════════════════════════════ */
 .drawer-theme-toggle {
-  display: flex; gap: 8px; padding: var(--space-3);
+  display: flex; gap: 6px; padding: 8px 10px;
   border-top: 1px solid var(--border); flex-shrink: 0;
 }
 .theme-opt {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  height: 42px; border-radius: var(--r-md);
+  height: 32px; border-radius: var(--r-sm);
   border: 1.5px solid var(--border-strong); background: var(--bg-elev);
-  font-size: var(--fs-xl);
+  font-size: var(--fs-lg);
   transition: all var(--dur-base) var(--ease-standard);
 }
 .theme-opt.active { border-color: var(--ac); background: var(--ac-dim); box-shadow: var(--glow-ac); }
@@ -1097,7 +1097,7 @@
   .modal { max-width: 480px; max-height: 90dvh; border-radius: var(--r-xl); margin: auto; height: auto; }
   .modal-overlay { padding: var(--space-5); }
   .overlay-fs .modal { max-width: 100%; max-height: 100dvh; border-radius: 0; margin: 0; height: 100dvh; }
-  .drawer { width: min(60vw, 320px); }
+  .drawer { width: 260px; }
   .price-value { font-size: var(--fs-6xl); }
   .btn-trade   { min-height: 48px; }
   .nav-connect-btn { height: 30px; max-width: 140px; }
