@@ -148,4 +148,8 @@ jobs:
           fi
 
           git commit -m "🔄 Auto-update project tree"
-          git push
+
+          git fetch origin "${GITHUB_REF_NAME}"
+          git rebase "origin/${GITHUB_REF_NAME}"
+
+          git push origin "HEAD:${GITHUB_REF_NAME}"
