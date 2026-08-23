@@ -3,6 +3,11 @@
    ✅ بداية الجلسة 00:00 UTC+3
    ✅ كاش يشمل sessionStats → يظهر فوراً عند فتح التطبيق
    ✅ startMainClock محذوفة (كانت ميتة — dtClock في app.js يغطيها)
+   ✅ جديد — loadQuickState() الآن تُحدِّث بطاقات شاشة "الأسواق" أيضاً
+      (mktPrice*/mktChg*) فوراً من الكاش المحلي، لا فقط تابات الرئيسية.
+      ضروري الآن لأن "الأسواق" صارت الشاشة الافتراضية عند الإقلاع —
+      بدون هذا كانت البطاقات تبقى "—" لحين وصول أول تحديث WS حي، رغم
+      وجود سعر صالح بالكاش خلال أول 5 دقائق من فتح سابق.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -85,10 +90,14 @@ function loadQuickState() {
     if (d.prevDayPx)    Object.assign(State.prevDayPx,    d.prevDayPx);
     if (d.sessionStats) Object.assign(State.sessionStats, d.sessionStats); /* ✅ فوري */
 
-    /* تحديث تابات الأسعار فوراً */
+    /* تحديث تابات الأسعار + بطاقات شاشة الأسواق فوراً */
     Object.keys(ASSETS).forEach(sym => {
       const p  = State.prices[sym]; if (!p?.mid) return;
       const el = $(`price${sym}`);  if (el) el.textContent = fmt(p.mid, ASSETS[sym].pxDp);
+      /* ✅ جديد — نفس الفورية لبطاقات "الأسواق" (الشاشة الافتراضية
+         الآن) — بلا انتظار أول تحديث WS حي */
+      if (typeof _updateMarketCardPrice === 'function') _updateMarketCardPrice(sym, p.mid);
+      if (typeof _updateMarketCardChg   === 'function') _updateMarketCardChg(sym);
     });
 
     /* ✅ عرض إحصائيات الجلسة المحفوظة فوراً */
