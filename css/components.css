@@ -32,6 +32,12 @@
       - .nav-address/.nav-address-wrap/.nav-copy-btn حُذفت (كانت حصراً
         لبطاقة العنوان المحذوفة من الدرج؛ popover الرأس يعيد استخدام
         .ag-addr-box/.ag-addr-txt/.ag-copy-btn الموجودة أصلاً)
+
+   ✅ جولة ثالثة (2026-08) — إعادة تصميم بطاقات شاشة الأسواق: حذف
+      .market-card-sub (سطر الرمز/الرافعة تحت الاسم — الرافعة انتقلت
+      لنافذة معلومات الأصل الجديدة)، اسم/صورة/سعر أكبر بوضوح، صف اسم
+      جديد (.market-card-name-row) يضم زر "؟" (.market-info-btn) لكل
+      بطاقة، وقواعد جديدة لنافذة معلومات الأصل (.asset-info-*).
 ═══════════════════════════════════════════════════════════════ */
 
 @layer components {
@@ -405,13 +411,17 @@
 
 /* ════════════════════════════════════
    ✅ MARKETS SCREEN — بطاقات أنيقة لكل سوق
+   ✅ جولة ثالثة (2026-08) — .market-card-sub حُذفت (كانت الرمز
+      اللاتيني + الرافعة تحت الاسم). الرافعة انتقلت لنافذة معلومات
+      الأصل (.asset-info-*) — تُقرأ حيّاً من ASSETS[sym].lev بـapp.js،
+      لا رقم مكرَّر بالـCSS/HTML. الاسم/الصورة/السعر أكبر بوضوح الآن.
 ════════════════════════════════════ */
 .markets-list { display: flex; flex-direction: column; gap: var(--space-2); }
 
 .market-card {
-  display: flex; align-items: center; gap: var(--space-3);
+  display: flex; align-items: center; gap: var(--space-4);
   background: var(--bg-card); border: 1.5px solid var(--border);
-  border-radius: var(--r-lg); padding: var(--space-3);
+  border-radius: var(--r-lg); padding: var(--space-3) var(--space-4);
   text-align: right; cursor: pointer;
   transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, transform 120ms ease;
   animation: mcIn 320ms cubic-bezier(.22,1,.36,1) backwards;
@@ -428,22 +438,53 @@
 .market-card.active { border-color: var(--ac); box-shadow: var(--glow-ac); background: var(--bg-input); }
 
 .market-card-img-wrap {
-  width: 46px; height: 46px; border-radius: var(--r-md); flex-shrink: 0;
+  width: 60px; height: 60px; border-radius: var(--r-md); flex-shrink: 0;
   background: var(--bg-input); display: flex; align-items: center; justify-content: center;
   overflow: hidden;
 }
-.market-card-img { width: 66%; height: 66%; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
+.market-card-img { width: 72%; height: 72%; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
 
-.market-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.market-card-name { font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.market-card-sub  { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-muted); font-family: var(--font-mono); }
+.market-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.market-card-name-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.market-card-name {
+  flex: 1; min-width: 0;
+  font-size: var(--fs-3xl); font-weight: var(--fw-bold); color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.market-info-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; border-radius: 50%; flex-shrink: 0;
+  background: var(--bg-input); border: 1.5px solid var(--border-strong);
+  color: var(--text-muted); font-size: 11px; font-weight: var(--fw-bold); line-height: 1;
+  cursor: pointer; transition: all var(--dur-base) var(--ease-standard);
+}
+.market-info-btn:hover  { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
+.market-info-btn:active { transform: scale(.85); }
 
-.market-card-price { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
-.market-card-value { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary); white-space: nowrap; }
-.market-card-chg   { font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: var(--fw-bold); padding: 2px 8px; border-radius: var(--r-pill); white-space: nowrap; }
+.market-card-price { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px; flex-shrink: 0; }
+.market-card-value {
+  font-family: var(--font-mono); font-weight: var(--fw-black); color: var(--text-primary);
+  font-size: clamp(20px, 5.5vw, 25px); white-space: nowrap; line-height: 1;
+}
+.market-card-chg   { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: var(--fw-bold); padding: 2px 9px; border-radius: var(--r-pill); white-space: nowrap; }
 .market-card-chg.up { color: var(--up); background: var(--up-dim); }
 .market-card-chg.dn { color: var(--dn); background: var(--dn-dim); }
 .market-card-chg.n  { color: var(--text-muted); background: var(--bg-input); }
+
+/* ── نافذة معلومات الأصل (؟) — صورة ← رافعة ← شرح مختصر ── */
+.asset-info-body { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-2) 0 var(--space-4); }
+.asset-info-img-wrap {
+  width: 96px; height: 96px; border-radius: var(--r-lg); flex-shrink: 0;
+  background: var(--bg-input); border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center; padding: var(--space-3);
+}
+.asset-info-img-wrap img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 10px rgba(0,0,0,.5)); }
+.asset-info-lev {
+  font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: var(--fw-bold);
+  color: var(--ac); background: var(--ac-dim); border: 1.5px solid var(--ac);
+  padding: 6px 18px; border-radius: var(--r-pill); white-space: nowrap;
+}
+.asset-info-desc { font-size: var(--fs-md); color: var(--text-secondary); line-height: var(--lh-loose); text-align: center; padding: 0 4px; }
 
 /* ════════════════════════════════════
    NAV CONNECT — زر "اتصال" مدمج (حالة + اتصال + قطع اتصال بزر واحد)،
