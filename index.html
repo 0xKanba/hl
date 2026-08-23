@@ -110,6 +110,19 @@
      <html> يعطي تلقائياً: يمين=رسم، وسط=رئيسية، يسار=أسواق.
      تصميم سطح المكتب (أعمدة ثلاثة متزامنة) مؤجَّل لجزء منفصل لاحقاً —
      الهامبرغر يبقى كما هو بالموبايل على كل عرض شاشة حالياً.
+
+  ✅ جولة ثالثة (2026-08) — شاشة "الأسواق" الآن الافتراضية عند الإقلاع
+     (بدل "الرئيسية"): data-screen="home" تبدأ hidden وdata-screen=
+     "markets" ظاهرة، وtabMarkets هو الفعّال ابتدائياً بالتذييل (راجع
+     app.js:_activeScreen). بطاقات الأسواق أُعيد تصميمها بالكامل:
+     أسماء صريحة بترتيب ثابت (النفط ← غرام الذهب ← أونصة الفضة ←
+     أونصة الذهب ← ناسداك 100)، حذف سطر الرمز/الرافعة تحت الاسم،
+     اسم/صورة/سعر أكبر بوضوح، وزر "؟" بجانب كل اسم يفتح نافذة معلومات
+     مختصرة (صورة ← رافعة ← شرح) لكل أصل — modalAssetInfo أسفل،
+     مبنية من app.js:openAssetInfoModal. تحديث السعر/النسبة بالبطاقات
+     لم يعد يعتمد على أي مؤقّت — يُكتب مباشرة من نفس دفعة WS التي
+     تُحدِّث تابات الرئيسية (راجع prices.js)، فبلا تأخير ولا مصدرين
+     متنافسين على نفس العنصر.
   ════════════════════════════════════════════════════════════════
 -->
 <div class="app-shell" id="appScreen">
@@ -170,8 +183,8 @@
   <!-- SCREENS -->
   <main class="screens-viewport" id="screensViewport">
 
-    <!-- ══ شاشة الرئيسية (افتراضية) ══ -->
-    <section class="app-screen" data-screen="home" id="screenHome">
+    <!-- ══ شاشة الرئيسية ══ -->
+    <section class="app-screen hidden" data-screen="home" id="screenHome">
       <div class="screen-scroll">
 
         <!-- guestBanner يُدرَج هنا ديناميكياً (أعلى الشاشة) بواسطة
@@ -283,64 +296,18 @@
       </div>
     </section>
 
-    <!-- ══ شاشة الأسواق ══ -->
-    <section class="app-screen hidden" data-screen="markets" id="screenMarkets">
+    <!-- ══ شاشة الأسواق (الافتراضية عند الإقلاع الآن) ══ -->
+    <section class="app-screen" data-screen="markets" id="screenMarkets">
       <div class="screen-scroll">
         <div class="markets-list" id="marketsList">
 
-          <button class="market-card" data-asset="XAU">
-            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/gold.svg" alt="XAU" loading="lazy" style="filter:sepia(1) saturate(2) hue-rotate(10deg)"></div>
-            <div class="market-card-info">
-              <span class="market-card-name">ذهب/غرام</span>
-              <span class="market-card-sub">XAU · رافعة 25x</span>
-            </div>
-            <div class="market-card-price">
-              <span class="market-card-value" id="mktPriceXAU">—</span>
-              <span class="market-card-chg n" id="mktChgXAU">—</span>
-            </div>
-          </button>
-
-          <button class="market-card" data-asset="NQ">
-            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/100.png" alt="NQ" loading="lazy"></div>
-            <div class="market-card-info">
-              <span class="market-card-name">ناسداك 100</span>
-              <span class="market-card-sub">NQ · رافعة 30x</span>
-            </div>
-            <div class="market-card-price">
-              <span class="market-card-value" id="mktPriceNQ">—</span>
-              <span class="market-card-chg n" id="mktChgNQ">—</span>
-            </div>
-          </button>
-
-          <button class="market-card" data-asset="GOLD">
-            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/gold.svg" alt="GOLD" loading="lazy"></div>
-            <div class="market-card-info">
-              <span class="market-card-name">ذهب (أونصة)</span>
-              <span class="market-card-sub">GOLD · رافعة 25x</span>
-            </div>
-            <div class="market-card-price">
-              <span class="market-card-value" id="mktPriceGOLD">—</span>
-              <span class="market-card-chg n" id="mktChgGOLD">—</span>
-            </div>
-          </button>
-
-          <button class="market-card" data-asset="SILVER">
-            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/silver.svg" alt="SILVER" loading="lazy"></div>
-            <div class="market-card-info">
-              <span class="market-card-name">فضة</span>
-              <span class="market-card-sub">SILVER · رافعة 25x</span>
-            </div>
-            <div class="market-card-price">
-              <span class="market-card-value" id="mktPriceSILVER">—</span>
-              <span class="market-card-chg n" id="mktChgSILVER">—</span>
-            </div>
-          </button>
-
           <button class="market-card active" data-asset="CL">
-            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/oil.svg" alt="CL" loading="lazy"></div>
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/oil.svg" alt="CL" loading="eager"></div>
             <div class="market-card-info">
-              <span class="market-card-name">نفط خام</span>
-              <span class="market-card-sub">CL · رافعة 20x</span>
+              <span class="market-card-name-row">
+                <span class="market-card-name">النفط</span>
+                <span class="market-info-btn" data-info="CL" role="button" tabindex="0" aria-label="معلومات عن النفط">?</span>
+              </span>
             </div>
             <div class="market-card-price">
               <span class="market-card-value" id="mktPriceCL">—</span>
@@ -348,11 +315,67 @@
             </div>
           </button>
 
+          <button class="market-card" data-asset="XAU">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/gold.svg" alt="XAU" loading="eager" style="filter:sepia(1) saturate(2) hue-rotate(10deg)"></div>
+            <div class="market-card-info">
+              <span class="market-card-name-row">
+                <span class="market-card-name">غرام الذهب</span>
+                <span class="market-info-btn" data-info="XAU" role="button" tabindex="0" aria-label="معلومات عن غرام الذهب">?</span>
+              </span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceXAU">—</span>
+              <span class="market-card-chg n" id="mktChgXAU">—</span>
+            </div>
+          </button>
+
+          <button class="market-card" data-asset="SILVER">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/silver.svg" alt="SILVER" loading="eager"></div>
+            <div class="market-card-info">
+              <span class="market-card-name-row">
+                <span class="market-card-name">أونصة الفضة</span>
+                <span class="market-info-btn" data-info="SILVER" role="button" tabindex="0" aria-label="معلومات عن أونصة الفضة">?</span>
+              </span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceSILVER">—</span>
+              <span class="market-card-chg n" id="mktChgSILVER">—</span>
+            </div>
+          </button>
+
+          <button class="market-card" data-asset="GOLD">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/gold.svg" alt="GOLD" loading="eager"></div>
+            <div class="market-card-info">
+              <span class="market-card-name-row">
+                <span class="market-card-name">أونصة الذهب</span>
+                <span class="market-info-btn" data-info="GOLD" role="button" tabindex="0" aria-label="معلومات عن أونصة الذهب">?</span>
+              </span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceGOLD">—</span>
+              <span class="market-card-chg n" id="mktChgGOLD">—</span>
+            </div>
+          </button>
+
+          <button class="market-card" data-asset="NQ">
+            <div class="market-card-img-wrap"><img class="market-card-img" src="/images/100.png" alt="NQ" loading="eager"></div>
+            <div class="market-card-info">
+              <span class="market-card-name-row">
+                <span class="market-card-name">ناسداك 100</span>
+                <span class="market-info-btn" data-info="NQ" role="button" tabindex="0" aria-label="معلومات عن ناسداك 100">?</span>
+              </span>
+            </div>
+            <div class="market-card-price">
+              <span class="market-card-value" id="mktPriceNQ">—</span>
+              <span class="market-card-chg n" id="mktChgNQ">—</span>
+            </div>
+          </button>
+
         </div>
       </div>
     </section>
 
-    <!-- ══ شاشة الرسم البياني — تُبنى ديناميكياً بواسطة js/chart.js داخل
+    <!-- ══ شاشة الرسم البياني — تُبنى ديناميكياً بواسطة js/chart/*.js داخل
          هذا العنصر بالضبط (نفس أسلوب ChartModule القديم). الفرق الوحيد
          الآن: شاشة ثالثة تشارك appbar/tabbar عبر switchScreen('chart')
          بدل overlay منفصل كامل الشاشة يغطيهما ══ -->
@@ -366,11 +389,11 @@
       <span class="tab-btn-icon-wrap"><span class="tab-btn-icon">📈</span></span>
       <span class="tab-btn-lbl">الرسم</span>
     </button>
-    <button class="tab-btn active" data-tab="home" id="tabHome">
+    <button class="tab-btn" data-tab="home" id="tabHome">
       <span class="tab-btn-icon-wrap"><span class="tab-btn-icon">🏠</span></span>
       <span class="tab-btn-lbl">الرئيسية</span>
     </button>
-    <button class="tab-btn" data-tab="markets" id="tabMarkets">
+    <button class="tab-btn active" data-tab="markets" id="tabMarkets">
       <span class="tab-btn-icon-wrap"><span class="tab-btn-icon">🛒</span></span>
       <span class="tab-btn-lbl">الأسواق</span>
     </button>
@@ -540,20 +563,22 @@
   </div>
 </div>
 
-<div class="modal-overlay overlay-fs" id="modalAgentApproval">
-  <div class="modal modal-fs">
+<!--
+  modalAssetInfo — نافذة معلومات مختصرة لكل أصل بشاشة الأسواق، تُفتح من
+  زر "؟" بجانب اسم كل بطاقة (راجع app.js:openAssetInfoModal +
+  ASSET_INFO_DESC). الترتيب المطلوب: صورة ← رافعة ← شرح مختصر.
+-->
+<div class="modal-overlay" id="modalAssetInfo">
+  <div class="modal" style="max-width:380px;">
     <div class="modal-handle"></div>
-    <h3 class="modal-title">🔑 تفويض محفظة التداول</h3>
-    <p class="modal-subtitle">خطوة أمان لمرة واحدة (صالحة <span id="agentTtlTxt1">180 يوم</span>) — بعدها تُنفَّذ صفقاتك فوراً بلا حاجة لتوقيع محفظتك في كل مرة</p>
-    <div class="confirm-details">
-      <div class="confirm-row"><span class="confirm-key">🕒 المدة</span><span class="confirm-val" id="agentTtlTxt2">180 يوم، ويُطلب توقيع جديد عند الحاجة</span></div>
-      <div class="confirm-row"><span class="confirm-key">✅ الصلاحية</span><span class="confirm-val buy">تنفيذ الصفقات فقط</span></div>
-      <div class="confirm-row"><span class="confirm-key">⛔ السحب</span><span class="confirm-val sell">غير مسموح لهذه المحفظة إطلاقاً</span></div>
-      <div class="confirm-row"><span class="confirm-key">عنوان المحفظة المؤقتة</span><span class="confirm-val muted" id="agentAddrPreview" style="font-size:11px;direction:ltr;">—</span></div>
+    <h3 class="modal-title" id="aiTitle">—</h3>
+    <div class="asset-info-body">
+      <div class="asset-info-img-wrap"><img id="aiImg" src="" alt=""></div>
+      <span class="asset-info-lev" id="aiLev">—</span>
+      <p class="asset-info-desc" id="aiDesc">—</p>
     </div>
-    <div class="modal-buttons">
-      <button class="btn-modal btn-cancel" id="agentApprovalCancel">إلغاء ✕</button>
-      <button class="btn-modal btn-confirm btn-success" id="agentApprovalConfirm">✅ متابعة وتوقيع</button>
+    <div class="modal-buttons modal-buttons-center">
+      <button class="btn-modal btn-cancel" id="aiClose">إغلاق</button>
     </div>
   </div>
 </div>
