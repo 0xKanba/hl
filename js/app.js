@@ -14,10 +14,30 @@
       اتصال يفتح modalLogout) بدل مودال منفصل مباشرة عند نقر الزر.
    ✅ "الرصيد" حُذف من القائمة نهائياً — بطاقة دائمة أعلى الرئيسية الآن
       (راجع account.js:_renderBalanceFromState).
-   ✅ بطاقات الأسواق (شاشة الأسواق) تُحدَّث بمؤقّت خفيف كل ثانية من
-      State.prices/State.prevDayPx مباشرة — بلا أي لمس لـprices.js/
-      session.js (تبقيان كما هما بالضبط، الأسعار نفسها تبقى حيّة 100%
-      عبر WS الموجود أصلاً؛ هذا فقط مؤقّت عرض لشاشة التصفح).
+   ✅ FIX (شاشة الأسواق الافتراضية) — "الأسواق" الآن الشاشة الافتراضية
+      عند الإقلاع (_activeScreen أدناه)، لا "الرئيسية". التبديل
+      الابتدائي بين .hidden/.active على screenHome/screenMarkets +
+      tabHome/tabMarkets تم بـindex.html — هذا الملف فقط يطابق نفس
+      الحالة الابتدائية بمتغيّره الداخلي.
+   ✅ FIX — استطلاع بطاقات الأسواق القديم (مؤقّت setInterval كل ثانية
+      بهذا الملف: _refreshMarketCards/_startMarketsRefresh) حُذف
+      بالكامل. كان يقرأ نفس State.prices/prevDayPx التي يقرأها تاب
+      الرئيسية لكن بمؤقّت منفصل — تأخير محسوس حتى ثانية كاملة، ومصدرين
+      مستقلّين يكتبان لعناصر مرتبطة بنفس الحالة (خطر تضارب لاحق). الآن
+      prices.js تكتب مباشرة لعناصر البطاقة (mktPrice*/mktChg*) بنفس
+      لحظة كل WS tick (بلا أي مؤقّت)، وsession.js تفعل المثل من الكاش
+      المحلي فور الإقلاع. تفعيل البطاقة النشطة (.active) انتقل لـ
+      switchAsset() بـassets.js (فوري أيضاً، أي مصدر تبديل).
+   ✅ جديد — نافذة معلومات الأصل: زر "؟" بجانب اسم كل بطاقة بشاشة
+      الأسواق يفتح modalAssetInfo (صورة ← رافعة ← شرح مختصر). الرافعة
+      تُقرأ حيّاً من ASSETS[sym].lev (config.js) — مصدر واحد، لا رقم
+      مكرَّر. الاسم المعروض بالنافذة يُقرأ من نص البطاقة نفسها (مصدر
+      واحد أيضاً)، لا خريطة أسماء منفصلة قد تنحرف عن HTML لاحقاً.
+   ✅ بطاقات الأسواق (شاشة الأسواق) — بدون أي مؤقّت الآن (راجع أعلاه):
+      السعر/النسبة من prices.js وsession.js، البطاقة النشطة من
+      assets.js. app.js لا يلمس prices.js/session.js بمنطقها الداخلي
+      — فقط الدالتان الجاهزتان (_updateMarketCardPrice/Chg) تُستدعيان
+      من هناك، بلا أي تغيير على أسلوب push الحي الأصلي لـWS.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -151,8 +171,10 @@ function _fillDepositAddr() {
    تستدعي ChartModule.open()/close() لإدارة محتواها الداخلي (الودجت/
    اشتراك BBO/الساعة) عند الدخول/الخروج تحديداً — لا علاقة له بإظهار
    العنصر نفسه، فلا حاجة لمراقب DOM منفصل كما سابقاً.
+   ✅ الافتراضية الآن "markets" (كانت "home") — يطابق الحالة الابتدائية
+      بـindex.html (screenMarkets ظاهرة، tabMarkets نشط ابتدائياً).
 ═══════════════════════════════════════ */
-let _activeScreen = 'home';
+let _activeScreen = 'markets';
 
 function switchScreen(name) {
   if (name === _activeScreen) return;
@@ -245,34 +267,43 @@ function _initAddrPopover() {
 }
 
 /* ═══════════════════════════════════════
-   ✅ جديد — تحديث بطاقات شاشة الأسواق (سعر + تغيّر 24س)
-   يقرأ فقط من State.prices/State.prevDayPx الحيّة أصلاً عبر WS —
-   لا يلمس prices.js إطلاقاً، مجرّد "نافذة عرض" خفيفة لهذي الشاشة.
+   ✅ نافذة معلومات الأصل — "؟" بجانب اسم كل بطاقة بشاشة الأسواق.
+   الوصف فقط مصدره هنا (لا يوجد بمكان آخر بالمشروع)؛ الرافعة تُقرأ
+   حيّاً من ASSETS[sym].lev، والاسم المعروض يُقرأ من نص البطاقة نفسها
+   (btn.dataset.info + العثور على .market-card-name المجاورة) — بلا
+   أي خريطة أسماء JS منفصلة قد تنحرف لاحقاً عن HTML.
 ═══════════════════════════════════════ */
-let _marketsRefreshTimer = null;
+const ASSET_INFO_DESC = {
+  CL:     'يشير WTIOIL إلى سعر برميل واحد من خام غرب تكساس الوسيط الخفيف الحلو بالدولار الأمريكي. ويُعدّ خام غرب تكساس الوسيط معياراً عالمياً رئيسياً لأسعار النفط نظراً لجودته العالية (انخفاض الكثافة، وانخفاض نسبة الكبريت).',
+  XAU:    'يشير هذا السعر إلى قيمة غرام واحد من الذهب بالدولار الأمريكي — مُشتق مباشرة من سعر الأونصة الفورية للذهب (GOLD) بعد قسمتها على 31.1035 غراماً (عدد غرامات أونصة التروي الواحدة). نفس مصدر السعر العالمي بالضبط، بوحدة أصغر تناسب من يفضّل التداول بالغرام بدل الأونصة الكاملة.',
+  SILVER: 'يشير SILVER إلى سعر الدولار الأمريكي الفوري لأونصة تروي واحدة من الفضة (XAG/USD).',
+  GOLD:   'يشير GOLD إلى سعر الذهب الفوري بالدولار الأمريكي لأونصة تروي واحدة من الذهب (XAU/USD).',
+  NQ:     'يتتبع مؤشر XYZ100 مؤشراً معدلاً مرجحاً بالقيمة السوقية لـ100 من أكبر الشركات غير المالية وأكثرها تداولاً والمدرجة في بورصة أمريكية، ويعمل كمعيار مرجعي لأسهم التكنولوجيا والنمو الأمريكية ذات رأس المال الكبير.'
+};
 
-function _refreshMarketCards() {
-  Object.keys(ASSETS).forEach(sym => {
-    const p = State.prices[sym];
-    const priceEl = $(`mktPrice${sym}`);
-    if (priceEl && p?.mid) priceEl.textContent = fmt(p.mid, ASSETS[sym].pxDp);
-
-    const prevDay = State.prevDayPx[sym];
-    const chgEl = $(`mktChg${sym}`);
-    if (chgEl && p?.mid && prevDay > 0) {
-      const chg = ((p.mid - prevDay) / prevDay) * 100;
-      chgEl.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
-      chgEl.className   = `market-card-chg ${chg > 0.005 ? 'up' : chg < -0.005 ? 'dn' : 'n'}`;
-    }
-  });
-  document.querySelectorAll('.market-card[data-asset]').forEach(c =>
-    c.classList.toggle('active', c.dataset.asset === State.asset)
-  );
+function openAssetInfoModal(sym, displayName) {
+  const a = ASSETS[sym]; if (!a) return;
+  setTxt('aiTitle', `${a.icon} ${displayName || a.name}`);
+  const img = $('aiImg');
+  if (img && ASSET_IMAGES[sym]) { img.src = ASSET_IMAGES[sym]; img.alt = sym; }
+  setTxt('aiLev', `⚡ الرافعة المالية: ${a.lev}x`);
+  setTxt('aiDesc', ASSET_INFO_DESC[sym] || '');
+  openModal('modalAssetInfo');
 }
-function _startMarketsRefresh() {
-  clearInterval(_marketsRefreshTimer);
-  _refreshMarketCards();
-  _marketsRefreshTimer = setInterval(_refreshMarketCards, 1000);
+
+function _initMarketInfoButtons() {
+  document.querySelectorAll('.market-info-btn[data-info]').forEach(btn => {
+    const open = () => {
+      const sym = btn.dataset.info;
+      const nameEl = btn.closest('.market-card-name-row')?.querySelector('.market-card-name');
+      openAssetInfoModal(sym, nameEl?.textContent);
+    };
+    btn.onclick = e => { e.stopPropagation(); open(); };
+    btn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(); }
+    });
+  });
+  $('aiClose')?.addEventListener('click', () => closeModal('modalAssetInfo'));
 }
 
 function openOptions() {
@@ -294,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
   _initQtyInput();
   _initWithdrawFeeUI();
   _initAgentCopy();
-  _startMarketsRefresh();
+  _initMarketInfoButtons();
 
   $('connectEmailBtn')?.addEventListener('click', connectEmail);
   $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
@@ -310,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     c.onclick = () => { switchAsset(c.dataset.asset); switchScreen('home'); }
   );
 
-  /* ✅ Tabbar السفلي — 3 أزرار: رسم / رئيسية (افتراضي) / أسواق —
+  /* ✅ Tabbar السفلي — 3 أزرار: رسم / رئيسية / أسواق (افتراضي الآن) —
      الثلاثة الآن تمر عبر switchScreen() نفسها (راجع تعليقها أعلاه) —
      لا حاجة لأي حالة خاصة بالرسم البياني هنا بعد الآن. */
   document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
