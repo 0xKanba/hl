@@ -2,6 +2,13 @@
    prices.js — أسعار السوق حيّة بالكامل عبر WS
    ✅ لا polling إطلاقاً — bbo + activeAssetCtx subscriptions
    ✅ يعمل لوضع الزائر ولوضع المتصل بنفس المسار
+   ✅ جديد — بطاقات شاشة "الأسواق" تُحدَّث الآن من هنا مباشرة (نفس
+      لحظة تحديث تابات الرئيسية بالضبط، بلا أي مؤقّت منفصل). كان
+      app.js يستطلع State.prices/prevDayPx كل ثانية بمؤقّت مستقل —
+      يعني تأخير محسوس حتى ثانية كاملة عن نفس السعر بتاب الرئيسية،
+      ومصدرين يكتبان لنوعي عناصر مختلفة لكن من نفس الحالة (خطر تضارب
+      مستقبلي). الآن _updateMarketCardPrice/_updateMarketCardChg
+      يُستدعيان من نفس نقاط التحديث الحية أدناه — لا تأخير، لا تضارب.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -58,17 +65,23 @@ function _applyPrice(sym, bid, ask) {
   if (sym === 'GOLD') {
     State.prices['GOLD'] = { bid, ask, mid };
     _updateTabText('GOLD', mid, ASSETS['GOLD'].pxDp);
+    _updateMarketCardPrice('GOLD', mid);
+    _updateMarketCardChg('GOLD');
     State.prevMid['GOLD'] = mid;
     if (State.asset === 'GOLD') updatePriceUI();
 
     const gm = mid / TROY;
     State.prices['XAU'] = { bid: bid / TROY, ask: ask / TROY, mid: gm };
     _updateTabText('XAU', gm, ASSETS['XAU'].pxDp);
+    _updateMarketCardPrice('XAU', gm);
+    _updateMarketCardChg('XAU');
     State.prevMid['XAU'] = gm;
     if (State.asset === 'XAU') updatePriceUI();
   } else {
     State.prices[sym] = { bid, ask, mid };
     _updateTabText(sym, mid, ASSETS[sym].pxDp);
+    _updateMarketCardPrice(sym, mid);
+    _updateMarketCardChg(sym);
     State.prevMid[sym] = mid;
     if (sym === State.asset) updatePriceUI();
   }
@@ -80,9 +93,15 @@ function _applyAssetCtx(sym, ctx) {
   State.assetCtx[sym] = ctx;
   const prev = parseFloat(ctx.prevDayPx || 0);
   if (sym === 'GOLD') {
-    if (prev) { State.prevDayPx['GOLD'] = prev; State.prevDayPx['XAU'] = prev / TROY; }
+    if (prev) {
+      State.prevDayPx['GOLD'] = prev;
+      State.prevDayPx['XAU'] = prev / TROY;
+      _updateMarketCardChg('GOLD');
+      _updateMarketCardChg('XAU');
+    }
   } else if (prev) {
     State.prevDayPx[sym] = prev;
+    _updateMarketCardChg(sym);
   }
   if (sym === State.asset || (sym === 'GOLD' && State.asset === 'XAU')) updatePriceUI();
 }
@@ -90,6 +109,24 @@ function _applyAssetCtx(sym, ctx) {
 function _updateTabText(sym, mid, dp) {
   const el = $(`price${sym}`);
   if (el) el.textContent = fmt(mid, dp);
+}
+
+/* ════ بطاقات شاشة "الأسواق" — تحديث حي مباشر، بلا أي مؤقّت ════
+   نفس دفعة WS التي تُحدِّث price${sym} أعلاه تكتب أيضاً لـ
+   mktPrice${sym}/mktChg${sym} — لحظة واحدة، مصدر واحد، بلا تضارب. */
+function _updateMarketCardPrice(sym, mid) {
+  const el = $(`mktPrice${sym}`);
+  if (el && mid) el.textContent = fmt(mid, ASSETS[sym].pxDp);
+}
+function _updateMarketCardChg(sym) {
+  const el = $(`mktChg${sym}`);
+  if (!el) return;
+  const mid     = State.prices[sym]?.mid;
+  const prevDay = State.prevDayPx[sym];
+  if (!mid || !prevDay) return;
+  const chg = ((mid - prevDay) / prevDay) * 100;
+  el.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
+  el.className   = `market-card-chg ${chg > 0.005 ? 'up' : chg < -0.005 ? 'dn' : 'n'}`;
 }
 
 function _maybeSaveQuickState() {
