@@ -40,10 +40,18 @@ function switchAsset(sym) {
   */
   const qtyEl = $('qtyInput');
   const preset = a.presets?.[0] ?? 1;
-  State.qty = preset;
-  if (qtyEl) {
-    qtyEl.value = preset;
-    qtyEl._userEdited = false; /* reset flag on asset switch */
+  /* ✅ إصلاح — احترام تعديل المستخدم فعلياً. سابقاً كان العلم يُصفَّر هنا
+     فقط ولا يُضبط true بأي مكان (راجع app.js:_initQtyInput)، فكانت كمية
+     المستخدم تُمحى دائماً عند تبديل الأصل خلافاً للسلوك الموثّق. */
+  const kept = qtyEl && qtyEl._userEdited && parseFloat(qtyEl.value) > 0;
+  if (kept) {
+    State.qty = parseFloat(qtyEl.value);
+  } else {
+    State.qty = preset;
+    if (qtyEl) {
+      qtyEl.value = preset;
+      qtyEl._userEdited = false;
+    }
   }
 
   /* إعادة تعيين prevMid بدون وميض */

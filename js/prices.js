@@ -14,6 +14,7 @@
 
 let _priceUnsubs = [];
 let _lastQuickSave = 0;
+let _lastTimerMid  = null;
 
 function _uniqueCoins() {
   const out = {};
@@ -172,10 +173,16 @@ function updatePriceUI() {
   State.prevMid[State.asset] = p.mid;
   updateSessionUI();
 
-  let s = 1;
-  clearInterval(State.priceTimer);
-  setTxt('priceTimer', `↻ ${s}s`);
-  State.priceTimer = setInterval(() => { s++; setTxt('priceTimer', `↻ ${s}s`); }, 1000);
+  /* ✅ إصلاح — عدّاد الثواني كان يُلغى ويُعاد إنشاؤه عند كل نبضة BBO
+     (عدة مرات بالثانية)، أي اهتزاز مؤقّتات مستمر بلا فائدة. الآن يُعاد
+     تشغيله فقط عند تغيّر السعر فعلياً. */
+  if (_lastTimerMid !== p.mid) {
+    _lastTimerMid = p.mid;
+    let s = 1;
+    clearInterval(State.priceTimer);
+    setTxt('priceTimer', `↻ ${s}s`);
+    State.priceTimer = setInterval(() => { s++; setTxt('priceTimer', `↻ ${s}s`); }, 1000);
+  }
 
   if (typeof recalcTpPreview === 'function') recalcTpPreview();
   if (typeof recalcSlPreview === 'function') recalcSlPreview();
