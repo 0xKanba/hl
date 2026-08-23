@@ -3,6 +3,11 @@
    ✅ لا وميض عند تبديل الأصل
    ✅ الأصل الافتراضي النفط (CL)
    ✅ قيمة افتراضية منطقية في حقل الكمية
+   ✅ جديد — مزامنة البطاقة النشطة بشاشة "الأسواق" فوراً مع أي تبديل
+      أصل (تاب الرئيسية، بطاقة السوق نفسها، أو قائمة الأصول المنسدلة
+      بالرسم البياني — كلها تمر عبر switchAsset()) — بلا انتظار أي
+      مؤقّت. يستبدل الاستطلاع القديم كل ثانية بـapp.js (راجع تعليق
+      app.js لتفاصيل الإزالة الكاملة).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -13,6 +18,11 @@ function switchAsset(sym) {
   /* تفعيل التاب الصحيح */
   document.querySelectorAll('.tab[data-asset]').forEach(t =>
     t.classList.toggle('active', t.dataset.asset === sym)
+  );
+
+  /* ✅ نفس التفعيل لبطاقة شاشة الأسواق — فوري، بلا أي تأخير مؤقّت */
+  document.querySelectorAll('.market-card[data-asset]').forEach(c =>
+    c.classList.toggle('active', c.dataset.asset === sym)
   );
 
   const a = ASSETS[sym];
