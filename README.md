@@ -7,6 +7,7 @@
 ```text
 .
 ├── css
+│   ├── agentlink.css
 │   ├── base.css
 │   ├── components.css
 │   └── themes.css
@@ -32,6 +33,7 @@
 │   │   ├── trading.js
 │   │   └── ui.js
 │   ├── account.js
+│   ├── agentlink.js
 │   ├── agents.js
 │   ├── api.js
 │   ├── app.js
@@ -60,8 +62,10 @@
 │   ├── package-lock.json
 │   └── package.json
 ├── .gitattributes
+├── CHANGES.md
 ├── index.html
 ├── manifest.json
+├── market-liq-agents-v2.zip
 ├── md.html
 └── sw.js
 ```
