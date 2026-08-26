@@ -83,6 +83,16 @@ function errToAr(rawMsg) {
   const m = msg.toLowerCase();
   if (msg) console.warn('[errToAr] رسالة أصلية:', msg);
 
+  /* ✅ جديد — وضع "رابط الوكيل" (js/agentlink.js): لا مفتاح محفظة
+     رئيسية محلياً بهذا الوضع، فأي محاولة توقيع (إيداع/سحب/تفويض وكيل
+     جديد/تصدير) ترفض بهذا الاستثناء المتعمَّد — رسالة واضحة بدل
+     السقوط للعبارة العامة أدناه. */
+  if (m.includes('link_mode_no_master_key'))
+    return 'وضع رابط الوكيل للتداول فقط — هذا الإجراء يحتاج الدخول بالمحفظة الرئيسية';
+
+  if (m.includes('no_free_slot') || m.includes('الخانات الثلاث'))
+    return 'وصلت الحد الأقصى لعدد الوكلاء (3) — احذف أحدها من "الوكلاء" أولاً';
+
   if (m.includes('cancelled') || m.includes('canceled') || m.includes('rejected') ||
       m.includes('denied') || m.includes('user rejected') || m.includes('4001'))
     return 'تم إلغاء العملية من المحفظة';

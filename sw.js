@@ -4,11 +4,14 @@
    .github/workflows/bump-sw-version.yml — never edit by hand, never
    needs to be remembered. A stale value here only ever means "the
    cache tag didn't change"; it never blocks a real deploy, because
-   the app shell below is network-first, not stale-while-revalidate. */
+   the app shell below is network-first, not stale-while-revalidate.
+   ✅ رُفعت يدوياً هذه المرة (agents.js v2 + agentlink.js جديدان) —
+   الـAction سيرفعها تلقائياً مجدداً بأول push فعلي، هذا فقط ضمان
+   لأول تحميل مباشر بعد نسخ هذي الملفات. */
 
-const CACHE_APP   = 'hltrade-app-202608230956-4c4c95d';
-const CACHE_IMGS  = 'hltrade-img-202608230956-4c4c95d';
-const CACHE_FONTS = 'hltrade-fnt-202608230956-4c4c95d';
+const CACHE_APP   = 'hltrade-app-202608261200-agentv2';
+const CACHE_IMGS  = 'hltrade-img-202608261200-agentv2';
+const CACHE_FONTS = 'hltrade-fnt-202608261200-agentv2';
 
 const APP_SHELL = [
   '/',
@@ -16,10 +19,12 @@ const APP_SHELL = [
   '/css/base.css',
   '/css/themes.css',
   '/css/components.css',
+  '/css/agentlink.css',
   '/manifest.json',
   '/js/config.js',
   '/js/state.js',
   '/js/wallets.js',
+  '/js/agentlink.js',
   '/js/utils.js',
   '/js/api.js',
   '/js/ws.js',

@@ -293,6 +293,32 @@ async function _onWalletConnected(walletObj) {
     setTimeout(function () { if (State.wallet) lockApp(); }, 300);
 }
 
+/* ════════════════════════════════════════════════
+   ✅ جديد — وضع "رابط وكيل" (js/agentlink.js): AgentLink.tryConsume()
+   يضبط State.wallet/State.agent مباشرة بلا أي توقيع (المفتاح المرفق
+   بالرابط هو أصلاً وكيل مُصرَّح مسبقاً). مسار إقلاع مبسّط عمداً —
+   بلا Agents.ensure (الوكيل جاهز أصلاً)، بلا أعلام PRIVY/EXTWALLET
+   (جلسة الرابط لا تُحفظ محلياً — أمان: لا يبقى مفتاح وكيل بجهاز غريب
+   بعد إغلاق التبويب)، بلا تذكير تصدير/إيداع (لا معنى لهما هنا).
+════════════════════════════════════════════════ */
+async function _onAgentLinkConnected() {
+  updateAddrPopoverText();
+  updateConnectBtn();
+  _hideGuestBanner();
+  toast('🔗 وضع رابط وكيل — تداول فقط، بلا صلاحية سحب أو تعديل إعدادات', 'info', 6000);
+  try { await initAccountFeeds(); } catch (e) { console.warn('[agentlink]', e); }
+  setTimeout(() => { if (typeof preloadCalendarData === 'function') preloadCalendarData(); }, 3000);
+}
+
+/* ════ روابط المستكشف الخارجية — تُبنى ديناميكياً من عنوان المحفظة
+   الحالي عند كل فتح للـpopover (raجع app.js:_toggleAddrPopover). ════ */
+function _updateExplorerLinks() {
+  const addr = State.wallet?.address;
+  const ex = $('addrPopoverExplorer'), st = $('addrPopoverStatus');
+  if (ex) ex.href = addr ? `https://blockscan.com/address/${addr}` : '#';
+  if (st) st.href = addr ? `https://hyperscreener.asxn.xyz/profile/${addr}` : '#';
+}
+
 function _maybePromptExportBackup(walletObj) {
   if (walletObj.walletClientType !== 'privy') return;
   const flag = 'hl_export_prompted_' + walletObj.address.toLowerCase();
@@ -303,6 +329,8 @@ function _maybePromptExportBackup(walletObj) {
 
 async function exportWallet() {
   if (State.isGuest || !State.wallet) return toast('سجّل الدخول أولاً', 'err');
+  if (State.wallet.isAgentLink)
+    return toast('وضع رابط الوكيل — لا يوجد مفتاح محفظة رئيسية هنا لتصديره، فقط مفتاح الوكيل نفسه', 'info', 6000);
   if (State.wallet.walletClientType !== 'privy')
     return toast('محفظتك خارجية — صدّرها من داخل تطبيق المحفظة نفسه (مفتاحها لا يمر أبداً عبر هذا التطبيق)', 'info', 6000);
   try {
@@ -419,7 +447,9 @@ function updateConnectBtn() {
 
     let lbl = 'اتصال';
     if (hasWallet) {
-      lbl = State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4);
+      lbl = State.wallet.isAgentLink
+        ? '🔗 ' + State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4)
+        : State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4);
     }
     btn.innerHTML = '<span class="cb-dot"></span><span class="cb-lbl">' + lbl + '</span>';
   }

@@ -38,6 +38,11 @@
       assets.js. app.js لا يلمس prices.js/session.js بمنطقها الداخلي
       — فقط الدالتان الجاهزتان (_updateMarketCardPrice/Chg) تُستدعيان
       من هناك، بلا أي تغيير على أسلوب push الحي الأصلي لـWS.
+   ✅ جديد — وضع "رابط الوكيل" (js/agentlink.js): يُفحص أولاً بتسلسل
+      الإقلاع، قبل Privy/EXTWALLET — رابط صالح بالعنوان يعني جلسة
+      تداول جاهزة فوراً بلا أي توقيع. أزرار الإيداع/السحب/الوكلاء
+      بالدرج تُحجب برسالة واضحة بهذا الوضع (لا مفتاح محفظة رئيسية
+      متاح محلياً أصلاً ليُستخدم لأي منها).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -270,6 +275,7 @@ function _toggleAddrPopover(forceOpen) {
   if (!pop) return;
   const open = forceOpen !== undefined ? forceOpen : pop.classList.contains('hidden');
   pop.classList.toggle('hidden', !open);
+  if (open && typeof _updateExplorerLinks === 'function') _updateExplorerLinks();
 }
 function _initAddrPopover() {
   $('addrPopoverCopy')?.addEventListener('click', () => {
@@ -338,6 +344,15 @@ function closeOptions() {
   closeDrawer();
 }
 
+/* ✅ جديد — حارس موحّد لعمليات تحتاج توقيع المحفظة الرئيسية (إيداع/
+   سحب/إدارة وكلاء) وغير متاحة إطلاقاً بوضع "رابط الوكيل" (لا يوجد
+   مفتاح محفظة رئيسية محلياً بهذا الوضع أصلاً — راجع js/agentlink.js). */
+function _blockIfAgentLink() {
+  if (!State.wallet?.isAgentLink) return false;
+  toast('🔗 وضع رابط الوكيل للتداول فقط — هذا الإجراء يحتاج الدخول بالمحفظة الرئيسية', 'info', 5500);
+  return true;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 
   _initTheme();
@@ -391,10 +406,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   _el('optHistory').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); showHistory(); });
   _el('optCalendar').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); });
-  _el('optDeposit').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); _fillDepositAddr(); openModal('modalDeposit'); });
-  _el('optWithdraw').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); });
+  _el('optDeposit').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (_blockIfAgentLink()) return; _fillDepositAddr(); openModal('modalDeposit'); });
+  _el('optWithdraw').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (_blockIfAgentLink()) return; openModal('modalWithdraw'); });
   $('optExportWallet')?.addEventListener('click', _drawerAction(exportWallet));
-  $('optAgents')?.addEventListener('click', _drawerAction(() => { if (typeof Agents !== 'undefined') Agents.openModal(); }));
+  $('optAgents')?.addEventListener('click', _drawerAction(() => {
+    if (State.isGuest) return _promptConnect();
+    if (_blockIfAgentLink()) return;
+    if (typeof Agents !== 'undefined') Agents.openModal();
+  }));
 
   _el('btnBuy').onclick  = () => askTrade(true);
   _el('btnSell').onclick = () => askTrade(false);
@@ -537,7 +556,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (localStorage.getItem(PRIVY_FLAG_KEY)) {
+  /* ✅ جديد — رابط وكيل (?link=...) له الأولوية المطلقة على أي جلسة
+     محفوظة: جلسة تداول فورية بلا أي توقيع أو انتظار شبكة. راجع
+     js/agentlink.js + auth.js:_onAgentLinkConnected. */
+  if (typeof AgentLink !== 'undefined' && AgentLink.tryConsume()) {
+    _showAppOptimistically();
+    _onAgentLinkConnected().then(_startAuthedTimers).catch(_fallbackToGuest);
+  } else if (localStorage.getItem(PRIVY_FLAG_KEY)) {
     _showAppOptimistically();
     _loadPrivyBridge()
       .then(() => _waitPrivyReady(6000))
