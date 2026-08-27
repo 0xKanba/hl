@@ -65,7 +65,6 @@
 ├── CHANGES.md
 ├── index.html
 ├── manifest.json
-├── market-liq-agents-v2.zip
 ├── md.html
 └── sw.js
 ```
