@@ -505,9 +505,9 @@ const ChartModule = (function () {
 #_tvC{position:absolute;inset:0;direction:ltr!important;overflow:hidden;background:#000;}
 #_tvC>div{width:100%!important;height:100%!important;}
 #_tvC>iframe{width:100%!important;height:100%!important;display:block;}
-.chart-attribution{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 8px;background:var(--bg-card,#0d0d0d);border-top:1px solid var(--border,#1e1e1e);direction:ltr;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;color:var(--text-secondary,#777);}
-.chart-attribution a{color:var(--ac,#ff8c42);font-weight:800;text-decoration:none;transition:opacity .12s;}
-.chart-attribution a:hover{opacity:.7;text-decoration:underline;}
+.chart-attribution{flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:8px 14px;background:var(--bg-card,#0d0d0d);border-top:1px solid var(--border,#1e1e1e);direction:ltr;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--text-secondary,#777);text-decoration:none;transition:opacity .12s;cursor:pointer;}
+.chart-attribution:hover{opacity:.75;}
+.chart-attribution b{color:var(--ac,#ff8c42);font-weight:800;}
 #_tvOvr{position:absolute;inset:0;z-index:20;background:var(--bg-app,#000);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .35s ease;pointer-events:all;padding:20px;}
 #_tvOvr.fading{opacity:0;pointer-events:none;}
 #_tvOvr.gone{display:none;}
@@ -1089,9 +1089,12 @@ const ChartModule = (function () {
     wrap.appendChild(tvC);
     scr.appendChild(wrap);
 
-    const attr = document.createElement('div');
+    const attr = document.createElement('a');
     attr.className = 'chart-attribution';
-    attr.innerHTML = 'Charts powered by <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView</a>';
+    attr.href = 'https://www.tradingview.com/';
+    attr.target = '_blank';
+    attr.rel = 'noopener noreferrer';
+    attr.innerHTML = 'Charts powered by <b>TradingView</b>';
     scr.appendChild(attr);
 
     document.getElementById('_tvBack').onclick = () => ChartModule.close();
