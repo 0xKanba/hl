@@ -1,38 +1,42 @@
 /* ═══════════════════════════════════════════════════════════════
-   agents.js — إدارة محافظ الوكلاء (Hyperliquid Agent/API Wallets) — v2
+   agents.js — إدارة محافظ الوكلاء (Hyperliquid Agent/API Wallets) — v2.1
 
-   ✅ FIX جوهري (تاريخ الانتهاء لا يطابق لوحة Hyperliquid الرسمية):
-      السبب الحقيقي: الإصدار السابق كان يحسب "createdAt + 180 يوماً"
-      محلياً فقط، بمعزل عن أي بيانات خادم حقيقية. الآن كل approveAgent
-      يُرفق صراحة "valid_until <ms>" داخل agentName نفسه (موثّق رسمياً:
-      exchange-endpoint#approve-an-api-wallet، حد أقصى 180 يوماً)، وكل
-      عرض/فحص صلاحية يمر عبر type:"extraAgents" (info request موثّق
-      رسمياً يُرجع [{name,address,validUntil}] — نفس البيانات بالضبط
-      التي تعرضها صفحة API بموقع Hyperliquid). النتيجة: تطابق حرفي
-      مضمون لأن الاثنين يقرآن نفس المصدر، لا حساباً تخمينياً محلياً.
+   ⚠️ FIX جذري (هذا هو سبب "حدث خطأ غير متوقع — حاول مجدداً" فوراً عند
+   محاولة إنشاء وكيل): _confirmApproval بالإصدار السابق (وبالنسخة
+   الأصلية قبله أيضاً) كانت تعتمد على مودال ثابت بـindex.html
+   (modalAgentApproval/agentAddrPreview/agentApprovalConfirm/
+   agentApprovalCancel) غير موجود فعلياً بملف index.html المُستلَم —
+   فـ`$('agentApprovalConfirm').onclick = ...` كان يرمي
+   `TypeError: Cannot set properties of null` فوراً (العنصر null).
+   هذا الخطأ لا يطابق أي كلمة إنجليزية بـerrToAr فيسقط لعبارتها
+   العامة الافتراضية بالضبط — من هنا الرسالة الغامضة.
+   الحل: نافذة التفويض أصبحت ذاتية الحقن بالكامل (#agApproveModal)،
+   بلا أي اعتماد خارجي على index.html — تماماً كبقية نوافذ هذا الملف
+   (#agModal/#agConfirm/#agReveal). تعمل الآن سواء استُدعيت من داخل
+   نافذة "الوكلاء" المفتوحة، أو تلقائياً من auth.js عند أول اتصال
+   بمحفظة مموَّلة (السياق الذي لا تكون فيه نافذة الوكلاء مفتوحة أصلاً).
 
-   ✅ FIX جوهري (وكيلان بجهازين، توقيع الأول يُسقط الثاني بصمت):
-      السبب: كل الأجهزة كانت تستخدم نفس الاسم الثابت "suyula-agent" —
-      Hyperliquid يستبدل الوكيل صاحب نفس الاسم عند أي approveAgent
-      جديد بنفس الاسم (موثّق رسمياً: "Sending a new approveAgent with
-      the same name replaces the previous agent"). جهاز ثانٍ بمحفظة
-      فارغة محلياً كان يُنشئ وكيلاً جديداً بنفس الاسم فيُسقط وكيل الجهاز
-      الأول دون أن يشعر أي منهما. الآن: أسماء مرقّمة market-liq-1/2/3
-      (Hyperliquid يسمح بحد أقصى 3 وكلاء مُسمّين لكل حساب)، واختيار أي
-      اسم حر يتحقق أولاً من extraAgents الحقيقي (لا افتراض محلي) — فلا
-      يتصادم جهازان أبداً طالما بقيت خانة حرة من الثلاث. لا "تدوير"
-      (إعادة استخدام اسم) بعد الآن — فقط إنشاء/حذف صريحان بحرية كاملة.
+   ✅ تحصين شامل — كل نداء DOM بهذا الملف الآن يتحقق من وجود العنصر
+   فعلياً قبل استخدامه (بدل الاعتماد على أنه "يجب أن يكون موجوداً" لأنه
+   ذاتي الحقن) — أي خطأ مستقبلي بترتيب الحقن يُسجَّل بوضوح بالـconsole
+   ويُعرض كرسالة عربية مفهومة، لا ينهار صامتاً كـ"خطأ غير متوقع".
 
-   ✅ جديد — عند إنشاء وكيل: يُعرض مفتاحه الخاص فوراً (قابل للنسخ)، مع
-      زر "رابط تداول" (نفس آلية Hyperliquid الرسمية عبر js/agentlink.js
-      الجديد)، وزر تنزيل JSON لنقل الوكيل بين الأجهزة، واستيراد JSON
-      مقابل لإضافة وكيل مُصدَّر من جهاز آخر مباشرة بلا توقيع جديد.
+   ✅ جديد — تصدير/استيراد وكيل بطريقتين متكافئتين لكل اتجاه:
+      تصدير: 💾 تنزيل ملف .json  +  📋 نسخ كنص (للصقه بواتساب/تيليجرام مباشرة)
+      استيراد: 📥 من ملف         +  📋 لصق نص JSON (textarea)
 
-   ✅ ترحيل تلقائي بلا احتكاك — أي وكيل محفوظ بالصيغة المفردة القديمة
-      (hl_agent_<addr>) يُنقَل تلقائياً لعنصر وحيد بالمصفوفة الجديدة
-      (hl_agents_<addr>) باسمه الأصلي كما هو — لا إعادة تسمية (تحتاج
-      توقيعاً جديداً لا داعي له)، ويُزامَن تاريخ انتهائه الحقيقي من
-      extraAgents عند أول استخدام بعد هذا التحديث.
+   ✅ رسائل الأخطاء الآن كاملة عربية دائماً — errToAr (utils.js) صار
+   يمرّر أي رسالة عربية جاهزة كما هي بدل استبدالها بالعبارة العامة
+   (راجع utils.js لهذا الإصلاح المصاحب)، فرسائل مثل "وصلت الحد الأقصى
+   لعدد الوكلاء" تظهر حرفياً بدل "خطأ غير متوقع".
+
+   ✅ FIX جوهري سابق (باقٍ كما هو — تاريخ الانتهاء + تعدد الأجهزة):
+      كل approveAgent يُرفق "valid_until <ms>" بحقل agentName (موثّق
+      رسمياً — Hyperliquid Exchange Endpoint وDwellir API Docs يؤكدان
+      الصيغة والحد الأقصى 180 يوماً حرفياً)، وكل عرض/فحص صلاحية يمر
+      عبر type:"extraAgents" (نفس مصدر بيانات لوحة Hyperliquid تماماً).
+      أسماء مرقّمة market-liq-1/2/3 بدل اسم ثابت مشترك — لا تصادم بين
+      الأجهزة، ولا "تدوير" — إنشاء/حذف صريحان فقط.
 ═══════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -46,6 +50,9 @@
 
   let _ensurePromise = null;
   let _tickTimer     = null;
+
+  /* ════ خطأ برسالة عربية جاهزة للعرض المباشر (لا تحتاج ترجمة) ════ */
+  function _uerr(msg) { return new Error(msg); }
 
   /* ════ تخزين محلي (v2 — مصفوفة) ════ */
   function _key(addr)     { return AGENT_KEY_PREFIX + addr.toLowerCase(); }
@@ -94,9 +101,6 @@
     } catch { return null; } // null = فشل شبكة — لا نفترض فراغاً أبداً
   }
 
-  /* يُطابق السجلات المحلية بحقيقة الخادم: يُحدّث validUntil الحقيقي،
-     ويُعلّم (بلا حذف) أي سجل لم يعد موجوداً بالخادم (serverMissing) —
-     يبقى مرئياً للمستخدم ليحذفه بنفسه، لا حذف صامت لبياناته أبداً. */
   function _reconcile(addr, local, serverList) {
     if (!Array.isArray(serverList)) return local; // فشل شبكة — لا تغيير
     const byAddr = {};
@@ -114,10 +118,10 @@
     const taken = new Set((serverList || []).map(a => a.name));
     for (let n = 1; n <= MAX_NAMED_AGENTS; n++) {
       const nm = `${BASE_NAME}-${n}`;
-      if (localList.some(a => a.agentName === nm)) continue; // اسم نملكه محلياً أصلاً — تخطَّه
+      if (localList.some(a => a.agentName === nm)) continue;
       if (!taken.has(nm)) return nm;
     }
-    return null; // الخانات الثلاث كلها محجوزة (أجهزة/جلسات أخرى)
+    return null;
   }
 
   function _info(rec) {
@@ -130,8 +134,6 @@
     };
   }
 
-  /* توافق خلفي — auth.js/api.js يستدعيان getInfo(address) لوكيل واحد.
-     تُرجع المفضَّل لهذا الجهاز لو صالح، وإلا أول وكيل صالح بالترتيب. */
   function getInfo(address) {
     const addr = address || State.wallet?.address;
     if (!addr) return null;
@@ -147,13 +149,21 @@
     return _loadAll(addr).map(_info);
   }
 
-  /* ════ نافذة الموافقة (موجودة أصلاً بـindex.html) ════ */
+  /* ════ نافذة التفويض — ذاتية الحقن بالكامل (راجع تعليق رأس الملف) ════ */
   function _confirmApproval(agentAddress, slotName) {
     return new Promise((resolve, reject) => {
-      setTxt('agentAddrPreview', `${slotName} — ${agentAddress}`);
-      openModal('modalAgentApproval');
-      $('agentApprovalConfirm').onclick = () => { closeModal('modalAgentApproval'); resolve(); };
-      $('agentApprovalCancel').onclick  = () => { closeModal('modalAgentApproval'); reject(new Error('CANCELLED')); };
+      const box   = document.getElementById('agApproveModal');
+      const okBtn = document.getElementById('agApproveConfirm');
+      const noBtn = document.getElementById('agApproveCancel');
+      if (!box || !okBtn || !noBtn) {
+        console.error('[agents.js] عناصر نافذة التفويض الذاتية غير موجودة — تحقق من ترتيب تحميل agents.js');
+        reject(_uerr('تعذّر فتح نافذة التفويض — أعد تحميل الصفحة وحاول مجدداً'));
+        return;
+      }
+      setTxt('agApprovePreview', `${slotName} — ${agentAddress}`);
+      box.classList.add('open');
+      okBtn.onclick = () => { box.classList.remove('open'); resolve(); };
+      noBtn.onclick = () => { box.classList.remove('open'); reject(new Error('CANCELLED')); };
     });
   }
 
@@ -165,7 +175,7 @@
     try {
       const nonce      = Date.now();
       const validUntil = nonce + AGENT_TTL_MS;
-      const nameOnChain = `${slotName} valid_until ${validUntil}`; // موثّق رسمياً — لاحقة تُقرأ من extraAgents لاحقاً
+      const nameOnChain = `${slotName} valid_until ${validUntil}`; // موثّق رسمياً
       const action = {
         type: 'approveAgent', hyperliquidChain: 'Mainnet', signatureChainId: '0xa4b1',
         agentAddress: agent.address, agentName: nameOnChain, nonce,
@@ -196,9 +206,6 @@
     } finally { hideLoader(); }
   }
 
-  /* ════ نقطة الدخول للتداول — forceNew=true يعني "أضف وكيلاً جديداً"
-     صراحة (لا يمس الموجودين)؛ بلا معامل = أعِد استخدام أي وكيل صالح،
-     وإلا أنشئ أول وكيل تلقائياً. محمية بقفل تزامن كالسابق. ════ */
   function ensure(forceNew) {
     if (!State.wallet) return Promise.reject(new Error('NO_WALLET'));
     if (_ensurePromise) return _ensurePromise;
@@ -228,13 +235,10 @@
     }
 
     const slotName = _pickFreeSlotName(serverList, local);
-    if (!slotName) throw new Error('الخانات الثلاث محجوزة أصلاً — احذف وكيلاً أولاً');
+    if (!slotName) throw _uerr('وصلت الحد الأقصى لعدد الوكلاء (3) — احذف وكيلاً أولاً من "الوكلاء" بالخيارات');
     return _createAndApprove(addr, slotName);
   }
 
-  /* ════ حذف — محلي فقط (Hyperliquid لا توثّق أي endpoint لسحب موافقة
-     وكيل؛ الوكيل يبقى تقنياً صالحاً حتى انتهاء صلاحيته الطبيعية، لكنه
-     لا يقدر إطلاقاً على سحب أموال، فلا خطر مالي رغم هذا القيد). ════ */
   function revokeOne(address, agentAddress) {
     const addr = address || State.wallet?.address;
     if (!addr) return;
@@ -244,8 +248,6 @@
     _refreshUI();
   }
 
-  /* حذف كامل لكل وكلاء المحفظة — تحتفظ بنفس توقيع v1 (بلا معاملات)
-     لتوافق auth.js:doForgotPin. */
   function revoke(address) {
     const addr = address || State.wallet?.address;
     if (!addr) return;
@@ -265,31 +267,42 @@
     _refreshUI();
   }
 
-  /* ════ JSON export/import — نقل وكيل بين الأجهزة بلا توقيع جديد ════ */
+  /* ════ نقل وكيل بين الأجهزة — ملف .json أو نص خام (نسخ/لصق) ════ */
+  function _exportPayload(rec) {
+    return {
+      mainAddress: State.wallet.address, agentName: rec.agentName, agentAddress: rec.agentAddress,
+      pk: rec.pk, createdAt: rec.createdAt, validUntil: rec.validUntil,
+    };
+  }
+
   function exportJSON(agentAddress) {
     if (!State.wallet) return;
     const rec = _loadAll(State.wallet.address).find(a => a.agentAddress === agentAddress);
     if (!rec) return;
-    const payload = {
-      mainAddress: State.wallet.address, agentName: rec.agentName, agentAddress: rec.agentAddress,
-      pk: rec.pk, createdAt: rec.createdAt, validUntil: rec.validUntil,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(_exportPayload(rec), null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = `${rec.agentName}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
+  function copyJSONText(agentAddress) {
+    if (!State.wallet) return;
+    const rec = _loadAll(State.wallet.address).find(a => a.agentAddress === agentAddress);
+    if (!rec) return;
+    _copy(JSON.stringify(_exportPayload(rec)));
+  }
+
   function importJSON(obj) {
     if (!State.wallet) return { ok: false, msg: 'سجّل الدخول أولاً' };
-    if (!obj || !obj.pk || !obj.agentAddress) return { ok: false, msg: 'ملف غير صالح' };
-    if (!/^0x[0-9a-fA-F]{64}$/.test(obj.pk)) return { ok: false, msg: 'مفتاح غير صالح' };
+    if (!obj || !obj.pk || !obj.agentAddress) return { ok: false, msg: 'الملف/النص لا يحتوي بيانات وكيل صالحة' };
+    if (!/^0x[0-9a-fA-F]{64}$/.test(obj.pk)) return { ok: false, msg: 'مفتاح الوكيل بالملف غير صالح' };
+    if (!/^0x[0-9a-fA-F]{40}$/.test(obj.agentAddress)) return { ok: false, msg: 'عنوان الوكيل بالملف غير صالح' };
     const addr = State.wallet.address;
     const all  = _loadAll(addr);
     if (all.some(a => a.agentAddress.toLowerCase() === obj.agentAddress.toLowerCase()))
-      return { ok: false, msg: 'هذا الوكيل مستورَد أصلاً' };
-    if (all.length >= MAX_NAMED_AGENTS) return { ok: false, msg: 'الحد الأقصى 3 وكلاء لكل محفظة' };
+      return { ok: false, msg: 'هذا الوكيل مستورَد أصلاً بهذا الجهاز' };
+    if (all.length >= MAX_NAMED_AGENTS) return { ok: false, msg: 'الحد الأقصى 3 وكلاء لكل محفظة — احذف أحدها أولاً' };
     const mismatch = obj.mainAddress && obj.mainAddress.toLowerCase() !== addr.toLowerCase();
     all.push({
       pk: obj.pk, agentAddress: obj.agentAddress, agentName: obj.agentName || `${BASE_NAME}-imported`,
@@ -297,10 +310,9 @@
     });
     _saveAll(addr, all);
     _refreshUI();
-    return { ok: true, msg: mismatch ? '✅ استُورد — تنبيه: عنوان المحفظة بالملف مختلف عن المتصلة الآن' : '✅ تم الاستيراد' };
+    return { ok: true, msg: mismatch ? '✅ استُورد — تنبيه: عنوان المحفظة بالملف مختلف عن المتصلة الآن' : '✅ تم الاستيراد بنجاح' };
   }
 
-  /* ════ رابط تداول — عبر js/agentlink.js ════ */
   function buildLink(agentAddress, target) {
     if (!State.wallet || typeof AgentLink === 'undefined') return null;
     const rec = _loadAll(State.wallet.address).find(a => a.agentAddress === agentAddress);
@@ -371,6 +383,9 @@
 .ag-note b{color:#e07248;}
 .ag-empty{text-align:center;padding:26px 10px;color:#8a8278;font-size:13px;font-weight:700;}
 .ag-empty .ag-btn{margin-top:14px;max-width:230px;margin-inline:auto;}
+.ag-paste-area{width:100%;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);
+  border-radius:10px;padding:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  color:var(--text-primary,#f0ece4);direction:ltr;text-align:left;resize:vertical;min-height:64px;}
 .ag-confirm{position:absolute;inset:0;background:rgba(0,0,0,.6);display:none;
   align-items:center;justify-content:center;padding:20px;border-radius:20px;z-index:3;}
 .ag-confirm.open{display:flex;}
@@ -379,6 +394,14 @@
 .ag-confirm-txt{font-size:13px;color:var(--text-primary,#f0ece4);line-height:1.7;
   margin-bottom:14px;font-weight:700;}
 .ag-confirm-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.ag-approve-ov{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.75);display:none;
+  align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;
+  direction:rtl;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+.ag-approve-ov.open{display:flex;animation:agFade .18s ease;}
+.ag-approve-card{background:var(--bg-card,#1e1c18);border:1px solid rgba(255,255,255,.12);
+  border-radius:18px;padding:20px;width:100%;max-width:340px;
+  animation:agPop .2s cubic-bezier(.34,1.56,.64,1);}
+.ag-approve-txt{font-size:12.5px;line-height:1.7;color:#8a8278;text-align:center;}
 </style>`);
 
   document.body.insertAdjacentHTML('beforeend', `
@@ -409,11 +432,26 @@
         </div>
         <div class="ag-note">⚠️ احفظه الآن بمكان آمن — من يملكه يقدر يتداول نيابة عنك فقط (بدون سحب أموال إطلاقاً).</div>
         <div class="ag-actions">
-          <button class="ag-btn rot" id="agRevealCopyLink">🔗 نسخ رابط تداول</button>
-          <button class="ag-btn" id="agRevealJson">💾 تنزيل JSON</button>
+          <button class="ag-btn rot" id="agRevealCopyLink">🔗 رابط تداول</button>
+          <button class="ag-btn" id="agRevealCopyJson">📋 نسخ JSON</button>
         </div>
+        <button class="ag-btn wide" id="agRevealJson" style="margin-top:8px;">💾 تنزيل كملف .json</button>
         <button class="ag-btn wide" id="agRevealClose" style="margin-top:8px;">فهمت، إغلاق</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="ag-approve-ov" id="agApproveModal">
+  <div class="ag-approve-card">
+    <div class="ag-title" style="justify-content:center;margin-bottom:8px;">🤖 تفويض محفظة تداول جديدة</div>
+    <p class="ag-approve-txt">توقيع واحد من محفظتك الرئيسية يكفي — هذا الوكيل يقدر يتداول فقط، لا يقدر إطلاقاً على سحب أو تحويل أموالك.</p>
+    <div class="ag-addr-box" style="margin:10px 0 14px;">
+      <span class="ag-addr-txt" id="agApprovePreview">—</span>
+    </div>
+    <div class="ag-confirm-btns">
+      <button class="ag-btn" id="agApproveCancel">إلغاء</button>
+      <button class="ag-btn rot" id="agApproveConfirm">✅ وافق ووقّع</button>
     </div>
   </div>
 </div>`);
@@ -424,7 +462,7 @@
     const statusCls = info.serverMissing ? 'bad' : !info.valid ? 'bad' : info.daysLeft <= 14 ? 'warn' : 'ok';
     const statusTxt = info.serverMissing ? 'غير موجود بالخادم — احذفه'
                      : !info.valid ? 'منتهي' : info.daysLeft <= 14 ? 'ينتهي قريباً' : 'نشط';
-    const isPref = _getPref(State.wallet.address) === info.address;
+    const isPref = State.wallet && _getPref(State.wallet.address) === info.address;
     return `
       <div class="ag-card-box${isPref ? ' ag-pref' : ''}">
         <div class="ag-row"><span class="ag-row-k">${info.name}${isPref ? ' 🎯' : ''}</span><span class="ag-status ${statusCls}">● ${statusTxt}</span></div>
@@ -445,7 +483,7 @@
 
   function _render() {
     const body = document.getElementById('agBody');
-    if (!body) return;
+    if (!body || !State.wallet) return;
     const infos = list();
 
     let agentsHtml;
@@ -459,14 +497,21 @@
         : `<div class="ag-note">وصلت الحد الأقصى (3 وكلاء لكل محفظة حسب Hyperliquid). احذف أحدها لإضافة آخر.</div>`);
     }
 
-    const wAddr = State.wallet?.address || '';
+    const wAddr = State.wallet.address;
     body.innerHTML = `
       <div class="ag-sec-title">الوكلاء (${infos.length}/${MAX_NAMED_AGENTS})</div>
       ${agentsHtml}
       <div class="ag-sec-title">استيراد وكيل من جهاز آخر</div>
       <div class="ag-card-box">
-        <button class="ag-btn wide" id="agImportBtn">📥 استيراد من ملف JSON</button>
+        <div class="ag-actions" style="margin-top:0;">
+          <button class="ag-btn" id="agImportBtn">📥 من ملف</button>
+          <button class="ag-btn" id="agPasteBtn">📋 لصق JSON</button>
+        </div>
         <input type="file" accept="application/json" id="agImportFile" style="display:none;">
+        <div id="agPasteBox" class="hidden" style="margin-top:10px;">
+          <textarea id="agPasteArea" class="ag-paste-area" placeholder="الصق محتوى JSON هنا (بالكامل)..." rows="4"></textarea>
+          <button class="ag-btn rot wide" id="agPasteImport" style="margin-top:8px;">استيراد الآن</button>
+        </div>
       </div>
       <div class="ag-sec-title">المحفظة</div>
       <div class="ag-card-box">
@@ -484,12 +529,15 @@
     _wireActions();
   }
 
+  function _showAgentError(e) {
+    if (!e || e.message === 'CANCELLED') return;
+    const msg = typeof errToAr === 'function' ? errToAr(e.message) : e.message;
+    toast('⚠️ ' + msg, 'err');
+  }
+
   async function _createFlow() {
     try { await ensure(true); }
-    catch (e) {
-      if (e.message === 'CANCELLED') return;
-      toast('⚠️ ' + (typeof errToAr === 'function' ? errToAr(e.message) : e.message), 'err');
-    }
+    catch (e) { _showAgentError(e); }
   }
 
   function _wireActions() {
@@ -509,7 +557,7 @@
       );
     }));
 
-    const importBtn = document.getElementById('agImportBtn');
+    const importBtn  = document.getElementById('agImportBtn');
     const importFile = document.getElementById('agImportFile');
     importBtn?.addEventListener('click', () => importFile?.click());
     importFile?.addEventListener('change', () => {
@@ -525,18 +573,36 @@
       reader.readAsText(f);
       importFile.value = '';
     });
+
+    document.getElementById('agPasteBtn')?.addEventListener('click', () => {
+      document.getElementById('agPasteBox')?.classList.toggle('hidden');
+    });
+    document.getElementById('agPasteImport')?.addEventListener('click', () => {
+      const ta  = document.getElementById('agPasteArea');
+      const raw = ta?.value?.trim();
+      if (!raw) { toast('الصق محتوى JSON أولاً', 'err'); return; }
+      try {
+        const res = importJSON(JSON.parse(raw));
+        toast(res.msg, res.ok ? 'ok' : 'err');
+        if (res.ok) { if (ta) ta.value = ''; _render(); }
+      } catch { toast('نص JSON غير صالح — تأكد من نسخه كاملاً بلا نقص', 'err'); }
+    });
   }
 
   function _showReveal(rec) {
     if (!rec) return;
+    const box = document.getElementById('agReveal');
+    if (!box) { console.error('[agents.js] #agReveal غير موجود'); return; }
     const link = typeof AgentLink !== 'undefined' ? AgentLink.build(State.wallet.address, rec.pk) : null;
     setTxt('agRevealTitle', `🔑 ${rec.agentName}`);
     setTxt('agRevealPk', rec.pk);
-    document.getElementById('agReveal').classList.add('open');
-    document.getElementById('agRevealCopyPk').onclick = () => _copy(rec.pk);
-    document.getElementById('agRevealCopyLink').onclick = () => link ? _copy(link) : toast('تعذّر توليد الرابط', 'err');
-    document.getElementById('agRevealJson').onclick = () => exportJSON(rec.agentAddress);
-    document.getElementById('agRevealClose').onclick = () => document.getElementById('agReveal').classList.remove('open');
+    box.classList.add('open');
+    const byId = id => document.getElementById(id);
+    if (byId('agRevealCopyPk'))   byId('agRevealCopyPk').onclick   = () => _copy(rec.pk);
+    if (byId('agRevealCopyLink')) byId('agRevealCopyLink').onclick = () => link ? _copy(link) : toast('تعذّر توليد الرابط', 'err');
+    if (byId('agRevealCopyJson')) byId('agRevealCopyJson').onclick = () => copyJSONText(rec.agentAddress);
+    if (byId('agRevealJson'))     byId('agRevealJson').onclick     = () => exportJSON(rec.agentAddress);
+    if (byId('agRevealClose'))    byId('agRevealClose').onclick    = () => box.classList.remove('open');
   }
 
   function _copy(text) {
@@ -546,10 +612,12 @@
 
   function _confirm(msg, onYes) {
     const box = document.getElementById('agConfirm');
-    document.getElementById('agConfirmTxt').textContent = msg;
+    if (!box) { console.error('[agents.js] #agConfirm غير موجود'); return; }
+    setTxt('agConfirmTxt', msg);
     box.classList.add('open');
-    document.getElementById('agConfirmNo').onclick = () => box.classList.remove('open');
-    document.getElementById('agConfirmYes').onclick = () => { box.classList.remove('open'); onYes(); };
+    const noBtn = document.getElementById('agConfirmNo'), yesBtn = document.getElementById('agConfirmYes');
+    if (noBtn)  noBtn.onclick  = () => box.classList.remove('open');
+    if (yesBtn) yesBtn.onclick = () => { box.classList.remove('open'); onYes(); };
   }
 
   function _refreshUI() { if (document.getElementById('agModal')?.classList.contains('open')) _render(); }
@@ -565,6 +633,7 @@
     document.getElementById('agModal')?.classList.remove('open');
     document.getElementById('agConfirm')?.classList.remove('open');
     document.getElementById('agReveal')?.classList.remove('open');
+    document.getElementById('agApproveModal')?.classList.remove('open');
     clearInterval(_tickTimer);
   }
 
@@ -573,7 +642,7 @@
 
   window.Agents = {
     ensure, revoke, revokeOne, clearSession, getInfo, list, setPreferred,
-    exportJSON, importJSON, buildLink,
+    exportJSON, importJSON, copyJSONText, buildLink,
     openModal: _open, closeModal: _close, TTL_MS: AGENT_TTL_MS,
   };
 })();

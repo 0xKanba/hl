@@ -38,8 +38,34 @@
       assets.js. app.js لا يلمس prices.js/session.js بمنطقها الداخلي
       — فقط الدالتان الجاهزتان (_updateMarketCardPrice/Chg) تُستدعيان
       من هناك، بلا أي تغيير على أسلوب push الحي الأصلي لـWS.
+   ✅ جديد — وضع "رابط الوكيل" (js/agentlink.js): يُفحص أولاً بتسلسل
+      الإقلاع، قبل Privy/EXTWALLET — رابط صالح بالعنوان يعني جلسة
+      تداول جاهزة فوراً بلا أي توقيع. أزرار الإيداع/السحب/الوكلاء
+      بالدرج تُحجب برسالة واضحة بهذا الوضع (لا مفتاح محفظة رئيسية
+      متاح محلياً أصلاً ليُستخدم لأي منها).
 ═══════════════════════════════════════ */
 'use strict';
+
+/* ✅ إصلاح — وصول آمن للعناصر داخل DOMContentLoaded.
+   سابقاً كانت عشرات الروابط بصيغة $('id').onclick = ... بلا حماية؛
+   أي معرّف مفقود أو معاد تسميته بـindex.html يرمي TypeError في منتصف
+   المعالج، فتُلغى كل الروابط التالية وتسلسل الإقلاع نفسه — التطبيق
+   يظهر لكنه ميت. _el() تُرجع عنصراً وهمياً غير ضار وتُسجّل تحذيراً
+   بدل الانهيار. */
+const _NOOP_EL = {
+  onclick: null, oninput: null, value: '', textContent: '', min: '', placeholder: '',
+  addEventListener() {}, removeEventListener() {}, select() {}, focus() {}, contains() { return false; },
+  querySelector() { return null; }, querySelectorAll() { return []; },
+  classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+  dataset: {}, style: {}
+};
+function _el(id) {
+  const e = typeof $ === 'function' ? $(id) : document.getElementById(id);
+  if (e) return e;
+  console.warn('[app] عنصر مفقود بالـDOM: #' + id);
+  return _NOOP_EL;
+}
+
 
 const _AR_MONTHS = [
   'يناير','فبراير','مارس','أبريل','مايو','يونيو',
@@ -129,7 +155,7 @@ function _initQtyInput() {
     }
   });
   input.oninput = function () {
-    this._userEdited = true;
+    this._userEdited = true; /* ✅ إصلاح — كان العلم لا يُضبط أبداً */
     State.qty = parseFloat(this.value) || 0;
   };
 }
@@ -249,6 +275,7 @@ function _toggleAddrPopover(forceOpen) {
   if (!pop) return;
   const open = forceOpen !== undefined ? forceOpen : pop.classList.contains('hidden');
   pop.classList.toggle('hidden', !open);
+  if (open && typeof _updateExplorerLinks === 'function') _updateExplorerLinks();
 }
 function _initAddrPopover() {
   $('addrPopoverCopy')?.addEventListener('click', () => {
@@ -317,6 +344,15 @@ function closeOptions() {
   closeDrawer();
 }
 
+/* ✅ جديد — حارس موحّد لعمليات تحتاج توقيع المحفظة الرئيسية (إيداع/
+   سحب/إدارة وكلاء) وغير متاحة إطلاقاً بوضع "رابط الوكيل" (لا يوجد
+   مفتاح محفظة رئيسية محلياً بهذا الوضع أصلاً — راجع js/agentlink.js). */
+function _blockIfAgentLink() {
+  if (!State.wallet?.isAgentLink) return false;
+  toast('🔗 وضع رابط الوكيل للتداول فقط — هذا الإجراء يحتاج الدخول بالمحفظة الرئيسية', 'info', 5500);
+  return true;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 
   _initTheme();
@@ -351,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => switchScreen(btn.dataset.tab));
   });
 
-  $('btnConnect').onclick = e => {
+  _el('btnConnect').onclick = e => {
     if (State.isGuest) { connectWallet(); return; }
     e.stopPropagation();
     _toggleAddrPopover();
@@ -365,20 +401,24 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ✅ محتويات الدرج — نفس الـIDs القديمة تماماً. القفل انتقل لـappbar
      (لم يعد بداخل الدرج، فلا حاجة لـ_drawerAction هنا). المظهر أصبح
      شعارين ثابتين أسفل الدرج (راجع _initThemeToggle). */
-  $('btnLock').onclick = () => { if (State.isGuest) return _promptConnect(); lockApp(true); };
+  _el('btnLock').onclick = () => { if (State.isGuest) return _promptConnect(); lockApp(true); };
   $('btnDocs')?.addEventListener('click', () => closeDrawer());
 
-  $('optHistory').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); showHistory(); });
-  $('optCalendar').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); });
-  $('optDeposit').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); _fillDepositAddr(); openModal('modalDeposit'); });
-  $('optWithdraw').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); openModal('modalWithdraw'); });
+  _el('optHistory').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); showHistory(); });
+  _el('optCalendar').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); });
+  _el('optDeposit').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (_blockIfAgentLink()) return; _fillDepositAddr(); openModal('modalDeposit'); });
+  _el('optWithdraw').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (_blockIfAgentLink()) return; openModal('modalWithdraw'); });
   $('optExportWallet')?.addEventListener('click', _drawerAction(exportWallet));
-  $('optAgents')?.addEventListener('click', _drawerAction(() => { if (typeof Agents !== 'undefined') Agents.openModal(); }));
+  $('optAgents')?.addEventListener('click', _drawerAction(() => {
+    if (State.isGuest) return _promptConnect();
+    if (_blockIfAgentLink()) return;
+    if (typeof Agents !== 'undefined') Agents.openModal();
+  }));
 
-  $('btnBuy').onclick  = () => askTrade(true);
-  $('btnSell').onclick = () => askTrade(false);
+  _el('btnBuy').onclick  = () => askTrade(true);
+  _el('btnSell').onclick = () => askTrade(false);
 
-  $('qty100').onclick = () => {
+  _el('qty100').onclick = () => {
     if (State.isGuest) return _promptConnect();
     const a   = ASSETS[State.asset];
     const bal = State.balance?.available || State.balance?.total || 0;
@@ -386,41 +426,41 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!bal || !px) return toast('رصيد غير متاح', 'err');
     const qty100 = parseFloat(wire((bal * a.lev) / px, a.szDp));
     State.qty = qty100;
-    $('qtyInput').value = qty100;
+    _el('qtyInput').value = qty100;
     toast(`✅ ${qty100} ${a.unit}`, 'ok');
   };
 
-  $('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
-  $('confirmExecute').onclick = () => requirePin(execTrade);
+  _el('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
+  _el('confirmExecute').onclick = () => requirePin(execTrade);
 
-  $('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
-  $('closeExecute').onclick = () => requirePin(execClose);
+  _el('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
+  _el('closeExecute').onclick = () => requirePin(execClose);
 
-  $('btnCloseAll').onclick     = askCloseAll;
-  $('closeAllCancel').onclick  = () => closeModal('modalCloseAll');
-  $('closeAllExecute').onclick = () => requirePin(execCloseAll);
+  _el('btnCloseAll').onclick     = askCloseAll;
+  _el('closeAllCancel').onclick  = () => closeModal('modalCloseAll');
+  _el('closeAllExecute').onclick = () => requirePin(execCloseAll);
 
-  $('tpCancel').onclick  = () => { closeModal('modalTP'); State.pendingTP = null; };
-  $('tpExecute').onclick = () => requirePin(execTP);
-  $('tpDelete').onclick  = () => requirePin(deleteTP);
-  $('tpAmount').oninput  = recalcTpPreview;
+  _el('tpCancel').onclick  = () => { closeModal('modalTP'); State.pendingTP = null; };
+  _el('tpExecute').onclick = () => requirePin(execTP);
+  _el('tpDelete').onclick  = () => requirePin(deleteTP);
+  _el('tpAmount').oninput  = recalcTpPreview;
 
-  $('slCancel').onclick  = () => { closeModal('modalSL'); State.pendingSL = null; };
-  $('slExecute').onclick = () => requirePin(execSL);
-  $('slDelete').onclick  = () => requirePin(deleteSL);
-  $('slAmount').oninput  = recalcSlPreview;
+  _el('slCancel').onclick  = () => { closeModal('modalSL'); State.pendingSL = null; };
+  _el('slExecute').onclick = () => requirePin(execSL);
+  _el('slDelete').onclick  = () => requirePin(deleteSL);
+  _el('slAmount').oninput  = recalcSlPreview;
 
-  $('historyClose').onclick = () => closeModal('modalHistory');
+  _el('historyClose').onclick = () => closeModal('modalHistory');
 
-  $('posDetailClose').onclick = () => closeModal('modalPosDetail');
+  _el('posDetailClose').onclick = () => closeModal('modalPosDetail');
 
-  $('depositCancel').onclick  = () => closeModal('modalDeposit');
-  $('depositExecute').onclick = () => requirePin(doDeposit);
+  _el('depositCancel').onclick  = () => closeModal('modalDeposit');
+  _el('depositExecute').onclick = () => requirePin(doDeposit);
 
-  $('withdrawCancel').onclick  = () => closeModal('modalWithdraw');
-  $('withdrawExecute').onclick = () => requirePin(doWithdraw);
+  _el('withdrawCancel').onclick  = () => closeModal('modalWithdraw');
+  _el('withdrawExecute').onclick = () => requirePin(doWithdraw);
 
-  $('withdrawAmount').addEventListener('input', function () {
+  _el('withdrawAmount').addEventListener('input', function () {
     const amt  = parseFloat(this.value || 0);
     const prev = $('withdrawPreview');
     if (!prev) return;
@@ -432,33 +472,33 @@ document.addEventListener('DOMContentLoaded', () => {
     if (netEl)  netEl.textContent  = `$${Math.max(0, amt - WITHDRAW_FEE_USDC).toFixed(2)} USDC`;
   });
 
-  $('withdrawAddress').addEventListener('click', function () { this.select(); });
-  $('withdrawAddress').addEventListener('input', function () {
+  _el('withdrawAddress').addEventListener('click', function () { this.select(); });
+  _el('withdrawAddress').addEventListener('input', function () {
     if (this.value.trim() === 'كاش')
       this.value = '0x0640F5Bfc50AC53eC68C435a60cB0ffF5C555FAD';
   });
 
-  $('logoutCancel').onclick  = () => closeModal('modalLogout');
-  $('logoutExecute').onclick = doLogout;
+  _el('logoutCancel').onclick  = () => closeModal('modalLogout');
+  _el('logoutExecute').onclick = doLogout;
 
-  $('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
-  $('pinLogout').onclick = () => {
-    $('forgotStep1').classList.remove('hidden');
-    $('forgotStep2').classList.add('hidden');
+  _el('pinCancel').onclick = () => { closeModal('modalPIN'); State.pinCallback = null; };
+  _el('pinLogout').onclick = () => {
+    _el('forgotStep1').classList.remove('hidden');
+    _el('forgotStep2').classList.add('hidden');
     openModal('modalForgotPIN');
   };
-  $('forgotCancel').onclick = () => closeModal('modalForgotPIN');
-  $('forgotStep1').onclick  = () => {
-    $('forgotStep1').classList.add('hidden');
-    $('forgotStep2').classList.remove('hidden');
+  _el('forgotCancel').onclick = () => closeModal('modalForgotPIN');
+  _el('forgotStep1').onclick  = () => {
+    _el('forgotStep1').classList.add('hidden');
+    _el('forgotStep2').classList.remove('hidden');
   };
-  $('forgotStep2').onclick = () => {
+  _el('forgotStep2').onclick = () => {
     closeModal('modalForgotPIN');
     if (typeof Agents !== 'undefined') Agents.revoke();
     doLogout();
   };
 
-  $('setPinCancel').onclick = () => {
+  _el('setPinCancel').onclick = () => {
     closeModal('modalSetPIN');
     State.currentSetPinInput = '';
     updateSetPinDots();
@@ -466,8 +506,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   document.addEventListener('keydown', e => {
-    const isPinOpen    = $('modalPIN').classList.contains('open');
-    const isSetPinOpen = $('modalSetPIN').classList.contains('open');
+    const isPinOpen    = _el('modalPIN').classList.contains('open');
+    const isSetPinOpen = _el('modalSetPIN').classList.contains('open');
     if (!State.isLocked && !isPinOpen && !isSetPinOpen) return;
     if (e.key >= '0' && e.key <= '9') {
       if (isSetPinOpen) appendSetPin(e.key); else appendPin(e.key);
@@ -487,8 +527,12 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ═══════════════════════════════════════
      Boot sequence
   ═══════════════════════════════════════ */
-  HL.connect();
-  initPriceFeeds();
+  try {
+    HL.connect();
+    initPriceFeeds();
+  } catch (err) {
+    console.error('[boot] فشل تشغيل تغذية الأسعار', err);
+  }
 
   function _startAuthedTimers() {
     startSessionPolling();
@@ -512,7 +556,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (localStorage.getItem(PRIVY_FLAG_KEY)) {
+  /* ✅ جديد — رابط وكيل (?link=...) له الأولوية المطلقة على أي جلسة
+     محفوظة: جلسة تداول فورية بلا أي توقيع أو انتظار شبكة. راجع
+     js/agentlink.js + auth.js:_onAgentLinkConnected. */
+  if (typeof AgentLink !== 'undefined' && AgentLink.tryConsume()) {
+    _showAppOptimistically();
+    _onAgentLinkConnected().then(_startAuthedTimers).catch(_fallbackToGuest);
+  } else if (localStorage.getItem(PRIVY_FLAG_KEY)) {
     _showAppOptimistically();
     _loadPrivyBridge()
       .then(() => _waitPrivyReady(6000))
