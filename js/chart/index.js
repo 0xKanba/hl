@@ -16,6 +16,13 @@
       ورقة التأكيد/القوائم المنسدلة) — لا تلمس .hidden على الشاشة
       نفسها إطلاقاً؛ ذاك حصراً مسؤولية switchScreen() بـapp.js (نفس
       المعاملة بالضبط لشاشتي الرئيسية والأسواق)، فلا تعارض بين الاثنين.
+   ✅ إعادة تلوين (2026-08) — كل ألوان overrides/loading_screen هذه
+      لا تمرّ عبر CSS variables (تُرسَل مباشرة لمكتبة TradingView كقيم
+      JS خام)، فتحديث themes.css وحده لا يغطيها. حُدِّثت هنا يدوياً
+      لنفس اللوحة الجديدة: شموع up/down=success/danger، priceLineColor
+      وloading foregroundColor=البنفسجي الأساسي، شبكة الرسم بلون
+      rgba(148,163,184,...) الموثّق صراحة كـ"شبكة الرسوم البيانية"،
+      وخلفية/نص/خطوط المقاييس من نفس ثنائي bg-app/border الجديد.
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 var CM = window.__cm = window.__cm || {};
@@ -36,30 +43,30 @@ var CM = window.__cm = window.__cm || {};
       timezone: 'Asia/Kuwait',   // display only — data is always UTC
       theme: dark ? 'Dark' : 'Light',
       overrides: {
-        'paneProperties.background': dark ? '#000000' : '#F9F9F9',
+        'paneProperties.background': dark ? '#0f172a' : '#f8fafc',
         'paneProperties.backgroundType': 'solid',
-        'paneProperties.vertGridProperties.color': dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)',
-        'paneProperties.horzGridProperties.color': dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)',
+        'paneProperties.vertGridProperties.color': dark ? 'rgba(148,163,184,0.12)' : 'rgba(148,163,184,0.15)',
+        'paneProperties.horzGridProperties.color': dark ? 'rgba(148,163,184,0.12)' : 'rgba(148,163,184,0.15)',
         'paneProperties.vertGridProperties.style': 0,
         'paneProperties.horzGridProperties.style': 0,
-        'paneProperties.crossHairProperties.color': '#888',
+        'paneProperties.crossHairProperties.color': '#64748b',
         'paneProperties.crossHairProperties.style': 2,
         'paneProperties.crossHairProperties.width': 1,
-        'mainSeriesProperties.candleStyle.upColor': '#00e676',
-        'mainSeriesProperties.candleStyle.downColor': '#ff3d3d',
+        'mainSeriesProperties.candleStyle.upColor': '#10b981',
+        'mainSeriesProperties.candleStyle.downColor': '#ef4444',
         'mainSeriesProperties.candleStyle.drawBorder': true,
-        'mainSeriesProperties.candleStyle.borderUpColor': '#00e676',
-        'mainSeriesProperties.candleStyle.borderDownColor': '#ff3d3d',
-        'mainSeriesProperties.candleStyle.wickUpColor': '#00e676',
-        'mainSeriesProperties.candleStyle.wickDownColor': '#ff3d3d',
+        'mainSeriesProperties.candleStyle.borderUpColor': '#10b981',
+        'mainSeriesProperties.candleStyle.borderDownColor': '#ef4444',
+        'mainSeriesProperties.candleStyle.wickUpColor': '#10b981',
+        'mainSeriesProperties.candleStyle.wickDownColor': '#ef4444',
         'mainSeriesProperties.showPriceLine': true,
-        'mainSeriesProperties.priceLineColor': '#ff8c42',
+        'mainSeriesProperties.priceLineColor': '#8b5cf6',
         'mainSeriesProperties.priceLineWidth': 1,
         'mainSeriesProperties.showCountdown': true,
         'scalesProperties.fontSize': scaleFont,
-        'scalesProperties.textColor': dark ? '#999' : '#444',
-        'scalesProperties.lineColor': dark ? '#222' : '#ddd',
-        'scalesProperties.backgroundColor': dark ? '#000' : '#F9F9F9',
+        'scalesProperties.textColor': dark ? '#94a3b8' : '#64748b',
+        'scalesProperties.lineColor': dark ? '#334155' : '#e2e8f0',
+        'scalesProperties.backgroundColor': dark ? '#0f172a' : '#f8fafc',
       },
       studies_overrides: {},
       disabled_features: [
@@ -83,8 +90,8 @@ var CM = window.__cm = window.__cm || {};
       ],
       save_load_adapter: CM.buildSLA(sym),
       loading_screen: {
-        backgroundColor: dark ? '#000000' : '#F9F9F9',
-        foregroundColor: dark ? '#ff8c42' : '#c96442',
+        backgroundColor: dark ? '#0f172a' : '#f8fafc',
+        foregroundColor: '#8b5cf6',
       },
       client_id: 'suyula_hl', user_id: 'trader',
       charts_storage_api_version: '1.1',

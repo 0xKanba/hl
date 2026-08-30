@@ -7,10 +7,10 @@
 .addr-popover-link {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   font-size: var(--fs-sm, 12px); font-weight: var(--fw-bold, 800);
-  color: var(--text-secondary, #9a938a); text-decoration: none;
-  padding: 9px 0; border-top: 1px solid var(--border, #3a352e);
+  color: var(--text-secondary, #94a3b8); text-decoration: none;
+  padding: 9px 0; border-top: 1px solid var(--border, #334155);
   transition: color var(--dur-base, 180ms) var(--ease-standard, ease);
 }
-.addr-popover-link:hover  { color: var(--ac, #e07248); }
+.addr-popover-link:hover  { color: var(--ac, #8b5cf6); }
 .addr-popover-link:active { opacity: .7; }
 }

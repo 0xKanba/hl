@@ -66,9 +66,9 @@
 .login-brand { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-6); flex-shrink: 0; }
 .login-icon {
   width: 48px; height: 48px; border-radius: var(--r-md);
-  background: linear-gradient(140deg, var(--ac), var(--ac-2));
+  background: linear-gradient(140deg, var(--logo-grad-1), var(--logo-grad-2));
   display: flex; align-items: center; justify-content: center; font-size: var(--fs-4xl);
-  box-shadow: var(--glow-ac), 0 4px 16px rgba(0,0,0,.5); flex-shrink: 0;
+  box-shadow: 0 0 16px var(--logo-glow), 0 4px 16px rgba(0,0,0,.5); flex-shrink: 0;
 }
 .login-title { font-size: var(--fs-5xl); font-weight: var(--fw-bold); }
 
@@ -317,9 +317,9 @@
 .drawer-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .drawer-logo-icon {
   width: 34px; height: 34px; border-radius: var(--r-sm);
-  background: linear-gradient(140deg, var(--ac), var(--ac-2));
+  background: linear-gradient(140deg, var(--logo-grad-1), var(--logo-grad-2));
   display: flex; align-items: center; justify-content: center;
-  font-size: var(--fs-xl); flex-shrink: 0; box-shadow: var(--glow-ac);
+  font-size: var(--fs-xl); flex-shrink: 0; box-shadow: 0 0 16px var(--logo-glow);
 }
 .drawer-logo-text {
   font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary);
@@ -526,8 +526,8 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 30%, transparent), 0 0 10px color-mix(in srgb, var(--warn) 55%, transparent);
   animation: connectPulse 1.4s ease-in-out infinite;
 }
-.nav-connect-btn.ws-connecting .cb-lbl { color: #1a1200; text-shadow: none; }
-.nav-connect-btn.ws-connecting .cb-dot { background: rgba(26,18,0,.7); box-shadow: none; }
+.nav-connect-btn.ws-connecting .cb-lbl { color: #0f172a; text-shadow: none; }
+.nav-connect-btn.ws-connecting .cb-dot { background: rgba(15,23,42,.7); box-shadow: none; }
 @keyframes connectPulse {
   0%,100%{ box-shadow:0 0 0 2px color-mix(in srgb, var(--warn) 30%, transparent), 0 0 10px color-mix(in srgb, var(--warn) 55%, transparent); }
   50%{ box-shadow:0 0 0 4px color-mix(in srgb, var(--warn) 15%, transparent), 0 0 18px color-mix(in srgb, var(--warn) 80%, transparent); }

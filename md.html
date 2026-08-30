@@ -18,21 +18,21 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-      line-height: 1.8; color: #222; background: #fff;
+      line-height: 1.8; color: #0f172a; background: #f8fafc;
       font-size: 18px; padding: 30px 20px;
       max-width: 900px; margin: 0 auto; text-align: center;
     }
 
     @media (prefers-color-scheme: dark) {
-      body { color: #eee; background: #121212; }
-      a { color: #4fc3f7; } table { border-color: #444; } th, td { border-color: #555; }
+      body { color: #f1f5f9; background: #0f172a; }
+      a { color: #8b5cf6; } table { border-color: #334155; } th, td { border-color: #334155; }
     }
 
     #content { text-align: initial; margin: 0 auto; }
 
     /* العناوين الرئيسية فقط (h1 و h2) */
     h1 {
-      margin: 1.5em 0 1em; color: #0074d9; text-align: center;
+      margin: 1.5em 0 1em; color: #8b5cf6; text-align: center;
       position: relative; display: flex;
       align-items: center; justify-content: center;
       flex-wrap: wrap; gap: 10px; /* المسافة بين النص ورابط 🔗 */
@@ -40,7 +40,7 @@
 
     /* العناوين الفرعية (بدون أيقونة الربط) */
     h2, h3, h4, h5, h6 {
-      margin: 1.2em 0 0.8em; color: #4caf50; text-align: center;
+      margin: 1.2em 0 0.8em; color: #8b5cf6; text-align: center;
     }
 
     .heading-link {
@@ -60,7 +60,7 @@
       bottom: 30px;
       left: 50%;
       transform: translateX(-50%);
-      background: #0074d9;
+      background: #8b5cf6;
       color: #fff;
       padding: 8px 24px;
       border-radius: 8px;
@@ -73,19 +73,19 @@
     .copy-toast.show { opacity: 1; }
 
     p, ul, ol, pre { margin-bottom: 1em; }
-    a { color: #0056b3; text-decoration: underline; }
+    a { color: #8b5cf6; text-decoration: underline; }
     img { max-width: 100%; border-radius: 8px; margin: 15px auto; display: block; }
 
     table { width: 100%; border-collapse: collapse; margin: 20px auto; text-align: center; }
-    th, td { border: 1px solid #ccc; padding: 10px; }
-    th { background: #0074d9; color: white; }
+    th, td { border: 1px solid #e2e8f0; padding: 10px; }
+    th { background: #8b5cf6; color: white; }
 
-    code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
-    pre { background: #f5f5f5; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.95em; text-align: left; }
+    code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+    pre { background: #f1f5f9; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.95em; text-align: left; }
 
     @media (prefers-color-scheme: dark) {
-      code { background: #333; } pre { background: #222; }
-      .copy-toast { background: #4fc3f7; color: #000; }
+      code { background: #334155; } pre { background: #1e293b; }
+      .copy-toast { background: #8b5cf6; color: #fff; }
     }
   </style>
 </head>
@@ -105,7 +105,7 @@
       })
       .catch(() => {
         document.getElementById('content').innerHTML =
-          '<p style="color:red;text-align:center;">Error loading file map.</p>';
+          '<p style="color:#ef4444;text-align:center;">Error loading file map.</p>';
       });
 
     function parseHash() {
@@ -127,7 +127,7 @@
         history.replaceState(null, '', '#' + file);
       }
 
-      contentDiv.innerHTML = '<p style="text-align:center;color:#888;">Loading...</p>';
+      contentDiv.innerHTML = '<p style="text-align:center;color:#64748b;">Loading...</p>';
 
       fetch('md/' + file + '.md')
         .then(r => { if (!r.ok) throw new Error(); return r.text(); })

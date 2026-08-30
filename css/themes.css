@@ -1,14 +1,21 @@
 /* ═══════════════════════════════════════════════════════════════
    themes.css — HL / سيولة · Color System
-   الألوان مستخرجة كاملة من hl.css + hl2.css (البرتقالي #e07248).
+   ✅ إعادة تلوين كاملة (2026-08) — استُبدلت كل الألوان بالنظام الجديد:
+      بنفسجي (#8b5cf6) أساس الواجهة بالكامل بدل البرتقالي القديم.
+      خلفيات/نصوص/حدود من لوحة slate (0f172a/1e293b/334155/f1f5f9/
+      94a3b8/e2e8f0)، success=#10b981، danger=#ef4444، warning=#f59e0b.
+      الأسماء (--ac, --up, --dn, --bg-app...) بقيت كما هي عمداً —
+      كل ملف آخر بالمشروع يستهلكها بـvar()، فتغيير القيم هنا فقط يكفي
+      لإعادة تلوين التطبيق بأكمله بلا لمس أي ملف CSS/JS آخر يشير إليها.
+      accent/success/danger/warning ثابتة بين الوضعين الفاتح والغامق
+      (نفس نهج اللوحة الجديدة نفسها) — فقط الخلفيات/النصوص/الحدود
+      تتغيّر بين الوضعين. أي تدرّج داكن/فاتح غير مُعطى صراحة بالنظام
+      الجديد (ac-2، border-strong، sb-thumb-hover...) يُشتق عبر
+      color-mix() من نفس ألوان اللوحة — لا لون جديد يُستحدث بأي مكان.
+      --logo-grad-1/2 وglow اللوجو تطابق حرفياً "تدرج اللوجو" الموثّق
+      (أزرق→بنفسجي) لعنصري .login-icon/.drawer-logo-icon فقط.
    تبديل ديناميكي عبر [data-theme="dark|light"] على <html>.
    لا @media (prefers-color-scheme) — التبديل يدوي فقط عبر الزر.
-   ✅ FIX — --ac-soft كانت color-mix(...50%...) فتظهر أزرار (login-btn،
-      بانر الزائر، qty-100، footer-opts-btn) خافتة بكلا المظهرين رغم
-      حدّها --ac بلون مشبّع كامل. الآن 100% (اللون مباشرة بلا مزج).
-      لون النص (--text-primary) يبقى كما هو — تباينه محسوب أصلاً
-      ليعمل جيداً فوق --ac الصلب بكلا المظهرين (فاتح على الغامق،
-      شبه أسود على البرتقالي المتوسط بالفاتح، نسبة تباين ~5:1+).
 ═══════════════════════════════════════════════════════════════ */
 
 @layer themes {
@@ -18,59 +25,59 @@
 ════════════════════════════════════ */
 :root,
 [data-theme="dark"] {
-  --bg-app:        #131210;
-  --bg-card:       #1e1c18;
-  --bg-elev:       #272420;
-  --bg-input:      #302d28;
-  --bg-overlay:    rgba(19,18,16,.85);
+  --bg-app:        #0f172a;
+  --bg-card:       #1e293b;
+  --bg-elev:       #334155;
+  --bg-input:      #334155;
+  --bg-overlay:    rgba(15,23,42,.85);
 
-  --border:         #48443c;
-  --border-strong:  #5a554c;
+  --border:         #334155;
+  --border-strong:  color-mix(in srgb, #334155, #94a3b8 35%);
   --border-subtle:  rgba(255,255,255,.06);
 
-  /* Accent — برتقالي HL */
-  --ac:      #e07248;
-  --ac-2:    #a8502f;
-  --ac-dim:  rgba(224,114,72,.22);
-  --ac-deep: #a8502f;
+  /* Accent — بنفسجي (أساسي للواجهة بالكامل) */
+  --ac:      #8b5cf6;
+  --ac-2:    color-mix(in srgb, #8b5cf6 70%, black);
+  --ac-dim:  rgba(139,92,246,.22);
+  --ac-deep: color-mix(in srgb, #8b5cf6 70%, black);
   --ac-soft: var(--ac);
 
   /* Trading semantics */
-  --up:       #34c85a;
-  --up-2:     #1a7f37;
-  --up-dim:   rgba(52,200,90,.18);
-  --dn:       #f05248;
-  --dn-2:     #a0281e;
-  --dn-dim:   rgba(240,82,72,.18);
-  --warn:     #f0be30;
-  --warn-2:   #806b00;
-  --warn-dim: rgba(240,190,48,.18);
-  --tp:       #28d99a;
-  --tp-dim:   rgba(40,217,154,.18);
-  --sl:       #f09050;
-  --sl-dim:   rgba(240,144,80,.18);
+  --up:       #10b981;
+  --up-2:     color-mix(in srgb, #10b981 70%, black);
+  --up-dim:   rgba(16,185,129,.18);
+  --dn:       #ef4444;
+  --dn-2:     color-mix(in srgb, #ef4444 70%, black);
+  --dn-dim:   rgba(239,68,68,.18);
+  --warn:     #f59e0b;
+  --warn-2:   color-mix(in srgb, #f59e0b 55%, black);
+  --warn-dim: rgba(245,158,11,.18);
+  --tp:       #10b981;
+  --tp-dim:   rgba(16,185,129,.18);
+  --sl:       #f59e0b;
+  --sl-dim:   rgba(245,158,11,.18);
 
   /* Text */
-  --text-primary:   #f8f4ee;
-  --text-secondary: #d8d0c4;
-  --text-muted:     #a09890;
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
 
   /* Shadows */
-  --shadow:    0 8px 32px rgba(0,0,0,.65);
-  --shadow-sm: 0 4px 16px rgba(0,0,0,.35);
+  --shadow:    0 10px 25px -5px rgba(0,0,0,.4);
+  --shadow-sm: 0 4px 14px -4px rgba(0,0,0,.3);
 
   /* Glows */
-  --glow-ac:  0 0 16px var(--ac-dim), 0 0 32px rgba(224,114,72,.10);
+  --glow-ac:  0 0 16px var(--ac-dim), 0 0 32px rgba(139,92,246,.10);
   --glow-up:  0 0 16px var(--up-dim);
   --glow-dn:  0 0 16px var(--dn-dim);
   --glow-bdr: 0 0 0 1px rgba(255,255,255,.06), inset 0 1px 0 rgba(255,255,255,.04);
-  --tglow-up: 0 0 12px rgba(52,200,90,.5);
-  --tglow-dn: 0 0 12px rgba(240,82,72,.5);
+  --tglow-up: 0 0 12px rgba(16,185,129,.5);
+  --tglow-dn: 0 0 12px rgba(239,68,68,.5);
 
   /* Scrollbar */
-  --sb-thumb:       #4d443e;
-  --sb-thumb-hover: #6e6259;
-  --sb-track-hover: rgba(120,110,100,.25);
+  --sb-thumb:       #334155;
+  --sb-thumb-hover: color-mix(in srgb, #334155, #f1f5f9 20%);
+  --sb-track-hover: rgba(139,92,246,.12);
 
   /* Legacy aliases (inline JS يستخدمها) */
   --hc-up:   var(--up);
@@ -80,61 +87,65 @@
   --hc-tp:   var(--tp);
   --hc-sl:   var(--sl);
 
+  /* اللوجو فقط — تدرج أزرق→بنفسجي موثّق صراحة، منفصل عن accent العام */
+  --logo-grad-1: #3b82f6;
+  --logo-grad-2: #8b5cf6;
+  --logo-glow:   rgba(59,130,246,.4);
+
   color-scheme: dark;
 }
 
 /* ════════════════════════════════════
-   LIGHT — من hl.css @media prefers-color-scheme: light
-   منقولة إلى [data-theme="light"] للتبديل اليدوي.
+   LIGHT
 ════════════════════════════════════ */
 [data-theme="light"] {
-  --bg-app:        #eeeae4;
-  --bg-card:       #f8f4ef;
-  --bg-elev:       #e8e4de;
-  --bg-input:      #dedad4;
-  --bg-overlay:    rgba(232,228,222,.85);
+  --bg-app:        #f8fafc;
+  --bg-card:       #ffffff;
+  --bg-elev:       #f1f5f9;
+  --bg-input:      #f1f5f9;
+  --bg-overlay:    rgba(248,250,252,.85);
 
-  --border:         #c8c4bc;
-  --border-strong:  #b0aba2;
+  --border:         #e2e8f0;
+  --border-strong:  color-mix(in srgb, #e2e8f0, #64748b 25%);
   --border-subtle:  rgba(0,0,0,.05);
 
-  --ac:      #c96442;
-  --ac-2:    #a8502f;
-  --ac-dim:  rgba(201,100,66,.15);
-  --ac-deep: #a8502f;
+  --ac:      #8b5cf6;
+  --ac-2:    color-mix(in srgb, #8b5cf6 70%, black);
+  --ac-dim:  rgba(139,92,246,.15);
+  --ac-deep: color-mix(in srgb, #8b5cf6 70%, black);
   --ac-soft: var(--ac);
 
-  --up:       #1a8c3a;
-  --up-2:     #005c2b;
-  --up-dim:   rgba(26,140,58,.14);
-  --dn:       #cc2e24;
-  --dn-2:     #a30000;
-  --dn-dim:   rgba(204,46,36,.14);
-  --warn:     #9a6400;
-  --warn-2:   #704900;
-  --warn-dim: rgba(154,100,0,.14);
-  --tp:       #1a9e72;
-  --tp-dim:   rgba(26,158,114,.14);
-  --sl:       #c05818;
-  --sl-dim:   rgba(192,88,24,.14);
+  --up:       #10b981;
+  --up-2:     color-mix(in srgb, #10b981 65%, black);
+  --up-dim:   rgba(16,185,129,.14);
+  --dn:       #ef4444;
+  --dn-2:     color-mix(in srgb, #ef4444 65%, black);
+  --dn-dim:   rgba(239,68,68,.14);
+  --warn:     #f59e0b;
+  --warn-2:   color-mix(in srgb, #f59e0b 55%, black);
+  --warn-dim: rgba(245,158,11,.14);
+  --tp:       #10b981;
+  --tp-dim:   rgba(16,185,129,.14);
+  --sl:       #f59e0b;
+  --sl-dim:   rgba(245,158,11,.14);
 
-  --text-primary:   #100e08;
-  --text-secondary: #3a3630;
-  --text-muted:     #605850;
+  --text-primary:   #0f172a;
+  --text-secondary: #64748b;
+  --text-muted:     color-mix(in srgb, #64748b, #0f172a 20%);
 
-  --shadow:    0 4px 20px rgba(0,0,0,.14);
-  --shadow-sm: 0 2px 8px rgba(0,0,0,.09);
+  --shadow:    0 10px 25px -5px rgba(0,0,0,.08);
+  --shadow-sm: 0 3px 10px -3px rgba(0,0,0,.06);
 
-  --glow-ac:  0 0 10px rgba(201,100,66,.20);
-  --glow-up:  0 0 8px  rgba(26,140,58,.18);
-  --glow-dn:  0 0 8px  rgba(204,46,36,.18);
-  --glow-bdr: 0 0 0 1px rgba(201,100,66,.15), inset 0 1px 0 rgba(255,255,255,.9);
+  --glow-ac:  0 0 10px rgba(139,92,246,.20);
+  --glow-up:  0 0 8px  rgba(16,185,129,.18);
+  --glow-dn:  0 0 8px  rgba(239,68,68,.18);
+  --glow-bdr: 0 0 0 1px rgba(139,92,246,.15), inset 0 1px 0 rgba(255,255,255,.9);
   --tglow-up: none;
   --tglow-dn: none;
 
-  --sb-thumb:       #cdc3b8;
-  --sb-thumb-hover: #a89c8e;
-  --sb-track-hover: rgba(201,100,66,.08);
+  --sb-thumb:       #e2e8f0;
+  --sb-thumb-hover: color-mix(in srgb, #e2e8f0, #64748b 30%);
+  --sb-track-hover: rgba(139,92,246,.08);
 
   --hc-up:   var(--up);
   --hc-dn:   var(--dn);
@@ -142,6 +153,10 @@
   --hc-warn: var(--warn);
   --hc-tp:   var(--tp);
   --hc-sl:   var(--sl);
+
+  --logo-grad-1: #3b82f6;
+  --logo-grad-2: #8b5cf6;
+  --logo-glow:   rgba(59,130,246,.4);
 
   color-scheme: light;
 }

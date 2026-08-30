@@ -34,7 +34,7 @@ var CM = window.__cm = window.__cm || {};
     ov.innerHTML =
       '<div class="tvcf-card">' +
         '<div class="tvcf-hdl"></div>' +
-        '<div class="tvcf-title" style="color:' + (isBuy ? '#00e676' : '#ff3d3d') + '">' + a.icon + ' ' + (isBuy ? 'شراء ▲' : 'بيع ▼') + ' — ' + a.name + '</div>' +
+        '<div class="tvcf-title" style="color:' + (isBuy ? '#10b981' : '#ef4444') + '">' + a.icon + ' ' + (isBuy ? 'شراء ▲' : 'بيع ▼') + ' — ' + a.name + '</div>' +
         '<div class="tvcf-sub">رافعة ' + a.lev + 'x · تأكيد قبل التنفيذ</div>' +
         '<div class="tvcf-rows">' +
           '<div class="tvcf-row"><span class="tvcf-k">الكمية</span><span class="tvcf-v">' + qty.toFixed(a.szDp) + ' ' + a.unit + '</span></div>' +
