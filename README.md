@@ -42,6 +42,7 @@
 │   ├── c.js
 │   ├── chart.js
 │   ├── config.js
+│   ├── lastplace.js
 │   ├── pin.js
 │   ├── positions.js
 │   ├── prices.js
@@ -61,9 +62,9 @@
 │   ├── build.mjs
 │   ├── package-lock.json
 │   └── package.json
-├── .gitattributes
 ├── CHANGES.md
 ├── index.html
+├── m.zip
 ├── manifest.json
 ├── md.html
 ├── ml.zip
