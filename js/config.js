@@ -43,6 +43,9 @@ const QSTATE_KEY    = 'hl_qstate_v1';
 const OPENTIME_KEY  = 'hl_position_opens';
 const PRIVY_FLAG_KEY = 'hl_privy_connected';
 const EXTWALLET_FLAG_KEY = 'hl_extwallet_connected';
+/* ✅ جديد — آخر "مكان" كان فيه المستخدم (الشاشة/الأصل/نافذة الدرج
+   المفتوحة إن وُجدت) — راجع js/lastplace.js لمنطق الحفظ/الاستعادة. */
+const LASTPLACE_KEY = 'hl_last_place';
 
 /* تعريف الأصول */
 const ASSETS = {

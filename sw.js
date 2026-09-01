@@ -5,13 +5,13 @@
    needs to be remembered. A stale value here only ever means "the
    cache tag didn't change"; it never blocks a real deploy, because
    the app shell below is network-first, not stale-while-revalidate.
-   ✅ رُفعت يدوياً هذه المرة (agents.js v2 + agentlink.js جديدان) —
+   ✅ رُفعت يدوياً هذه المرة (lastplace.js جديد + إعادة تلوين كاملة) —
    الـAction سيرفعها تلقائياً مجدداً بأول push فعلي، هذا فقط ضمان
    لأول تحميل مباشر بعد نسخ هذي الملفات. */
 
-const CACHE_APP   = 'hltrade-app-202608300951-5ef4480';
-const CACHE_IMGS  = 'hltrade-img-202608300951-5ef4480';
-const CACHE_FONTS = 'hltrade-fnt-202608300951-5ef4480';
+const CACHE_APP   = 'hltrade-app-202608301845-b7e2c14';
+const CACHE_IMGS  = 'hltrade-img-202608301845-b7e2c14';
+const CACHE_FONTS = 'hltrade-fnt-202608301845-b7e2c14';
 
 const APP_SHELL = [
   '/',
@@ -45,6 +45,7 @@ const APP_SHELL = [
   '/js/chart/index.js',
   '/js/c.js',
   '/js/app.js',
+  '/js/lastplace.js',
   '/images/oil.svg',
   '/images/gold.svg',
   '/images/silver.svg',
