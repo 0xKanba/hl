@@ -68,6 +68,7 @@
 ├── manifest.json
 ├── md.html
 ├── ml.zip
+├── seo.json
 └── sw.js
 ```
 <!-- TREE END -->
