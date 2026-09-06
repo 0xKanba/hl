@@ -62,12 +62,11 @@
 │   ├── build.mjs
 │   ├── package-lock.json
 │   └── package.json
+├── .c
 ├── CHANGES.md
 ├── index.html
-├── m.zip
 ├── manifest.json
 ├── md.html
-├── ml.zip
 ├── seo.json
 └── sw.js
 ```
