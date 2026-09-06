@@ -62,7 +62,6 @@
 │   ├── build.mjs
 │   ├── package-lock.json
 │   └── package.json
-├── .c
 ├── CHANGES.md
 ├── index.html
 ├── manifest.json
