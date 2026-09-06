@@ -40,7 +40,6 @@
 │   ├── assets.js
 │   ├── auth.js
 │   ├── c.js
-│   ├── chart.js
 │   ├── config.js
 │   ├── lastplace.js
 │   ├── pin.js
