@@ -65,6 +65,14 @@
          بفضل شرط isGuest بداخل الدالة (راجع account.js)، فلا حاجة
          لتصفير State.balance يدوياً؛ فقط الاستدعاء كافٍ لتحديث العرض
          فوراً بدل بقاء أرقام الجلسة السابقة ظاهرة بعد قطع الاتصال.
+
+   ✅ إصلاح توقيت (2026-08) — State._identityReady تُضبط الآن true بشكل
+      متزامن في كل من _onWalletConnected() و_onAgentLinkConnected()،
+      بأول سطر ممكن (قبل أي await فعلي) — إشارة دقيقة "قرار الهوية
+      اتُّخذ" (ضيف أم متصل) يستهلكها js/lastplace.js بدل الانتظار
+      الخاطئ سابقاً لـState._sessionTimer (لا يُضبط إلا بعد اكتمال جلب
+      بيانات الحساب الشبكي بالكامل — بطيء وغير ضروري لهذا الغرض تحديداً).
+      راجع state.js لتعريف الحقل، وjs/lastplace.js لكيفية استهلاكه.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -91,6 +99,8 @@ function _loadPrivyBridge() {
 
 function initGuestMode() {
   State.isGuest = true;
+  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. متزامن، أول سطرين بالدالة. */
+  State._identityReady = true;
   $('loginScreen')?.classList.add('hidden');
   $('appScreen')?.classList.remove('hidden');
   _showGuestBanner();
@@ -235,6 +245,8 @@ async function _onWalletConnected(walletObj) {
 
   State.wallet = walletObj;
   State.isGuest = false;
+  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. متزامن، قبل أي await هنا. */
+  State._identityReady = true;
 
   if (walletObj.walletClientType === 'privy') {
     localStorage.setItem(PRIVY_FLAG_KEY, '1');
@@ -289,8 +301,12 @@ async function _onWalletConnected(walletObj) {
     }, 900);
   }
 
-  if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
-    setTimeout(function () { if (State.wallet) lockApp(); }, 300);
+  /* ✅ إصلاح توقيت (2026-08) — نسخة القفل المؤجَّلة هنا (كانت
+     setTimeout(...,300) بلا داعٍ حقيقي) حُذفت. القفل الآن يحدث مرة
+     واحدة فقط، فوراً، بأول سطر بتسلسل إقلاع app.js — قبل حتى بدء أي
+     مسار اتصال (بما فيها هذه الدالة نفسها) — فلا حاجة لمحاولة ثانية
+     هنا إطلاقاً؛ لو كان القفل مطلوباً، يكون قد فتح شاشته بالفعل قبل
+     وصولنا لهذه النقطة أصلاً. راجع app.js لمكان الفحص الوحيد الآن. */
 }
 
 /* ════════════════════════════════════════════════
@@ -302,6 +318,13 @@ async function _onWalletConnected(walletObj) {
    بعد إغلاق التبويب)، بلا تذكير تصدير/إيداع (لا معنى لهما هنا).
 ════════════════════════════════════════════════ */
 async function _onAgentLinkConnected() {
+  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. AgentLink.tryConsume() (يُستدعى
+     قبل هذه الدالة بـapp.js) يضبط State.isGuest=false بالفعل بشكل
+     متزامن؛ هذا السطر يُثبّت الإشارة صراحة هنا أيضاً كأول شيء تفعله هذه
+     الدالة، قبل أي await، لضمان دقتها بصرف النظر عن أي تغيير مستقبلي
+     بترتيب agentlink.js. */
+  State._identityReady = true;
+
   updateAddrPopoverText();
   updateConnectBtn();
   _hideGuestBanner();
@@ -311,7 +334,7 @@ async function _onAgentLinkConnected() {
 }
 
 /* ════ روابط المستكشف الخارجية — تُبنى ديناميكياً من عنوان المحفظة
-   الحالي عند كل فتح للـpopover (raجع app.js:_toggleAddrPopover). ════ */
+   الحالي عند كل فتح للـpopover (راجع app.js:_toggleAddrPopover). ════ */
 function _updateExplorerLinks() {
   const addr = State.wallet?.address;
   const ex = $('addrPopoverExplorer'), st = $('addrPopoverStatus');

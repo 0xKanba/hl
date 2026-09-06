@@ -53,7 +53,7 @@
     "publisher": { "@type": "Organization", "name": "ماركت ليك" }
   }
   </script>
-  <meta property="og:site_name" content="سيولة">
+  <meta property="og:site_name" content="ماركت ليك">
   <meta property="og:title" content="ماركت ليك — اسواق: نفط وذهب وفضة وغيرها">
   <meta property="og:description" content="ماركت ليك — اسواق: نفط وذهب وفضة وغيرها. تداول لحظي برافعة مالية على Hyperliquid، توقيع وتنفيذ مباشر من متصفحك بلا وسيط.">
   <meta property="og:image" content="https://hl.kanba.pw/images/icon-512x512.png">
@@ -73,6 +73,26 @@
     (function(){
       var t=localStorage.getItem('hl_theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
       document.documentElement.setAttribute('data-theme',t);
+    })();
+  </script>
+
+  <!-- ✅ جديد — يمنع أي وميض لواجهة التداول خلف شاشة قفل PIN عند
+       الإقلاع. يعمل قبل تحليل <body> إطلاقاً (نفس أسلوب سكربت المظهر
+       أعلاه بالضبط) — يقرأ نفس القيمتين المحليتين اللتين تفحصهما
+       أول سطر بمعالج DOMContentLoaded بـjs/app.js (PIN_KEY/LOCKED_KEY
+       من js/config.js)، لكن هنا حرفياً كسلسلتين نصيتين مباشرة لأن
+       config.js نفسه لم يُحمَّل بعد بهذي المرحلة المبكرة جداً. ⚠️ لو
+       غُيِّر اسم أيٍّ من المفتاحين بـconfig.js مستقبلاً، حدّث هذا
+       السطر أيضاً (لا رابط تلقائي بينهما، تكرار مقصود وموثَّق). راجع
+       css/base.css (قاعدة data-boot-lock) وjs/pin.js:unlockApp
+       (يُزيل الخاصية عند فتح القفل فعلياً) لبقية الآلية. -->
+  <script>
+    (function(){
+      try {
+        if (localStorage.getItem('hl_trade_pin') && localStorage.getItem('hl_trade_locked') === 'true') {
+          document.documentElement.setAttribute('data-boot-lock','1');
+        }
+      } catch(e) {}
     })();
   </script>
 </head>

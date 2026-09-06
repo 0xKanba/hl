@@ -43,6 +43,20 @@
       تداول جاهزة فوراً بلا أي توقيع. أزرار الإيداع/السحب/الوكلاء
       بالدرج تُحجب برسالة واضحة بهذا الوضع (لا مفتاح محفظة رئيسية
       متاح محلياً أصلاً ليُستخدم لأي منها).
+
+   ✅ إصلاح توقيت جوهري (2026-08) — قفل PIN كان يتأخر 600ms على الأقل
+      (وأحياناً لا يظهر إطلاقاً لو تجاوز اتصال المحفظة تلك المهلة، لأن
+      الفحص كان `if (State.wallet)` بعد setTimeout ثابت — سباق حقيقي
+      ضد الشبكة). القفل نفسه لا يعتمد على أي بيانات شبكة أو حتى معرفة
+      "ضيف أم متصل" إطلاقاً — فقط PIN_KEY/LOCKED_KEY المحليان. الآن
+      يُفحص ويُطلَق فوراً كأول سطر بكامل معالج DOMContentLoaded، قبل
+      أي شيء آخر، بلا أي انتظار أو شرط على State.wallet. بالتزامن مع
+      هذا: سكربت <head> جديد بـindex.html (data-boot-lock) يُخفي
+      .app-shell بالكامل قبل أول رسم أصلاً لو كان القفل مفعَّلاً آخر
+      جلسة — فلا وميض لواجهة التداول خلف الشاشة حتى قبل أن يصل تنفيذ
+      JS لهذا السطر. راجع css/base.css وjs/pin.js:unlockApp لبقية
+      الآلية. النسخة المكرَّرة من نفس الفحص بنهاية _onWalletConnected
+      (auth.js) حُذفت أيضاً — مصدر واحد فقط الآن.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -355,6 +369,20 @@ function _blockIfAgentLink() {
 
 document.addEventListener('DOMContentLoaded', () => {
 
+  /* ✅ إصلاح توقيت جوهري (2026-08) — أول شيء يحدث بالإقلاع بالكامل،
+     قبل أي تهيئة أخرى أو أي مسار اتصال. القفل لا يعتمد على أي بيانات
+     شبكة ولا حتى على معرفة "ضيف أم متصل" — فقط PIN_KEY/LOCKED_KEY
+     المحليان، متاحان فوراً بلا أي انتظار. لا setTimeout، لا شرط على
+     State.wallet (كان السبب الحقيقي للتأخير القديم 600ms+ ولاحتمال
+     عدم ظهور القفل إطلاقاً لو تجاوز اتصال المحفظة تلك المهلة — سباق
+     حقيقي ضد الشبكة لشيء لا علاقة له بالشبكة إطلاقاً). سكربت <head>
+     بـindex.html (data-boot-lock) يُخفي .app-shell قبل هذا السطر حتى
+     (قبل أول رسم أصلاً) فلا وميض ممكن مهما استغرق تحميل بقية السكربتات
+     أدناه. راجع css/base.css وjs/pin.js:unlockApp لبقية الآلية. */
+  if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true') {
+    lockApp();
+  }
+
   _initTheme();
   _startDatetimeClock();
   _initMonthsPanel();
@@ -590,6 +618,4 @@ document.addEventListener('DOMContentLoaded', () => {
     _fallbackToGuest();
   }
 
-  if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
-    setTimeout(() => { if (State.wallet) lockApp(); }, 600);
 });

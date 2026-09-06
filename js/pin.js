@@ -23,6 +23,12 @@ function unlockApp() {
   State.currentPinInput = '';
   closeModal('modalPIN');
   $('pinCancel').classList.remove('hidden');
+  /* ✅ جديد — يزيل خاصية الإخفاء المسبق (data-boot-lock) التي يضبطها
+     سكربت <head> بـindex.html قبل أول رسم لمنع أي وميض لواجهة التداول
+     خلف شاشة القفل عند الإقلاع. إزالة آمنة دائماً حتى لو لم تكن مضبوطة
+     أصلاً (removeAttribute على خاصية غير موجودة لا يفعل شيئاً). راجع
+     تعليق ذلك السكربت + css/base.css للتفاصيل الكاملة. */
+  document.documentElement.removeAttribute('data-boot-lock');
 }
 
 /* ════ requirePin — يطلب PIN قبل تنفيذ callback ════ */

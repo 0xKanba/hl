@@ -1,204 +1,140 @@
 /* ═══════════════════════════════════════════════════════════════
-   base.css — HL / سيولة · Foundation
-   Reset · Typography (كل النصوص font-weight: 900) · Spacing · Radius
-   · Motion · A11y · Scrollbars
-   لا قيم ألوان هنا — كل الألوان في themes.css
+   base.css — الأساس: مقاييس التصميم (خط/تباعد/انحناء/حركة) + Reset +
+   عناصر تحكم عامة (أزرار/حقول/سكرول بار) + أدوات مساعدة (utilities).
+   لا ألوان حرفية هنا إطلاقاً — كل شيء عبر var() من themes.css، فتبديل
+   لوحة الألوان بالكامل لا يلمس هذا الملف أبداً.
+   النصوص عريضة 100% بكل مكان عمداً (--fw-regular نفسها 900) — قرار
+   تصميم ثابت لهذا المشروع، ليس سهواً.
 ═══════════════════════════════════════════════════════════════ */
+
 @layer base, themes, components;
 
 @layer base {
 
-/* ════════════════════════════════════
-   CORE TOKENS — theme-agnostic
-════════════════════════════════════ */
 :root {
-  /* Typography */
-  --font-ui:   'Cairo', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  /* الخطوط */
+  --font-ar:   'Cairo', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
 
-  --fs-2xs: 9px;  --fs-xs: 10px; --fs-sm: 11px; --fs-base: 12px;
-  --fs-md:  14px; --fs-lg: 15px; --fs-xl: 16px; --fs-2xl: 18px;
-  --fs-3xl: 20px; --fs-4xl: 22px; --fs-5xl: 26px; --fs-6xl: 28px;
+  --fs-2xs: 10px;  --fs-xs: 11px;  --fs-sm: 12px;  --fs-md: 13px;
+  --fs-base: 14px; --fs-lg: 15px;  --fs-xl: 16px;  --fs-2xl: 18px;
+  --fs-3xl: 20px;  --fs-4xl: 22px; --fs-5xl: 26px; --fs-6xl: 32px;
 
-  --lh-tight: 1.2;
-  --lh-base:  1.45;
-  --lh-loose: 1.75;
-
-  /* ✅ كل الأوزان = 900 (نص عريض 100% كامل) */
   --fw-regular:  900;
-  --fw-medium:   900;
   --fw-semibold: 900;
   --fw-bold:     900;
   --fw-black:    900;
 
-  /* Spacing — 4px system */
-  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
-  --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
-  --space-9: 48px;
+  --lh-base:  1.5;
+  --lh-loose: 1.75;
 
-  /* Radius scale — من hl.css */
-  --r-xs:   8px;
-  --r-sm:   12px;
-  --r-md:   16px;
-  --r-lg:   20px;
-  --r-xl:   24px;
+  /* التباعد */
+  --space-1: 4px;  --space-2: 6px;  --space-3: 10px; --space-4: 14px;
+  --space-5: 18px; --space-6: 22px; --space-7: 28px; --space-8: 36px;
+  --space-9: 44px;
+
+  /* الانحناء */
+  --r-xs: 6px; --r-sm: 9px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px;
   --r-pill: 999px;
 
-  /* Motion */
+  /* الحركة */
+  --dur-fast: 120ms; --dur-base: 180ms; --dur-slow: 260ms;
   --ease-standard: cubic-bezier(.4,0,.2,1);
   --ease-out:      cubic-bezier(.22,1,.36,1);
-  --ease-in:       cubic-bezier(.64,0,.78,0);
   --ease-bounce:   cubic-bezier(.34,1.56,.64,1);
-  --dur-fast:  120ms;
-  --dur-base:  180ms;
-  --dur-slow:  280ms;
-  --dur-theme: 200ms;
 
-  /* Z-index — طبقات هندسية 100% (من hl2.css) */
-  --z-screen: 1;
-  --z-chart:  50;
-  --z-opts:   200;
-  --z-modal:  300;
-  --z-toast:  350;
-  --z-loader: 400;
+  /* طبقات z-index */
+  --z-screen:  1;
+  --z-opts:    200;
+  --z-modal:   300;
+  --z-toast:   350;
+  --z-loader:  360;
 }
 
-/* ════════════════════════════════════
-   THEME-SWITCH SMOOTHING
-   يُطبَّق على <html> خلال ~200ms عند
-   تبديل data-theme عبر الزر الخارجي.
-════════════════════════════════════ */
-html.theme-transitioning,
-html.theme-transitioning *,
-html.theme-transitioning *::before,
-html.theme-transitioning *::after {
-  transition:
-    background-color var(--dur-theme) var(--ease-standard),
-    color            var(--dur-theme) var(--ease-standard),
-    border-color     var(--dur-base)  var(--ease-standard),
-    box-shadow       var(--dur-base)  var(--ease-standard) !important;
-}
-
-/* ════════════════════════════════════
-   RESET
-════════════════════════════════════ */
-*, *::before, *::after {
-  margin: 0; padding: 0; box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-
-/* البيانات المالية تبقى قابلة للتحديد */
-.pos-data-value, .price-value, .positions-pnl,
-.hist-val, .hist-pnl, .balance-value, .confirm-val,
-.tab-price, .nav-address, .pos-pnl, .pos-size,
-.price-bid-ask, .price-delta, .wp-val, .tb-mono,
-.cal-stat-v, .cal-dv, .cal-tv, .cal-tp {
-  user-select: text;
-  -webkit-user-select: text;
-}
+*, *::before, *::after { box-sizing: border-box; }
 
 html, body {
-  height: 100%;
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
   background: var(--bg-app);
   color: var(--text-primary);
-  font-family: var(--font-ui);
-  overflow: hidden;
-  font-size: var(--fs-md);
+  font-family: var(--font-ar);
+  font-size: var(--fs-base);
   line-height: var(--lh-base);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  font-weight: 900;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
-/* ✅ إجبار كل عنصر نصي على 900 */
-body, p, span, div, a, label, strong, em, b, i, small,
-h1, h2, h3, h4, h5, h6,
-button, input, select, textarea,
-li, td, th, figcaption {
-  font-weight: 900 !important;
+body, p, span, div, button, input, textarea, select, a,
+h1, h2, h3, h4, h5, h6, label {
+  font-weight: var(--fw-regular) !important;
 }
 
-input, button, select, textarea {
-  font-family: inherit; font-size: inherit; color: inherit;
-}
-
-button {
-  cursor: pointer; border: none; background: none;
-  font-weight: 900;
-  transition:
-    transform var(--dur-fast) var(--ease-standard),
-    filter    var(--dur-base) var(--ease-standard),
-    opacity   var(--dur-base) var(--ease-standard);
-}
-button:active   { transform: scale(.96); }
-button:disabled { opacity: .45; pointer-events: none; }
-
-input {
-  background: var(--bg-input);
-  border: 2px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  padding: 10px 14px;
+button, input, textarea, select {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: none;
   outline: none;
-  transition:
-    border-color var(--dur-base) var(--ease-standard),
-    box-shadow   var(--dur-base) var(--ease-standard);
-  font-weight: 900;
-  color: var(--text-primary);
-  font-size: max(16px, 1em); /* منع zoom تلقائي على iOS */
+  -webkit-appearance: none;
+  appearance: none;
 }
-input:focus {
-  border-color: var(--ac);
-  box-shadow: 0 0 0 3px var(--ac-dim);
-}
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; }
 
-:focus-visible {
-  outline: 2px solid var(--ac);
-  outline-offset: 2px;
-  border-radius: var(--r-xs);
-}
-button:focus-visible { outline-offset: 3px; }
+a { color: inherit; text-decoration: none; }
+
+img { max-width: 100%; display: block; }
 
 /* ════════════════════════════════════
-   SCROLLBARS — thin, theme-aware
+   تبديل المظهر — انتقال ناعم اختياري (يُفعَّل فقط لحظة الضغط على
+   ☀️/🌙 عبر _applyTheme(theme, true) بـapp.js، لا عند التحميل الأولي)
 ════════════════════════════════════ */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--sb-thumb) transparent;
+html.theme-transitioning,
+html.theme-transitioning * {
+  transition: background-color var(--dur-slow) var(--ease-standard),
+              border-color     var(--dur-slow) var(--ease-standard),
+              color            var(--dur-slow) var(--ease-standard) !important;
 }
-*::-webkit-scrollbar       { width: 6px; height: 6px; }
-*::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 2px;
-  transition: background var(--dur-fast) var(--ease-standard);
-}
+
+/* ════════════════════════════════════
+   ✅ قفل PIN قبل أول رسم — سكربت <head> بـindex.html يضبط هذه الخاصية
+   على <html> بشكل متزامن قبل تحليل <body> إطلاقاً لو كان القفل مفعَّلاً
+   آخر جلسة (PIN_KEY + LOCKED_KEY==='true') — فيُخفي .app-shell بالكامل
+   قبل أن يُتاح لأي محتوى حساب فرصة الرسم على الشاشة، بصرف النظر عن وقت
+   تحميل/تنفيذ بقية سكربتات الصفحة. تُزال فقط عند فتح القفل فعلياً
+   (راجع js/pin.js:unlockApp) — لا صلة لها بأي قفل يدوي لاحق بنفس
+   الجلسة (ذاك يعمل بالكامل عبر مودال #modalPIN العادي، فوق كل شيء
+   بصرياً أصلاً بحكم ترتيبه بالـDOM). visibility بدل display:none
+   عمداً — لا reflow عند الإزالة، فقط تبديل رسم. */
+html[data-boot-lock="1"] .app-shell { visibility: hidden; }
+
+/* ════════════════════════════════════
+   Scrollbar — عبر متغيّرات themes.css فقط
+════════════════════════════════════ */
+* { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-track:hover { background: var(--sb-track-hover); }
-*::-webkit-scrollbar-thumb {
-  background: var(--sb-thumb);
-  border-radius: var(--r-pill);
-  transition: background var(--dur-fast) var(--ease-standard);
-}
+*::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: var(--r-pill); }
 *::-webkit-scrollbar-thumb:hover  { background: var(--sb-thumb-hover); }
 *::-webkit-scrollbar-thumb:active { background: var(--ac); }
 
 /* ════════════════════════════════════
-   UTILITIES
+   Utilities
 ════════════════════════════════════ */
 .hidden { display: none !important; }
 
-/* ════════════════════════════════════
-   A11Y — motion
-════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
 }

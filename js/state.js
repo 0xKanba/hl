@@ -9,6 +9,14 @@ const State = {
   asset:  'CL',
   qty:    0.1,
   isGuest: true,
+  /* ✅ جديد — إشارة دقيقة "قرار الهوية اتّخذ" (ضيف أم متصل)، تُضبط
+     true بشكل متزامن (بلا أي انتظار شبكة) بأول سطرين من كل مسار إقلاع:
+     initGuestMode() بـapp.js، أو _onWalletConnected()/_onAgentLinkConnected()
+     بـauth.js — قبل أي await فعلي. تحل محل الاعتماد الخاطئ سابقاً على
+     State._sessionTimer (لا يُضبط إلا بعد اكتمال جلب بيانات الحساب
+     الشبكي بالكامل) لكل ما لا يحتاج فعلياً إلا معرفة "ضيف أم متصل" —
+     مثل lastplace.js. راجع تعليقات app.js/auth.js لتفاصيل كل موضع. */
+  _identityReady: false,
 
   prices: {
     XAU:    { bid:0, ask:0, mid:0 },
@@ -19,7 +27,7 @@ const State = {
   },
   prevMid:    { XAU:0, NQ:0, GOLD:0, SILVER:0, CL:0 },
   prevDayPx:  { XAU:0, NQ:0, GOLD:0, SILVER:0, CL:0 },
-  /* ✅ جديد — PerpsAssetCtx كامل لكل رمز (funding/openInterest/markPx/oraclePx/midPx)
+  /* ✅ جديد — PerpsAssetCtx كامل لكل رمز (funding/openInterest/markPx/oraclePx/prevDayPx)
      يُغذّى حياً من اشتراك activeAssetCtx — بديل metaAndAssetCtxs المتكرر كل 60 ثانية */
   assetCtx: { XAU:null, NQ:null, GOLD:null, SILVER:null, CL:null },
 
