@@ -21,11 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Build md/files.json
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -50,7 +47,6 @@ jobs:
           PY
 
       - name: Build README tree
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -87,8 +83,8 @@ jobs:
 
               for i, p in enumerate(items):
                   last = i == len(items) - 1
-
                   branch = "└── " if last else "├── "
+
                   lines.append(prefix + branch + p.name)
 
                   if p.is_dir():
@@ -127,18 +123,13 @@ jobs:
               )
 
               text = text.rstrip() + "\n\n" + new_block
-
           else:
               text = new_block
 
-          readme.write_text(
-              text,
-              encoding="utf-8"
-          )
+          readme.write_text(text, encoding="utf-8")
           PY
 
       - name: Commit and push
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -153,5 +144,4 @@ jobs:
           fi
 
           git commit -m "🔄 Auto-update project tree"
-
           git push origin "HEAD:${GITHUB_REF_NAME}"
