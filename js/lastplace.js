@@ -55,6 +55,13 @@
       DOM بعد كل النوافذ المُستعادة هنا، فيُرسَم دائماً فوقها بصرياً
       بصرف النظر عن توقيت فتح كل منها — يحجب أي تفاعل حتى يُفتح القفل،
       وما تحته يبقى مستعاداً بالضبط كما كان.
+
+   ✅ جديد — الدرج المنبثق القديم (#drawerOverlay/.open) استُبدل بالدوك
+      الدائم الجديد (#dock/.expanded — راجع app.js/components.css).
+      _detectDrawerOpen() هي الدالة الوحيدة هنا التي تغيّرت: تفحص الآن
+      #dock بدل #drawerOverlay. الاستعادة نفسها (محاكاة نقرة btnMenu)
+      لم تتغيّر — btnMenu لا يزال موجوداً بنفس الـID، فقط منطقه الداخلي
+      (app.js:_initDock) صار يبدّل .expanded بدل .open/.hidden.
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -109,9 +116,11 @@
     return null;
   }
 
+  /* ✅ الدوك الجديد (#dock) بدل الدرج القديم (#drawerOverlay) — راجع
+     تعليق رأس الملف. حالة "مفتوح" الآن تعني .expanded لا .open. */
   function _detectDrawerOpen() {
-    const d = document.getElementById('drawerOverlay');
-    return !!(d && d.classList.contains('open'));
+    const d = document.getElementById('dock');
+    return !!(d && d.classList.contains('expanded'));
   }
 
   function _snapshot() {

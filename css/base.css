@@ -111,8 +111,17 @@ html.theme-transitioning * {
    (راجع js/pin.js:unlockApp) — لا صلة لها بأي قفل يدوي لاحق بنفس
    الجلسة (ذاك يعمل بالكامل عبر مودال #modalPIN العادي، فوق كل شيء
    بصرياً أصلاً بحكم ترتيبه بالـDOM). visibility بدل display:none
-   عمداً — لا reflow عند الإزالة، فقط تبديل رسم. */
-html[data-boot-lock="1"] .app-shell { visibility: hidden; }
+   عمداً — لا reflow عند الإزالة، فقط تبديل رسم.
+   ✅ جديد — #dock/#dockBackdrop يعيشان الآن خارج .app-shell (عنصران
+   ثابتا الموضع مستقلّان، راجع components.css) لأن الدوك دائم الظهور
+   بتصميمه (لا يُحكَم بـ.hidden/.open كالدرج القديم). بدون هذا السطر،
+   كانا سيُفلِتان من الإخفاء ويُرسَمان فوق شاشة القفل قبل أن يُتاح لـ
+   js/app.js فرصة استدعاء lockApp() فعلياً — نفس فئة سباق الرسم التي
+   يحلّها هذا الملف بأكمله، فقط لعنصر جديد لم يكن موجوداً وقت كتابة
+   القاعدة الأصلية. */
+html[data-boot-lock="1"] .app-shell,
+html[data-boot-lock="1"] #dock,
+html[data-boot-lock="1"] #dockBackdrop { visibility: hidden; }
 
 /* ════════════════════════════════════
    Scrollbar — عبر متغيّرات themes.css فقط

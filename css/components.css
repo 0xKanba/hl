@@ -38,7 +38,17 @@
       لنافذة معلومات الأصل الجديدة)، اسم/صورة/سعر أكبر بوضوح، صف اسم
       جديد (.market-card-name-row) يضم زر "؟" (.market-info-btn) لكل
       بطاقة، وقواعد جديدة لنافذة معلومات الأصل (.asset-info-*).
-═══════════════════════════════════════════════════════════════ */
+
+   ✅ جولة رابعة (2026-08) — الدرج الجانبي (.drawer-overlay/.drawer)
+      حُذف بالكامل واستُبدل بـ.dock: عمود أيقونات دائم الظهور يمين
+      الشاشة (لا يُحكَم بـ.hidden/.open كالسابق — عائم عمودياً بمنتصف
+      الشاشة طوال الوقت)، يتمدّد فقط لعرض العناوين عند فتح ☰. نفس
+      الأزرار بالضبط بحالتَي الطي/التمدد (لا عنصر مكرَّر)، فكل زر يعمل
+      بنقرة مباشرة على أيقونته بصرف النظر عن حالة التمدد. .drawer-theme-
+      toggle (زرَّان ☀️/🌙 منفصلان) حُذف أيضاً — استُبدل بزر واحد ضمن
+      قائمة .dock-item نفسها (.dock-item#dockTheme)، أيقونته وعنوانه
+      يعكسان المظهر الحالي فعلياً (راجع app.js:_syncThemeToggleUI).
+════════════════════════════════════════════════════════════════ */
 
 @layer components {
 
@@ -282,87 +292,73 @@
 .tab-btn:active .tab-btn-icon-wrap { transform: scale(.86); }
 
 /* ════════════════════════════════════
-   ✅ DRAWER — يحل محل .opts-overlay القديمة بالكامل، ينزلق من اليمين
-   (نفس جهة زر ☰ بالـappbar) مع خلفية معتمة. فوري بالكامل (بلا أي
-   transition) — لا وقت انتظار عند الفتح أو الإغلاق.
+   ✅ DOCK — عمود أيقونات دائم الظهور يمين الشاشة (يحل محل .drawer-
+   overlay/.drawer بالكامل — راجع تعليق رأس الملف "جولة رابعة").
+   حالتان بلا أي تكرار عناصر بينهما:
+     • مطويّ (افتراضي): أيقونات فقط، عرض ثابت صغير، دائم الظهور.
+     • ممتدّ (.expanded، يُبدَّل بزر ☰ #btnMenu): نفس الأزرار بالضبط،
+       فقط عرض العمود ونطاق كل زر يكبران فتظهر العناوين (.dock-lbl)
+       بجانب كل أيقونة (.dock-icon) عبر transition على max-width/
+       opacity — لا إعادة بناء DOM ولا عناصر موازية.
+   كل .dock-item له onclick واحد يعمل بصرف النظر تماماً عن .expanded —
+   هذا هو المطلوب: "الأزرار تعمل سواء فُتحت اللوحة أو لا" لأن الزر نفسه
+   (لا نسخة أخرى منه) هو ما يُنقر عليه بالحالتين.
 ════════════════════════════════════ */
-.drawer-overlay {
+.dock-backdrop {
   position: fixed; inset: 0; z-index: var(--z-opts);
-  background: rgba(0,0,0,0);
-  display: none;
+  background: rgba(0,0,0,0); pointer-events: none;
+  transition: background var(--dur-base) var(--ease-standard);
 }
-.drawer-overlay:not(.hidden) { display: block; }
-.drawer-overlay.open { background: rgba(0,0,0,.65); }
+.dock-backdrop.show { background: rgba(0,0,0,.55); pointer-events: auto; }
 
-.drawer {
-  position: fixed; top: 0; right: 0; bottom: 0;
-  width: min(58vw, 300px);
+.dock {
+  position: fixed; top: 50%; right: 0;
+  transform: translateY(-50%);
+  z-index: calc(var(--z-opts) + 1);
+  width: 52px;
+  max-height: min(72vh, 560px);
   background: var(--bg-card);
-  border-left: 1.5px solid var(--border);
-  box-shadow: -14px 0 44px rgba(0,0,0,.5);
-  display: flex; flex-direction: column;
-  transform: translateX(100%);
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+  border: 1.5px solid var(--border-strong);
+  border-inline-end: none;
+  border-radius: var(--r-lg) 0 0 var(--r-lg);
+  box-shadow: var(--shadow), var(--glow-bdr);
   overflow: hidden;
+  display: flex; flex-direction: column;
+  transition: width 220ms var(--ease-out);
 }
-.drawer-overlay.open .drawer { transform: translateX(0); }
+.dock.expanded { width: min(64vw, 240px); }
 
-.drawer-header {
-  display: flex; align-items: center; justify-content: center;
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.drawer-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.drawer-logo-icon {
-  width: 34px; height: 34px; border-radius: var(--r-sm);
-  background: linear-gradient(140deg, var(--logo-grad-1), var(--logo-grad-2));
-  display: flex; align-items: center; justify-content: center;
-  font-size: var(--fs-xl); flex-shrink: 0; box-shadow: 0 0 16px var(--logo-glow);
-}
-.drawer-logo-text {
-  font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.dock-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: var(--space-2) 0;
+  display: flex; flex-direction: column; gap: 1px;
 }
 
-.drawer-menu {
-  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: var(--space-3) var(--space-3) var(--space-5);
-  display: flex; flex-direction: column; gap: 2px;
-}
-.drawer-item {
-  display: flex; align-items: center; gap: 12px;
-  width: 100%; padding: 13px 12px;
-  border-radius: var(--r-md); border: none; background: none;
-  color: var(--text-primary); font-size: var(--fs-lg); font-weight: var(--fw-semibold);
-  text-align: right; text-decoration: none; cursor: pointer;
+.dock-item {
+  display: flex; align-items: center;
+  width: 100%; padding: 10px 13px;
+  background: none; border: none; text-decoration: none;
+  color: var(--text-primary); cursor: pointer;
+  white-space: nowrap; overflow: hidden; flex-shrink: 0;
   transition: background var(--dur-fast) var(--ease-standard);
   -webkit-tap-highlight-color: transparent;
 }
-.drawer-item:hover  { background: var(--bg-elev); }
-.drawer-item:active { background: var(--ac-dim); }
-.di-icon { font-size: var(--fs-xl); width: 26px; text-align: center; flex-shrink: 0; line-height: 1; }
-.di-lbl  { flex: 1; min-width: 0; }
-.drawer-divider { height: 1px; background: var(--border); margin: var(--space-2) 10px; flex-shrink: 0; }
+.dock-item:hover  { background: var(--bg-elev); }
+.dock-item:active { background: var(--ac-dim); }
 
-/* ════════════════════════════════════
-   ✅ DRAWER THEME TOGGLE — شعاران ثابتان (☀️/🌙) أسفل الدرج، خارج
-   القائمة القابلة للتمرير. اختيار صريح بدل زر واحد يقلب الحالة.
-════════════════════════════════════ */
-.drawer-theme-toggle {
-  display: flex; gap: 6px; padding: 8px 10px;
-  border-top: 1px solid var(--border); flex-shrink: 0;
+.dock-icon {
+  font-size: var(--fs-xl); width: 26px; flex-shrink: 0;
+  text-align: center; line-height: 1;
 }
-.theme-opt {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  height: 32px; border-radius: var(--r-sm);
-  border: 1.5px solid var(--border-strong); background: var(--bg-elev);
-  font-size: var(--fs-lg);
-  transition: all var(--dur-base) var(--ease-standard);
+.dock-lbl {
+  font-size: var(--fs-base); font-weight: var(--fw-semibold);
+  max-width: 0; opacity: 0; margin-inline-start: 0;
+  overflow: hidden; text-overflow: ellipsis;
+  transition: max-width 220ms var(--ease-out), opacity 160ms ease, margin-inline-start 220ms var(--ease-out);
 }
-.theme-opt.active { border-color: var(--ac); background: var(--ac-dim); box-shadow: var(--glow-ac); }
-.theme-opt:active { transform: scale(.92); }
+.dock.expanded .dock-lbl { max-width: 170px; opacity: 1; margin-inline-start: 10px; }
+
+.dock-divider { height: 1px; background: var(--border); margin: 6px 10px; flex-shrink: 0; }
 
 /* ════════════════════════════════════
    ✅ BALANCE CARD — بطاقة دائمة أعلى الرئيسية (بديل modalBalance)
@@ -1122,7 +1118,7 @@
    PERFORMANCE HINTS
 ════════════════════════════════════ */
 .tab, .price-card, .position-item, .btn-trade, .positions-card,
-.nav-connect-btn, .modal, .balance-card, .market-card, .drawer, .app-screen {
+.nav-connect-btn, .modal, .balance-card, .market-card, .dock, .app-screen {
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -1138,7 +1134,7 @@
   .modal { max-width: 480px; max-height: 90dvh; border-radius: var(--r-xl); margin: auto; height: auto; }
   .modal-overlay { padding: var(--space-5); }
   .overlay-fs .modal { max-width: 100%; max-height: 100dvh; border-radius: 0; margin: 0; height: 100dvh; }
-  .drawer { width: 260px; }
+  .dock.expanded { width: 260px; }
   .price-value { font-size: var(--fs-6xl); }
   .btn-trade   { min-height: 48px; }
   .nav-connect-btn { height: 30px; max-width: 140px; }

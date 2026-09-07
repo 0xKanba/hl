@@ -1,15 +1,23 @@
 /* ═══════════════════════════════════════
-   app.js — appbar + tabbar سفلي (3 أزرار) + درج هامبرغر
+   app.js — appbar + tabbar سفلي (3 أزرار) + دوك أيقونات جانبي
    ✅ راوتر شاشات: الرئيسية / الأسواق / الرسم البياني (data-screen)
       — switchScreen() المسؤول الوحيد عن إظهار/إخفاء أي من الثلاث،
       بما فيها الرسم البياني الآن (لم يعد overlay منفصلاً — راجع
       index.html/chart.js). تستدعي ChartModule.open()/close() فقط
       عند الدخول/الخروج من شاشة الرسم تحديداً، بلا أي منطق إضافي.
-   ✅ الدرج فوري 100% (بلا transition) — الهامبرغر نفسه مفتاح تبديل
-      (لا زر ✕). محتواه يبدأ بنفس أزرار التذييل (رئيسية/أسواق/رسم)،
-      ثم إيداع/سحب/تأريخ/تقويم/وكلاء/تصدير محفظة/وثائق كما هي.
-      القفل انتقل لـappbar، وتبديل المظهر أصبح شعارين ثابتين أسفل
-      الدرج (☀️/🌙) بدل زر واحد يقلب الحالة.
+   ✅ جديد — الدرج المنبثق (drawerOverlay/.drawer) استُبدل بالكامل
+      بـ"دوك" (Dock): عمود أيقونات دائم الظهور يمين الشاشة (لا يُحكَم
+      بـ.hidden/.open — عائم عمودياً بمنتصف الشاشة طوال الوقت)، يتمدّد
+      فقط لعرض العناوين عند نقر ☰ (.expanded على #dock). كل زر بداخله
+      (.dock-item) له onclick واحد يعمل بصرف النظر عن حالة التمدد —
+      "أيقونة تُنقر مباشرة دون فتح اللوحة" بالضبط كما طُلب. نفس الـIDs
+      القديمة تماماً لعناصر الإجراءات (optDeposit/optWithdraw/...)،
+      فمنطق الحراسات (تسجيل دخول/وضع رابط وكيل) أدناه لم يتغيّر إطلاقاً
+      — فقط غلاف الإغلاق تغيّر اسمه من _drawerAction إلى _dockAction.
+   ✅ جديد — زر تبديل المظهر أصبح زراً واحداً (#dockTheme) بدل شعارين
+      منفصلين (☀️/🌙) كانا يعيشان أسفل الدرج القديم. الأيقونة والعنوان
+      بداخله يعكسان المظهر الحالي فعلياً ويتبدّلان فور كل تبديل
+      (_syncThemeToggleUI)، والنقر يقلب الحالة مباشرة (_initThemeToggle).
    ✅ عنوان الحساب المتصل بالـappbar الآن popover صغير (نسخ + إلغاء
       اتصال يفتح modalLogout) بدل مودال منفصل مباشرة عند نقر الزر.
    ✅ "الرصيد" حُذف من القائمة نهائياً — بطاقة دائمة أعلى الرئيسية الآن
@@ -41,7 +49,7 @@
    ✅ جديد — وضع "رابط الوكيل" (js/agentlink.js): يُفحص أولاً بتسلسل
       الإقلاع، قبل Privy/EXTWALLET — رابط صالح بالعنوان يعني جلسة
       تداول جاهزة فوراً بلا أي توقيع. أزرار الإيداع/السحب/الوكلاء
-      بالدرج تُحجب برسالة واضحة بهذا الوضع (لا مفتاح محفظة رئيسية
+      بالدوك تُحجب برسالة واضحة بهذا الوضع (لا مفتاح محفظة رئيسية
       متاح محلياً أصلاً ليُستخدم لأي منها).
 
    ✅ إصلاح توقيت جوهري (2026-08) — قفل PIN كان يتأخر 600ms على الأقل
@@ -116,8 +124,9 @@ function _initMonthsPanel() {
   });
 }
 
-/* ✅ الآن شعاران ثابتان (☀️/🌙) أسفل الدرج بدل زر واحد يقلب الحالة —
-   _syncThemeToggleUI() تُبرز الحالة النشطة، _setTheme() تختار صراحة. */
+/* ✅ زر واحد الآن (#dockTheme داخل الدوك) بدل شعارين منفصلين —
+   _syncThemeToggleUI() تحدّث أيقونة/عنوان هذا الزر ليعكسا المظهر
+   الحالي فعلياً، _setTheme() تُطبَّق صراحة من _initThemeToggle أدناه. */
 function _applyTheme(theme, animate) {
   if (animate) {
     document.documentElement.classList.add('theme-transitioning');
@@ -136,9 +145,15 @@ function _initTheme() {
   });
 }
 
+/* ✅ يحدّث أيقونة/عنوان زر تبديل المظهر الموحّد (#dockTheme) — يعرض
+   حالة المظهر الحالية (لا الحالة التي سيتحوّل إليها)، مطابقاً نفس
+   اصطلاح "الأيقونة تعكس ما هو نشط الآن" المعتمَد ببقية أزرار الدوك. */
 function _syncThemeToggleUI() {
-  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
-  document.querySelectorAll('.theme-opt').forEach(b => b.classList.toggle('active', b.dataset.themeSet === cur));
+  const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
+  const icon = $('dockThemeIcon');
+  const lbl  = $('dockThemeLbl');
+  if (icon) icon.textContent = cur === 'dark' ? '🌙' : '☀️';
+  if (lbl)  lbl.textContent  = cur === 'dark' ? 'المظهر الداكن' : 'المظهر الفاتح';
 }
 function _setTheme(theme) {
   if (theme === (document.documentElement.getAttribute('data-theme') || 'dark')) return;
@@ -146,7 +161,10 @@ function _setTheme(theme) {
   _applyTheme(theme, true);
 }
 function _initThemeToggle() {
-  document.querySelectorAll('.theme-opt').forEach(b => b.onclick = () => _setTheme(b.dataset.themeSet));
+  $('dockTheme')?.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+    _setTheme(cur === 'dark' ? 'light' : 'dark');
+  });
   _syncThemeToggleUI();
 }
 
@@ -252,31 +270,30 @@ function _syncTabbarActive() {
 }
 
 /* ═══════════════════════════════════════
-   ✅ درج هامبرغر — فوري 100% (بلا أي transition/انتظار). الهامبرغر
-   نفسه مفتاح تبديل (لا زر ✕ منفصل) — أي نقر خارج اللوحة أو على عنصر
-   بداخلها يُغلقها أيضاً.
+   ✅ DOCK — عمود الأيقونات الجانبي الدائم (بديل الدرج المنبثق القديم).
+   openDock/closeDock يبدّلان فقط .expanded على #dock + .show على
+   #dockBackdrop — الأزرار نفسها (.dock-item) تبقى مرسومة وتعمل طوال
+   الوقت بصرف النظر عن هاتين الحالتين، فـ_dockAction لا تفعل شيء أكثر
+   من "أغلق (إن كان مفتوحاً، وإلا فلا شيء) ثم نفّذ الإجراء" — تماماً
+   كيف كان _drawerAction يتصرّف مع الدرج القديم، فقط بمصطلحات جديدة.
 ═══════════════════════════════════════ */
-function openDrawer() {
-  const ov = $('drawerOverlay');
-  if (!ov) return;
-  ov.classList.remove('hidden');
-  ov.classList.add('open');
+function openDock() {
+  $('dock')?.classList.add('expanded');
+  $('dockBackdrop')?.classList.add('show');
 }
-function closeDrawer() {
-  const ov = $('drawerOverlay');
-  if (!ov) return;
-  ov.classList.remove('open');
-  ov.classList.add('hidden');
+function closeDock() {
+  $('dock')?.classList.remove('expanded');
+  $('dockBackdrop')?.classList.remove('show');
 }
-function _drawerAction(fn) {
-  return () => { closeDrawer(); fn(); };
+function _dockAction(fn) {
+  return () => { closeDock(); fn(); };
 }
-function _initDrawer() {
+function _initDock() {
   $('btnMenu')?.addEventListener('click', () => {
-    const ov = $('drawerOverlay');
-    if (ov && ov.classList.contains('open')) closeDrawer(); else openDrawer();
+    const d = $('dock');
+    if (d && d.classList.contains('expanded')) closeDock(); else openDock();
   });
-  $('drawerOverlay')?.addEventListener('click', e => { if (e.target === $('drawerOverlay')) closeDrawer(); });
+  $('dockBackdrop')?.addEventListener('click', closeDock);
 }
 
 /* ═══════════════════════════════════════
@@ -351,11 +368,11 @@ function _initMarketInfoButtons() {
 }
 
 function openOptions() {
-  /* إبقاء الاسم للتوافق لو استُدعيت من أي مكان قديم — الآن تفتح الدرج */
-  openDrawer();
+  /* إبقاء الاسم للتوافق لو استُدعيت من أي مكان قديم — الآن تفتح الدوك */
+  openDock();
 }
 function closeOptions() {
-  closeDrawer();
+  closeDock();
 }
 
 /* ✅ جديد — حارس موحّد لعمليات تحتاج توقيع المحفظة الرئيسية (إيداع/
@@ -376,9 +393,10 @@ document.addEventListener('DOMContentLoaded', () => {
      State.wallet (كان السبب الحقيقي للتأخير القديم 600ms+ ولاحتمال
      عدم ظهور القفل إطلاقاً لو تجاوز اتصال المحفظة تلك المهلة — سباق
      حقيقي ضد الشبكة لشيء لا علاقة له بالشبكة إطلاقاً). سكربت <head>
-     بـindex.html (data-boot-lock) يُخفي .app-shell قبل هذا السطر حتى
-     (قبل أول رسم أصلاً) فلا وميض ممكن مهما استغرق تحميل بقية السكربتات
-     أدناه. راجع css/base.css وjs/pin.js:unlockApp لبقية الآلية. */
+     بـindex.html (data-boot-lock) يُخفي .app-shell (وأيضاً #dock/
+     #dockBackdrop الآن — راجع base.css) قبل هذا السطر حتى (قبل أول
+     رسم أصلاً) فلا وميض ممكن مهما استغرق تحميل بقية السكربتات أدناه.
+     راجع css/base.css وjs/pin.js:unlockApp لبقية الآلية. */
   if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true') {
     lockApp();
   }
@@ -386,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
   _initTheme();
   _startDatetimeClock();
   _initMonthsPanel();
-  _initDrawer();
+  _initDock();
   _initAddrPopover();
   _initThemeToggle();
   _initQtyInput();
@@ -421,23 +439,23 @@ document.addEventListener('DOMContentLoaded', () => {
     _toggleAddrPopover();
   };
 
-  /* ✅ نفس أزرار التذييل، كأول خيارات بالدرج */
-  document.querySelectorAll('.drawer-item[data-nav-screen]').forEach(btn => {
-    btn.onclick = _drawerAction(() => switchScreen(btn.dataset.navScreen));
+  /* ✅ نفس أزرار التذييل، كأول عناصر بالدوك */
+  document.querySelectorAll('.dock-item[data-nav-screen]').forEach(btn => {
+    btn.onclick = _dockAction(() => switchScreen(btn.dataset.navScreen));
   });
 
-  /* ✅ محتويات الدرج — نفس الـIDs القديمة تماماً. القفل انتقل لـappbar
-     (لم يعد بداخل الدرج، فلا حاجة لـ_drawerAction هنا). المظهر أصبح
-     شعارين ثابتين أسفل الدرج (راجع _initThemeToggle). */
+  /* ✅ محتويات الدوك — نفس الـIDs القديمة تماماً. القفل انتقل لـappbar
+     (لم يعد بداخل الدوك، فلا حاجة لـ_dockAction هنا). المظهر أصبح
+     زراً واحداً موحَّداً داخل الدوك نفسه (راجع _initThemeToggle). */
   _el('btnLock').onclick = () => { if (State.isGuest) return _promptConnect(); lockApp(true); };
-  $('btnDocs')?.addEventListener('click', () => closeDrawer());
+  $('btnDocs')?.addEventListener('click', () => closeDock());
 
-  _el('optHistory').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); showHistory(); });
-  _el('optCalendar').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); });
-  _el('optDeposit').onclick  = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (_blockIfAgentLink()) return; _fillDepositAddr(); openModal('modalDeposit'); });
-  _el('optWithdraw').onclick = _drawerAction(() => { if (State.isGuest) return _promptConnect(); if (_blockIfAgentLink()) return; openModal('modalWithdraw'); });
-  $('optExportWallet')?.addEventListener('click', _drawerAction(exportWallet));
-  $('optAgents')?.addEventListener('click', _drawerAction(() => {
+  _el('optHistory').onclick  = _dockAction(() => { if (State.isGuest) return _promptConnect(); showHistory(); });
+  _el('optCalendar').onclick = _dockAction(() => { if (State.isGuest) return _promptConnect(); if (typeof openCalendar==='function') openCalendar(); });
+  _el('optDeposit').onclick  = _dockAction(() => { if (State.isGuest) return _promptConnect(); if (_blockIfAgentLink()) return; _fillDepositAddr(); openModal('modalDeposit'); });
+  _el('optWithdraw').onclick = _dockAction(() => { if (State.isGuest) return _promptConnect(); if (_blockIfAgentLink()) return; openModal('modalWithdraw'); });
+  $('optExportWallet')?.addEventListener('click', _dockAction(exportWallet));
+  $('optAgents')?.addEventListener('click', _dockAction(() => {
     if (State.isGuest) return _promptConnect();
     if (_blockIfAgentLink()) return;
     if (typeof Agents !== 'undefined') Agents.openModal();

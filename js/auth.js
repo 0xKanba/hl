@@ -73,6 +73,10 @@
       الخاطئ سابقاً لـState._sessionTimer (لا يُضبط إلا بعد اكتمال جلب
       بيانات الحساب الشبكي بالكامل — بطيء وغير ضروري لهذا الغرض تحديداً).
       راجع state.js لتعريف الحقل، وjs/lastplace.js لكيفية استهلاكه.
+
+   ✅ جديد — connectWallet(): الدرج المنبثق القديم (openDrawer) استُبدل
+      بالدوك الدائم الجديد (openDock) — راجع app.js لسبب هذا التغيير
+      بالكامل (الدرج لم يعد موجوداً إطلاقاً بالمشروع).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -110,7 +114,7 @@ function initGuestMode() {
 }
 
 function connectWallet() {
-  if (!State.isGuest) return openDrawer();
+  if (!State.isGuest) return openDock();
   _walletListOpenedAt = Date.now();
   _renderExtWalletList();
   if (typeof Wallets !== 'undefined') Wallets.onListChanged(_renderExtWalletList);

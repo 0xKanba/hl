@@ -383,45 +383,65 @@
   </div>
 </div>
 
-<!-- ✅ درج هامبرغر — فوري الفتح/الإغلاق، بلا زر ✕ (النقر خارجه أو على
-     أي عنصر بداخله يُغلقه). كل الأزرار بنفس الـIDs السابقة تماماً
-     (optDeposit/optWithdraw/...) — app.js لا يحتاج أي تغيير بربطها. -->
-<div class="drawer-overlay hidden" id="drawerOverlay">
-  <aside class="drawer" id="drawer">
+<!-- ✅ DOCK — يحل محل الدرج القديم (drawerOverlay/.drawer) بالكامل.
+     عمود أيقونات دائم الظهور يمين الشاشة (نفس جهة زر ☰ بالـappbar)،
+     عائم عمودياً في منتصف الشاشة، بلا أي اعتماد على حالة الفتح/الإغلاق:
+     كل زر (dock-item) له onclick واحد يعمل فوراً بالنقر المباشر على
+     أيقونته، طيّاً كان الدوك أو متمدداً — لا تكرار عناصر بين الحالتين.
+     زر ☰ (btnMenu) فقط يبدّل كلاس .expanded فتظهر العناوين بجانب كل
+     أيقونة (transition على العرض/الشفافية، بلا إعادة بناء DOM). نفس
+     الـIDs القديمة تماماً لعناصر الإجراءات — app.js لا يحتاج أي تغيير
+     بمنطق ربط تلك الأزرار نفسها، فقط بمنطق فتح/إغلاق الدوك نفسه
+     (راجع app.js:_initDock). زر تبديل المظهر الآن زر واحد (dockTheme)
+     بدل الزرَّين المنفصلَين السابقَين (☀️/🌙) — الأيقونة والعنوان
+     يعكسان المظهر الحالي فعلياً. -->
+<div class="dock-backdrop" id="dockBackdrop"></div>
+<aside class="dock" id="dock">
+  <div class="dock-scroll" id="dockScroll">
+    <button class="dock-item" data-nav-screen="home" title="الرئيسية">
+      <span class="dock-icon">🏠</span><span class="dock-lbl">الرئيسية</span>
+    </button>
+    <button class="dock-item" data-nav-screen="markets" title="الأسواق">
+      <span class="dock-icon">🛒</span><span class="dock-lbl">الأسواق</span>
+    </button>
+    <button class="dock-item" data-nav-screen="chart" title="الرسم البياني">
+      <span class="dock-icon">📈</span><span class="dock-lbl">الرسم البياني</span>
+    </button>
 
-    <div class="drawer-header">
-      <div class="drawer-brand">
-        <span class="drawer-logo-icon">💧</span>
-        <span class="drawer-logo-text">ماركت ليك</span>
-      </div>
-    </div>
+    <div class="dock-divider"></div>
 
-    <nav class="drawer-menu">
-      <button class="drawer-item" data-nav-screen="home"><span class="di-icon">🏠</span><span class="di-lbl">الرئيسية</span></button>
-      <button class="drawer-item" data-nav-screen="markets"><span class="di-icon">🛒</span><span class="di-lbl">الأسواق</span></button>
-      <button class="drawer-item" data-nav-screen="chart"><span class="di-icon">📈</span><span class="di-lbl">الرسم البياني</span></button>
+    <button class="dock-item" id="optDeposit" title="إيداع">
+      <span class="dock-icon">💵</span><span class="dock-lbl">إيداع</span>
+    </button>
+    <button class="dock-item" id="optWithdraw" title="سحب">
+      <span class="dock-icon">📤</span><span class="dock-lbl">سحب</span>
+    </button>
+    <button class="dock-item" id="optHistory" title="التأريخ">
+      <span class="dock-icon">📜</span><span class="dock-lbl">التأريخ</span>
+    </button>
+    <button class="dock-item" id="optCalendar" title="التقويم الشهري">
+      <span class="dock-icon">📅</span><span class="dock-lbl">التقويم الشهري</span>
+    </button>
+    <button class="dock-item" id="optAgents" title="الوكلاء">
+      <span class="dock-icon">🤖</span><span class="dock-lbl">الوكلاء</span>
+    </button>
+    <button class="dock-item" id="optExportWallet" title="تصدير المحفظة">
+      <span class="dock-icon">🔑</span><span class="dock-lbl">تصدير المحفظة</span>
+    </button>
 
-      <div class="drawer-divider"></div>
+    <div class="dock-divider"></div>
 
-      <button class="drawer-item" id="optDeposit"><span class="di-icon">💵</span><span class="di-lbl">إيداع</span></button>
-      <button class="drawer-item" id="optWithdraw"><span class="di-icon">📤</span><span class="di-lbl">سحب</span></button>
-      <button class="drawer-item" id="optHistory"><span class="di-icon">📜</span><span class="di-lbl">التأريخ</span></button>
-      <button class="drawer-item" id="optCalendar"><span class="di-icon">📅</span><span class="di-lbl">التقويم الشهري</span></button>
-      <button class="drawer-item" id="optAgents"><span class="di-icon">🤖</span><span class="di-lbl">الوكلاء</span></button>
-      <button class="drawer-item" id="optExportWallet"><span class="di-icon">🔑</span><span class="di-lbl">تصدير المحفظة</span></button>
+    <a class="dock-item" id="btnDocs" href="https://kanba.pw/" title="الوثائق والدعم">
+      <span class="dock-icon">📄</span><span class="dock-lbl">الوثائق والدعم</span>
+    </a>
 
-      <div class="drawer-divider"></div>
+    <div class="dock-divider"></div>
 
-      <a class="drawer-item" id="btnDocs" href="https://kanba.pw/"><span class="di-icon">📄</span><span class="di-lbl">الوثائق والدعم</span></a>
-    </nav>
-
-    <div class="drawer-theme-toggle">
-      <button class="theme-opt" data-theme-set="light" aria-label="المظهر الفاتح">☀️</button>
-      <button class="theme-opt" data-theme-set="dark" aria-label="المظهر الداكن">🌙</button>
-    </div>
-
-  </aside>
-</div>
+    <button class="dock-item" id="dockTheme" title="تبديل المظهر">
+      <span class="dock-icon" id="dockThemeIcon">🌙</span><span class="dock-lbl" id="dockThemeLbl">المظهر الداكن</span>
+    </button>
+  </div>
+</aside>
 
 <!-- ══ MODALS ══ -->
 
@@ -575,7 +595,7 @@
   modalDeposit يعرض عنوان محفظة المستخدم المتصلة مباشرة (بريد Privy أو
   خارجية — نفس المنطق للاثنين: الإيداع تحويل USDC من هذا العنوان بالذات
   للجسر). depositAddrTxt/depositAddrCopy يُملآن ويُوصَلان عبر
-  _fillDepositAddr() بapp.js، تُستدعى فور فتح النافذة من الدرج.
+  _fillDepositAddr() بapp.js، تُستدعى فور فتح النافذة من الدوك.
 -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
