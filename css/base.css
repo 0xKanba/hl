@@ -112,16 +112,11 @@ html.theme-transitioning * {
    الجلسة (ذاك يعمل بالكامل عبر مودال #modalPIN العادي، فوق كل شيء
    بصرياً أصلاً بحكم ترتيبه بالـDOM). visibility بدل display:none
    عمداً — لا reflow عند الإزالة، فقط تبديل رسم.
-   ✅ جديد — #dock/#dockBackdrop يعيشان الآن خارج .app-shell (عنصران
-   ثابتا الموضع مستقلّان، راجع components.css) لأن الدوك دائم الظهور
-   بتصميمه (لا يُحكَم بـ.hidden/.open كالدرج القديم). بدون هذا السطر،
-   كانا سيُفلِتان من الإخفاء ويُرسَمان فوق شاشة القفل قبل أن يُتاح لـ
-   js/app.js فرصة استدعاء lockApp() فعلياً — نفس فئة سباق الرسم التي
-   يحلّها هذا الملف بأكمله، فقط لعنصر جديد لم يكن موجوداً وقت كتابة
-   القاعدة الأصلية. */
-html[data-boot-lock="1"] .app-shell,
-html[data-boot-lock="1"] #dock,
-html[data-boot-lock="1"] #dockBackdrop { visibility: hidden; }
+   ✅ #dock (عمود الأيقونات الجانبي) عنصر flex حقيقي داخل .app-shell
+   نفسها الآن (راجع components.css:.content-row) — يرث visibility:
+   hidden تلقائياً من هذه القاعدة الواحدة بلا أي استثناء يدوي إضافي،
+   بعكس نسخة سابقة كانت خارج .app-shell واحتاجت سطراً خاصاً بها. */
+html[data-boot-lock="1"] .app-shell { visibility: hidden; }
 
 /* ════════════════════════════════════
    Scrollbar — عبر متغيّرات themes.css فقط

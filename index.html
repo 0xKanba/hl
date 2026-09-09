@@ -155,6 +155,74 @@
     </div>
   </div>
 
+  <!-- ✅ DOCK — يحل محل الدرج القديم (drawerOverlay/.drawer) بالكامل،
+       وأيضاً بديل النسخة العائمة السابقة (position:fixed منتصف الشاشة)
+       التي كانت تُصاب أحياناً بخطأ موضع بصري (تصادم transform مع قاعدة
+       أداء عامة لاحقة بـcomponents.css كانت تُلغي توسيط translateY(-50%)
+       فيظهر الدوك "بالأسفل" بدل المنتصف — جذر الشكوى الأخيرة). الآن
+       #dock عنصر تخطيط flex حقيقي داخل .content-row (يمين الشاشة، نفس
+       جهة زر ☰ بالـappbar بحكم RTL) — "عمود كامل" بمعنى حرفي: يمتد
+       تلقائياً بكامل ارتفاع منطقة المحتوى (بين الرأس والتذييل) عبر
+       flexbox نفسه، لا حساب بكسلات يدوي هش قد ينكسر لو تغيّر ارتفاع
+       الـappbar/tabbar لاحقاً — يعمل بنفس الدقة بأي حجم/اتجاه شاشة
+       (موبايل/سطح مكتب، عمودي/أفقي) لأن الارتفاع مُشتق من التخطيط
+       نفسه لا من قيمة مفترَضة. عرضه الخارجي (52px) ثابت دائماً — لا
+       "قفزة" بالتخطيط عند التمدد؛ التمدد (.expanded) يحدث فقط بالعنصر
+       الداخلي #dockScroll (position:absolute نسبةً لـ#dock، يفيض فوق
+       .screens-viewport كطبقة عائمة خفيفة، بلا خلفية معتمة كاملة —
+       راجع app.js:_initDock). كل زر (dock-item) له onclick واحد يعمل
+       فوراً بالنقر المباشر على أيقونته، طيّاً كان الدوك أو متمدداً —
+       لا تكرار عناصر بين الحالتين. نفس الـIDs القديمة تماماً لعناصر
+       الإجراءات. زر تبديل المظهر زر واحد (dockTheme) بدل الزرَّين
+       المنفصلَين السابقَين — الأيقونة والعنوان يعكسان المظهر الحالي. -->
+  <div class="content-row" id="contentRow">
+    <aside class="dock" id="dock">
+      <div class="dock-scroll" id="dockScroll">
+        <button class="dock-item" data-nav-screen="home" title="الرئيسية">
+          <span class="dock-icon">🏠</span><span class="dock-lbl">الرئيسية</span>
+        </button>
+        <button class="dock-item" data-nav-screen="markets" title="الأسواق">
+          <span class="dock-icon">🛒</span><span class="dock-lbl">الأسواق</span>
+        </button>
+        <button class="dock-item" data-nav-screen="chart" title="الرسم البياني">
+          <span class="dock-icon">📈</span><span class="dock-lbl">الرسم البياني</span>
+        </button>
+
+        <div class="dock-divider"></div>
+
+        <button class="dock-item" id="optDeposit" title="إيداع">
+          <span class="dock-icon">💵</span><span class="dock-lbl">إيداع</span>
+        </button>
+        <button class="dock-item" id="optWithdraw" title="سحب">
+          <span class="dock-icon">📤</span><span class="dock-lbl">سحب</span>
+        </button>
+        <button class="dock-item" id="optHistory" title="التأريخ">
+          <span class="dock-icon">📜</span><span class="dock-lbl">التأريخ</span>
+        </button>
+        <button class="dock-item" id="optCalendar" title="التقويم الشهري">
+          <span class="dock-icon">📅</span><span class="dock-lbl">التقويم الشهري</span>
+        </button>
+        <button class="dock-item" id="optAgents" title="الوكلاء">
+          <span class="dock-icon">🤖</span><span class="dock-lbl">الوكلاء</span>
+        </button>
+        <button class="dock-item" id="optExportWallet" title="تصدير المحفظة">
+          <span class="dock-icon">🔑</span><span class="dock-lbl">تصدير المحفظة</span>
+        </button>
+
+        <div class="dock-divider"></div>
+
+        <a class="dock-item" id="btnDocs" href="https://kanba.pw/" title="الوثائق والدعم">
+          <span class="dock-icon">📄</span><span class="dock-lbl">الوثائق والدعم</span>
+        </a>
+
+        <div class="dock-divider"></div>
+
+        <button class="dock-item" id="dockTheme" title="تبديل المظهر">
+          <span class="dock-icon" id="dockThemeIcon">🌙</span><span class="dock-lbl" id="dockThemeLbl">المظهر الداكن</span>
+        </button>
+      </div>
+    </aside>
+
   <!-- SCREENS -->
   <main class="screens-viewport" id="screensViewport">
 
@@ -357,6 +425,7 @@
     <section class="app-screen hidden" data-screen="chart" id="chartScreen"></section>
 
   </main>
+  </div>
 
   <!-- ✅ TABBAR — ترتيب DOM [رسم، رئيسية، أسواق] → RTL يعطي يمين=رسم/وسط=رئيسية/يسار=أسواق -->
   <nav class="tabbar">
@@ -382,66 +451,6 @@
     <div class="login-title">ماركت ليك</div>
   </div>
 </div>
-
-<!-- ✅ DOCK — يحل محل الدرج القديم (drawerOverlay/.drawer) بالكامل.
-     عمود أيقونات دائم الظهور يمين الشاشة (نفس جهة زر ☰ بالـappbar)،
-     عائم عمودياً في منتصف الشاشة، بلا أي اعتماد على حالة الفتح/الإغلاق:
-     كل زر (dock-item) له onclick واحد يعمل فوراً بالنقر المباشر على
-     أيقونته، طيّاً كان الدوك أو متمدداً — لا تكرار عناصر بين الحالتين.
-     زر ☰ (btnMenu) فقط يبدّل كلاس .expanded فتظهر العناوين بجانب كل
-     أيقونة (transition على العرض/الشفافية، بلا إعادة بناء DOM). نفس
-     الـIDs القديمة تماماً لعناصر الإجراءات — app.js لا يحتاج أي تغيير
-     بمنطق ربط تلك الأزرار نفسها، فقط بمنطق فتح/إغلاق الدوك نفسه
-     (راجع app.js:_initDock). زر تبديل المظهر الآن زر واحد (dockTheme)
-     بدل الزرَّين المنفصلَين السابقَين (☀️/🌙) — الأيقونة والعنوان
-     يعكسان المظهر الحالي فعلياً. -->
-<div class="dock-backdrop" id="dockBackdrop"></div>
-<aside class="dock" id="dock">
-  <div class="dock-scroll" id="dockScroll">
-    <button class="dock-item" data-nav-screen="home" title="الرئيسية">
-      <span class="dock-icon">🏠</span><span class="dock-lbl">الرئيسية</span>
-    </button>
-    <button class="dock-item" data-nav-screen="markets" title="الأسواق">
-      <span class="dock-icon">🛒</span><span class="dock-lbl">الأسواق</span>
-    </button>
-    <button class="dock-item" data-nav-screen="chart" title="الرسم البياني">
-      <span class="dock-icon">📈</span><span class="dock-lbl">الرسم البياني</span>
-    </button>
-
-    <div class="dock-divider"></div>
-
-    <button class="dock-item" id="optDeposit" title="إيداع">
-      <span class="dock-icon">💵</span><span class="dock-lbl">إيداع</span>
-    </button>
-    <button class="dock-item" id="optWithdraw" title="سحب">
-      <span class="dock-icon">📤</span><span class="dock-lbl">سحب</span>
-    </button>
-    <button class="dock-item" id="optHistory" title="التأريخ">
-      <span class="dock-icon">📜</span><span class="dock-lbl">التأريخ</span>
-    </button>
-    <button class="dock-item" id="optCalendar" title="التقويم الشهري">
-      <span class="dock-icon">📅</span><span class="dock-lbl">التقويم الشهري</span>
-    </button>
-    <button class="dock-item" id="optAgents" title="الوكلاء">
-      <span class="dock-icon">🤖</span><span class="dock-lbl">الوكلاء</span>
-    </button>
-    <button class="dock-item" id="optExportWallet" title="تصدير المحفظة">
-      <span class="dock-icon">🔑</span><span class="dock-lbl">تصدير المحفظة</span>
-    </button>
-
-    <div class="dock-divider"></div>
-
-    <a class="dock-item" id="btnDocs" href="https://kanba.pw/" title="الوثائق والدعم">
-      <span class="dock-icon">📄</span><span class="dock-lbl">الوثائق والدعم</span>
-    </a>
-
-    <div class="dock-divider"></div>
-
-    <button class="dock-item" id="dockTheme" title="تبديل المظهر">
-      <span class="dock-icon" id="dockThemeIcon">🌙</span><span class="dock-lbl" id="dockThemeLbl">المظهر الداكن</span>
-    </button>
-  </div>
-</aside>
 
 <!-- ══ MODALS ══ -->
 

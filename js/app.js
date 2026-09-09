@@ -271,19 +271,19 @@ function _syncTabbarActive() {
 
 /* ═══════════════════════════════════════
    ✅ DOCK — عمود الأيقونات الجانبي الدائم (بديل الدرج المنبثق القديم).
-   openDock/closeDock يبدّلان فقط .expanded على #dock + .show على
-   #dockBackdrop — الأزرار نفسها (.dock-item) تبقى مرسومة وتعمل طوال
-   الوقت بصرف النظر عن هاتين الحالتين، فـ_dockAction لا تفعل شيء أكثر
-   من "أغلق (إن كان مفتوحاً، وإلا فلا شيء) ثم نفّذ الإجراء" — تماماً
-   كيف كان _drawerAction يتصرّف مع الدرج القديم، فقط بمصطلحات جديدة.
-═══════════════════════════════════════ */
+   openDock/closeDock يبدّلان فقط .expanded على #dock — الأزرار نفسها
+   (.dock-item) تبقى مرسومة وتعمل طوال الوقت بصرف النظر عن هذه الحالة،
+   فـ_dockAction لا تفعل شيء أكثر من "أغلق (إن كان مفتوحاً، وإلا فلا
+   شيء) ثم نفّذ الإجراء" — تماماً كيف كان _drawerAction يتصرّف مع الدرج
+   القديم، فقط بمصطلحات جديدة. لا خلفية معتمة كاملة الشاشة بعد الآن
+   (#dockBackdrop حُذف — راجع components.css:"جولة خامسة") لأن التمدد
+   لم يعد يغطّي الشاشة كلها؛ بدلاً منه: نقرة خارج #dock (أو خارج زر ☰
+   نفسه) بينما الدوك متمدد تُغلقه — بنفس نمط _initAddrPopover أدناه. */
 function openDock() {
   $('dock')?.classList.add('expanded');
-  $('dockBackdrop')?.classList.add('show');
 }
 function closeDock() {
   $('dock')?.classList.remove('expanded');
-  $('dockBackdrop')?.classList.remove('show');
 }
 function _dockAction(fn) {
   return () => { closeDock(); fn(); };
@@ -293,7 +293,12 @@ function _initDock() {
     const d = $('dock');
     if (d && d.classList.contains('expanded')) closeDock(); else openDock();
   });
-  $('dockBackdrop')?.addEventListener('click', closeDock);
+  document.addEventListener('click', e => {
+    const d = $('dock');
+    if (!d || !d.classList.contains('expanded')) return;
+    if (d.contains(e.target) || $('btnMenu')?.contains(e.target)) return;
+    closeDock();
+  });
 }
 
 /* ═══════════════════════════════════════
@@ -393,8 +398,9 @@ document.addEventListener('DOMContentLoaded', () => {
      State.wallet (كان السبب الحقيقي للتأخير القديم 600ms+ ولاحتمال
      عدم ظهور القفل إطلاقاً لو تجاوز اتصال المحفظة تلك المهلة — سباق
      حقيقي ضد الشبكة لشيء لا علاقة له بالشبكة إطلاقاً). سكربت <head>
-     بـindex.html (data-boot-lock) يُخفي .app-shell (وأيضاً #dock/
-     #dockBackdrop الآن — راجع base.css) قبل هذا السطر حتى (قبل أول
+     بـindex.html (data-boot-lock) يُخفي .app-shell بالكامل (بما فيها
+     #dock — عنصر flex داخلها الآن، يرث الإخفاء تلقائياً بلا أي استثناء
+     خاص مطلوب، راجع base.css) قبل هذا السطر حتى (قبل أول
      رسم أصلاً) فلا وميض ممكن مهما استغرق تحميل بقية السكربتات أدناه.
      راجع css/base.css وjs/pin.js:unlockApp لبقية الآلية. */
   if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true') {

@@ -41,13 +41,30 @@
 
    ✅ جولة رابعة (2026-08) — الدرج الجانبي (.drawer-overlay/.drawer)
       حُذف بالكامل واستُبدل بـ.dock: عمود أيقونات دائم الظهور يمين
-      الشاشة (لا يُحكَم بـ.hidden/.open كالسابق — عائم عمودياً بمنتصف
-      الشاشة طوال الوقت)، يتمدّد فقط لعرض العناوين عند فتح ☰. نفس
-      الأزرار بالضبط بحالتَي الطي/التمدد (لا عنصر مكرَّر)، فكل زر يعمل
-      بنقرة مباشرة على أيقونته بصرف النظر عن حالة التمدد. .drawer-theme-
-      toggle (زرَّان ☀️/🌙 منفصلان) حُذف أيضاً — استُبدل بزر واحد ضمن
-      قائمة .dock-item نفسها (.dock-item#dockTheme)، أيقونته وعنوانه
-      يعكسان المظهر الحالي فعلياً (راجع app.js:_syncThemeToggleUI).
+      الشاشة، يتمدّد فقط لعرض العناوين عند فتح ☰. نفس الأزرار بالضبط
+      بحالتَي الطي/التمدد (لا عنصر مكرَّر)، فكل زر يعمل بنقرة مباشرة
+      على أيقونته بصرف النظر عن حالة التمدد. .drawer-theme-toggle
+      (زرَّان ☀️/🌙 منفصلان) حُذف أيضاً — استُبدل بزر واحد ضمن قائمة
+      .dock-item نفسها (.dock-item#dockTheme)، أيقونته وعنوانه يعكسان
+      المظهر الحالي فعلياً (راجع app.js:_syncThemeToggleUI).
+
+   ✅ جولة خامسة (2026-09) — FIX جذري لخطأ موضع بصري: النسخة الأولى
+      من .dock كانت position:fixed عائمة بمنتصف الشاشة (top:50% +
+      transform:translateY(-50%))، وتصادمت مع قاعدة أداء عامة لاحقة
+      بهذا الملف (transform:translateZ(0) على نفس الخاصية transform)
+      فألغت التوسيط صمتاً — ظهر الدوك منزاحاً للأسفل بدل المنتصف. الحل
+      ليس ترقيع القيمة بل إزالة فئة الخطأ بالكامل: .dock الآن عنصر flex
+      حقيقي (لا position:fixed، لا transform للموضع إطلاقاً) داخل
+      .content-row الجديد (صف أفقي يضم #dock + .screens-viewport، يملأ
+      كل الارتفاع المتبقي بين الرأس والتذييل عبر flex:1 عادي) — "عمود
+      كامل" فعلياً بارتفاع منطقة المحتوى، مُشتق من التخطيط نفسه فيعمل
+      بنفس الدقة بأي حجم/اتجاه شاشة (موبايل/سطح مكتب، عمودي/أفقي) بلا
+      أي حساب بكسلات هش. عرض #dock الخارجي (52px) لا يتغيّر أبداً —
+      التمدد يحدث فقط بـ#dockScroll الداخلي (position:absolute نسبةً
+      لـ#dock، يفيض بصرياً فوق .screens-viewport بلا حجبها/تربيعها)،
+      فلا اهتزاز تخطيط عند كل نقرة ☰. .dock-backdrop حُذف بالكامل —
+      لم يعد ضرورياً بما أن التمدد لم يعد يغطّي كامل الشاشة (راجع
+      app.js:_initDock لمنطق الإغلاق بالنقر خارج الدوك البديل الآن).
 ════════════════════════════════════════════════════════════════ */
 
 @layer components {
@@ -236,7 +253,7 @@
 /* ════════════════════════════════════
    SCREENS VIEWPORT — الرئيسية / الأسواق / الرسم البياني
 ════════════════════════════════════ */
-.screens-viewport { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.screens-viewport { flex: 1; min-width: 0; min-height: 0; position: relative; overflow: hidden; z-index: 1; }
 
 .app-screen {
   position: absolute; inset: 0;
@@ -292,46 +309,71 @@
 .tab-btn:active .tab-btn-icon-wrap { transform: scale(.86); }
 
 /* ════════════════════════════════════
-   ✅ DOCK — عمود أيقونات دائم الظهور يمين الشاشة (يحل محل .drawer-
-   overlay/.drawer بالكامل — راجع تعليق رأس الملف "جولة رابعة").
-   حالتان بلا أي تكرار عناصر بينهما:
-     • مطويّ (افتراضي): أيقونات فقط، عرض ثابت صغير، دائم الظهور.
-     • ممتدّ (.expanded، يُبدَّل بزر ☰ #btnMenu): نفس الأزرار بالضبط،
-       فقط عرض العمود ونطاق كل زر يكبران فتظهر العناوين (.dock-lbl)
-       بجانب كل أيقونة (.dock-icon) عبر transition على max-width/
-       opacity — لا إعادة بناء DOM ولا عناصر موازية.
-   كل .dock-item له onclick واحد يعمل بصرف النظر تماماً عن .expanded —
-   هذا هو المطلوب: "الأزرار تعمل سواء فُتحت اللوحة أو لا" لأن الزر نفسه
-   (لا نسخة أخرى منه) هو ما يُنقر عليه بالحالتين.
+   ✅ CONTENT ROW — صف flex أفقي يضم #dock + .screens-viewport معاً،
+   يملأ كل الارتفاع المتبقي بين الرأس (appbar/datetime-bar/months-panel)
+   والتذييل (tabbar) عبر flex:1 العادي — لا أي position:fixed ولا حساب
+   بكسلات. هذا وحده هو ما يجعل #dock "عموداً كاملاً" فعلياً بأي حجم/
+   اتجاه شاشة: ارتفاعه مُشتق من التخطيط نفسه، لا من قيمة مفترَضة.
 ════════════════════════════════════ */
-.dock-backdrop {
-  position: fixed; inset: 0; z-index: var(--z-opts);
-  background: rgba(0,0,0,0); pointer-events: none;
-  transition: background var(--dur-base) var(--ease-standard);
-}
-.dock-backdrop.show { background: rgba(0,0,0,.55); pointer-events: auto; }
-
-.dock {
-  position: fixed; top: 50%; right: 0;
-  transform: translateY(-50%);
-  z-index: calc(var(--z-opts) + 1);
-  width: 52px;
-  max-height: min(72vh, 560px);
-  background: var(--bg-card);
-  border: 1.5px solid var(--border-strong);
-  border-inline-end: none;
-  border-radius: var(--r-lg) 0 0 var(--r-lg);
-  box-shadow: var(--shadow), var(--glow-bdr);
+.content-row {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: row;
   overflow: hidden;
-  display: flex; flex-direction: column;
-  transition: width 220ms var(--ease-out);
 }
-.dock.expanded { width: min(64vw, 240px); }
+
+/* ════════════════════════════════════
+   ✅ DOCK — عمود أيقونات دائم الظهور، يحل محل .drawer-overlay/.drawer
+   القديم بالكامل، وأيضاً بديل نسخة سابقة كانت position:fixed عائمة
+   بمنتصف الشاشة (top:50%+transform:translateY(-50%)) — تلك تصادمت مع
+   قاعدة أداء عامة لاحقة بهذا الملف (transform:translateZ(0) على نفس
+   الخاصية transform)، فألغت التوسيط ٍصمتاً وظهر الدوك منزاحاً للأسفل.
+
+   ⚠️ FIX جذري — القرار المعماري الجديد يزيل فئة الخطأ هذه بالكامل بدل
+   ترقيعها: #dock لم يعد يستخدم position:fixed ولا transform للموضع
+   إطلاقاً. هو الآن عنصر flex حقيقي داخل .content-row (أول عنصر بترتيب
+   DOM ← يمين الشاشة بحكم RTL، نفس جهة زر ☰ بالـappbar تماماً كالسابق):
+
+     • #dock (الصندوق الخارجي): عرضه 52px ثابت لا يتغيّر أبداً مهما
+       حدث — هذا ما يضمن "الأيقونات ثابتة، تعمل وتظهر دائماً" بلا أي
+       قفزة/إعادة تخطيط لبقية الشاشة عند التمدد. ارتفاعه يملأ ارتفاع
+       .content-row تلقائياً (align-items:stretch الافتراضي بصف flex)
+       — أي بأي حجم شاشة أو اتجاه (عمودي/أفقي، موبايل/سطح مكتب) بلا
+       أي كود إضافي.
+     • #dockScroll (الصندوق الداخلي، نفس الأزرار): position:absolute
+       نسبةً لـ#dock نفسه — بحالته الافتراضية يملأ نفس الـ52px بالضبط
+       (أيقونات فقط). عند .expanded يتمدّد عرضه فقط (52px ← ~220px)
+       ويفيض بصرياً فوق .screens-viewport كطبقة عائمة خفيفة (ظل + حواف
+       مستديرة)، بلا حجب/تربيع أي محتوى وبلا خلفية معتمة كاملة الشاشة —
+       .screens-viewport لا تُعاد قياساتها إطلاقاً (#dock نفسه لا يتغيّر
+       حجمه)، فلا اهتزاز تخطيط عند كل نقرة ☰.
+
+   كل .dock-item له onclick واحد يعمل بصرف النظر تماماً عن .expanded —
+   "الأزرار تعمل سواء فُتحت اللوحة أو لا" لأن الزر نفسه (لا نسخة أخرى
+   منه) هو ما يُنقر عليه بالحالتين، بكل الشاشات وكل الاتجاهات.
+════════════════════════════════════ */
+.dock {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  overflow: visible;
+  z-index: 2;
+}
 
 .dock-scroll {
-  flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  position: absolute; top: 0; bottom: 0; right: 0;
+  width: 52px;
+  display: flex; flex-direction: column;
+  background: var(--bg-card);
+  border-left: 1.5px solid var(--border-strong);
+  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
   padding: var(--space-2) 0;
-  display: flex; flex-direction: column; gap: 1px;
+  gap: 1px;
+  transition: width 220ms var(--ease-out), border-radius 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+}
+.dock.expanded .dock-scroll {
+  width: min(66vw, 220px);
+  border-radius: var(--r-lg) 0 0 var(--r-lg);
+  box-shadow: var(--shadow), var(--glow-bdr);
 }
 
 .dock-item {
@@ -1118,7 +1160,7 @@
    PERFORMANCE HINTS
 ════════════════════════════════════ */
 .tab, .price-card, .position-item, .btn-trade, .positions-card,
-.nav-connect-btn, .modal, .balance-card, .market-card, .dock, .app-screen {
+.nav-connect-btn, .modal, .balance-card, .market-card, .dock-scroll, .app-screen {
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -1134,7 +1176,7 @@
   .modal { max-width: 480px; max-height: 90dvh; border-radius: var(--r-xl); margin: auto; height: auto; }
   .modal-overlay { padding: var(--space-5); }
   .overlay-fs .modal { max-width: 100%; max-height: 100dvh; border-radius: 0; margin: 0; height: 100dvh; }
-  .dock.expanded { width: 260px; }
+  .dock.expanded .dock-scroll { width: 260px; }
   .price-value { font-size: var(--fs-6xl); }
   .btn-trade   { min-height: 48px; }
   .nav-connect-btn { height: 30px; max-width: 140px; }
