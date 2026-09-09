@@ -63,6 +63,7 @@
 │   └── package.json
 ├── CHANGES.md
 ├── index.html
+├── m.zip
 ├── manifest.json
 ├── md.html
 ├── seo.json
