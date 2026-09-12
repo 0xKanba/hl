@@ -1,81 +1,75 @@
+
 /* ═══════════════════════════════════════════════════════════════
-   agents.js — إدارة محافظ الوكلاء (Hyperliquid Agent/API Wallets) — v3
+   agents.js — إدارة محافظ الوكلاء (Hyperliquid Agent/API Wallets) — v4
 
-   ⚠️ إصلاح أمني جوهري (سبب هذا الإصدار) — الحذف السابق (revokeOne) كان
-   محلياً بحتاً: يمسح السجل من localStorage فقط، بلا أي اتصال بالشبكة
-   إطلاقاً. النتيجة: الوكيل "المحذوف" يبقى مفوَّضاً وفعّالاً بالكامل
-   عند Hyperliquid — أي نسخة من مفتاحه الخاص (لو تسرّبت، أو بقيت بجهاز
-   آخر) تقدر تتداول نيابة عن الحساب رغم أن التطبيق "نسي" الوكيل تماماً.
-   هذا لا يطابق سلوك موقع Hyperliquid الرسمي، الذي يطلب توقيعاً فعلياً
-   عند إزالة وكيل ويُبطله حقاً من جهته.
+   ⚠️ السبب المباشر لهذا الإصدار — تجربة حقيقية أبلغ عنها المستخدم: إنشاء
+   0x1/0x2/0x3 ثم حذف 0x1 و0x2، فمحاولة إنشاء 0x4 كانت تُرفض بـ"وكلاء
+   كثيرة الآن" رغم الحذف. السبب الجذري: "الحذف" (إعادة اعتماد نفس الاسم
+   بمفتاح عشوائي مُهمَل) يضع مع ذلك المفتاح صلاحية 180 يوماً كاملة (تماماً
+   كأي اعتماد عادي — ضرورية لضمان قبول الخادم للحذف نفسه). فحص السعة
+   القديم كان يعتمد فقط على validUntil من الخادم، فيرى تلك الخانة
+   "مُشغولة وصالحة" رغم أنها فعلياً فارغة (لا أحد يملك ذلك المفتاح
+   العشوائي). الحل: تتبّع محلي صريح لكل اسم حرّرناه نحن بأنفسنا
+   (hl_agent_freed_<addr>) — يُعامَل كفارغ فعلياً بصرف النظر عمّا يُظهره
+   validUntil، ويُزال من القائمة تلقائياً حين يُعاد استخدامه لاحقاً.
 
-   🔍 بحث مباشر قبل الإصلاح (إلزامي لأي سلوك API حسّاس بمال حقيقي) —
-   فُحص توثيق exchange-endpoint الرسمي + الكود المصدري لـHyperliquid
-   Python SDK الرسمي (hyperliquid-dex/hyperliquid-python-sdk،
-   exchange.py) مباشرة. النتيجة المؤكَّدة: **لا يوجد أي إجراء "إلغاء/
-   إبطال" منفصل بكامل واجهة Hyperliquid** — `approveAgent` هي الإجراء
-   الوحيد المتعلق بالوكلاء بكل الـAPI (لا `revokeAgent`، لا
-   `deregisterAgent`). الآلية الحقيقية الوحيدة لإبطال وكيل مبكراً (قبل
-   انتهاء صلاحيته الطبيعية): إعادة اعتماد **نفس اسم الخانة** بمفتاح
-   عشوائي جديد يُهمَل فوراً بلا حفظ — Hyperliquid يستبدل حامل الاسم
-   السابق بهذا الجديد (سلوك مُثبَت فعلياً بتجربة هذا المشروع نفسه
-   تاريخياً — راجع CHANGES.md القديم: "Hyperliquid يستبدل الوكيل صاحب
-   نفس الاسم عند أي approveAgent جديد بنفس الاسم"). توقيع واحد فقط،
-   تماماً كالإنشاء — هذا هو ما تفعله _revokeSigned أدناه بالضبط.
+   ⚠️ إصلاح إضافي مصاحب — تصادم أسماء بين أجهزة مختلفة لنفس المحفظة:
+   بما أن الاسم الحقيقي المُرسَل لـHyperliquid صار مطابقاً للرقم المتسلسل
+   المعروض (0x1، 0x2...)، وهذا الرقم يُولَّد من عدّاد محلي بحت لكل جهاز/
+   متصفح على حدة — جهازان مختلفان بنفس المحفظة (كلاهما بعدّاد يبدأ من
+   الصفر) قد يحاولان كلاهما اعتماد "0x1" فيُسقط أحدهما الآخر صامتاً (نفس
+   عطل "وكيلان بجهازين" التاريخي بهذا المشروع). الإصلاح: قبل التوقيع،
+   يُتحقَّق من extraAgents الحقيقي أن الاسم المُقترَح غير مُستخدَم فعلياً
+   على الخادم (بأي جهاز)؛ لو كان مُستخدَماً، يُتخطّى تلقائياً للرقم التالي.
 
-   ⚠️ قيد حقيقي مؤكَّد من التوثيق الرسمي (لا افتراض): حساب واحد يملك
-   وكيلاً غير مُسمّى واحداً + **حتى 3 وكلاء مُسمّين فقط**، بلا أي إجراء
-   لحجز اسم جديد كلياً بعد امتلاء الثلاثة — إعادة استخدام **نفس** اسم
-   قديم هي الطريقة الوحيدة لتحرير سعة فعلية. لذلك أسماء الخانات
-   *الحقيقية* المُرسَلة لـHyperliquid (BASE_NAME أدناه) تبقى 3 أسماء
-   ثابتة يُعاد استخدامها للأبد (تماماً كالإصدار السابق — ضماناً للتوافق
-   الخلفي: أي وكيل مُوافَق عليه فعلاً بهذي الأسماء قبل هذا التحديث يبقى
-   مُتعرَّفاً عليه تلقائياً) — **غير مرئية للمستخدم إطلاقاً**.
+   🔍 التحقق المباشر (بحث فعلي 2026-09، لا افتراض) — exchange-endpoint
+   ونونces-and-api-wallets فُحصا مباشرة:
+   • حساب واحد: وكيل غير مُسمّى واحد + حتى 3 وكلاء مُسمّين — رقم حقيقي
+     موثّق، يُستخدَم هنا فقط كتلميح لاختيار الاسم قبل التوقيع (تفادي
+     توقيعين بالحالة الشائعة)، لا حاجزاً يمنع الإنشاء.
+   • آلية الإبطال المبكر الوحيدة الموثّقة: إرسال ApproveAgent بنفس الاسم
+     الحقيقي القائم فعلاً — يستبدل حامله السابق (يشمل الوكيل غير المُسمّى
+     أيضاً، بإرسال ApproveAgent بلا حقل agentName إطلاقاً — يطابق تماماً
+     approve_agent الرسمي بـPython SDK: التوقيع يُحسَب بقيمة فارغة أولاً،
+     ثم يُحذف الحقل من الحمولة المُرسَلة تحديداً لهذه الحالة).
 
-   ✅ الجديد الذي يراه المستخدم فعلاً — رقم تسلسلي محلي بحت (0x1، 0x2،
-   0x3... 0x10...) منفصل تماماً عن الاسم الحقيقي المُرسَل لـHyperliquid.
-   يزيد فقط عند نجاح إنشاء حقيقي (لا فجوات من محاولات أُلغيت أو فشلت)،
-   ولا يتراجع أبداً حتى لو حُذفت كل الوكلاء — بالضبط كما طُلب: 0x9
-   يُحذف ← الوكيل التالي 0x10. وبما أن الحذف الآن حقيقي (يُبطل الوكيل
-   عند Hyperliquid فعلاً)، السعة الحقيقية (3 خانات) تتحرر تلقائياً مع
-   كل حذف — فلا حد "مصطنع" يظهر للمستخدم بالاستخدام الطبيعي (إنشاء ←
-   حذف ← إنشاء...)، فقط لو امتلك 3 وكلاء صالحين بنفس اللحظة فعلاً.
+   ✅ القائمة تُبنى دائماً من extraAgents (حقيقة الخادم) — أي وكيل مرتبط
+   بالمحفظة الرئيسية فعلياً يظهر، بصرف النظر عن مصدر إنشائه (هذا التطبيق،
+   الموقع الرسمي مباشرة، أو جهاز آخر) — تطابق تام مع app.hyperliquid.xyz
+   API. الحذف لا يحتاج مفتاح الوكيل نفسه إطلاقاً، فقط توقيع من المحفظة
+   الرئيسية — فأي وكيل بالقائمة قابل للحذف من هنا. 🔗 رابط تداول و🔑 كشف
+   المفتاح يظهران فقط للوكلاء التي أنشأها هذا المتصفح (نملك مفتاحها).
 
-   ✅ تبسيط الواجهة (بطلب مباشر) — بطاقة كل وكيل 3 أزرار فقط: 🔗 رابط
-   تداول · 🔑 كشف المفتاح · 🗑 حذف. حُذف تماماً: تصدير/استيراد JSON
-   (ملف أو نص)، التفعيل اليدوي ("🎯 نشّطه" — الآن تلقائي بالكامل: أحدث
-   وكيل صالح محلياً هو المُستخدَم دائماً للتوقيع، بلا أي إعداد يدوي —
-   راجع _ensureImpl)، وصندوق عنوان المحفظة (متوفر أصلاً بنافذة الإيداع).
+   ✅ الإنشاء لا يُرفض أبداً من جهة التطبيق نفسه: اسم جديد كلياً (0xN)
+   لو وُجدت مساحة حقيقية الآن، وإلا إعادة استخدام خانة قائمة تلقائياً
+   (أولوية لما حرّرناه نحن بأنفسنا، ثم الأقدم انتهاءً) — توقيع واحد. رفض
+   حقيقي من الخادم رغم كل هذا (احتياط أخير) يُعالَج بتراجع تلقائي فوري،
+   لا بإظهار خطأ لمحاولة أولى فقط.
 
-   ✅ عزل كامل بين المحافظ — بلا تغيير: كل شيء (السجل المحلي + العداد
-   التسلسلي) مفتاح بعنوان المحفظة (hl_agents_<addr> / hl_agent_seq_
-   <addr>)، فلا تسريب أو تداخل بين حسابات مختلفة بنفس المتصفح.
+   ✅ تبسيط الواجهة — بطاقة كل وكيل: 🔗 رابط · 🔑 المفتاح (فقط لو نملكه
+   محلياً) · 🗑 حذف (دائماً). حُذف: تصدير/استيراد JSON، التفعيل اليدوي
+   (أحدث وكيل صالح محلياً يُستخدَم تلقائياً للتوقيع)، صندوق عنوان المحفظة.
 
-   ✅ توافق خلفي كامل — وكيل أي مستخدم مُوافَق عليه أصلاً (v1 أو v2)
-   يُرحَّل تلقائياً (نفس مفتاحه/عنوانه، بلا أي توقيع جديد) ويُعطى رقماً
-   تسلسلياً محلياً جديداً (0x1، 0x2...) أول مرة يُحمَّل بعد هذا التحديث.
+   ✅ عزل كامل بين المحافظ بلا تغيير — كل تخزين محلي (مفاتيح الوكلاء،
+   عدّاد الاسم، أسماء المُحرَّرة) مفتاح بعنوان المحفظة.
 ═══════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
 
   const AGENT_TTL_MS        = 180 * 24 * 3600 * 1000; // الحد الأقصى الموثّق رسمياً لـvalid_until
-  const AGENT_KEY_PREFIX    = 'hl_agents_';     // مصفوفة وكلاء لكل محفظة
-  const AGENT_KEY_PREFIX_V1 = 'hl_agent_';      // v1 القديم: كائن وكيل مفرد (يُرحَّل تلقائياً)
-  const SEQ_KEY_PREFIX      = 'hl_agent_seq_';  // عدّاد الاسم المعروض (0x1، 0x2...) — محلي بحت
-  /* الأسماء الحقيقية المُرسَلة فعلياً لـHyperliquid — 3 خانات ثابتة تُعاد
-     استخدامها للأبد (راجع تعليق رأس الملف لسبب هذا التحديد بالذات).
-     غير مرئية للمستخدم إطلاقاً — فقط _consumeDisplayName أدناه ينتج
-     الاسم الذي يراه فعلاً. */
-  const BASE_NAME       = 'market-liq';
-  const NAMED_POOL_SIZE = 3;
+  const AGENT_KEY_PREFIX    = 'hl_agents_';       // مصفوفة الوكلاء التي نملك مفاتيحها محلياً، لكل محفظة
+  const AGENT_KEY_PREFIX_V1 = 'hl_agent_';        // v1 القديم: كائن وكيل مفرد (يُرحَّل تلقائياً)
+  const SEQ_KEY_PREFIX      = 'hl_agent_seq_';    // عدّاد الاسم الجديد كلياً (0x1، 0x2...) — محلي بحت
+  const FREED_KEY_PREFIX    = 'hl_agent_freed_';  // أسماء حرّرناها نحن بأنفسنا (راجع تعليق رأس الملف)
+  const NAMED_DOC_CAP       = 3; // تلميح فقط — راجع تعليق رأس الملف
 
   let _ensurePromise = null;
   let _tickTimer     = null;
 
   function _uerr(msg) { return new Error(msg); }
-
-  function _key(addr)    { return AGENT_KEY_PREFIX + addr.toLowerCase(); }
-  function _seqKey(addr) { return SEQ_KEY_PREFIX + addr.toLowerCase(); }
+  function _key(addr)      { return AGENT_KEY_PREFIX + addr.toLowerCase(); }
+  function _seqKey(addr)   { return SEQ_KEY_PREFIX + addr.toLowerCase(); }
+  function _freedKey(addr) { return FREED_KEY_PREFIX + addr.toLowerCase(); }
 
   function _migrateV1(addr) {
     const oldKey = AGENT_KEY_PREFIX_V1 + addr.toLowerCase();
@@ -87,7 +81,7 @@
         const cur = JSON.parse(localStorage.getItem(_key(addr)) || '[]');
         if (!cur.some(a => a.agentAddress.toLowerCase() === m.agentAddress.toLowerCase())) {
           cur.push({
-            pk: m.pk, agentAddress: m.agentAddress, agentName: m.agentName || BASE_NAME + '-1',
+            pk: m.pk, agentAddress: m.agentAddress, agentName: m.agentName || 'agent-1',
             createdAt: m.createdAt || Date.now(), validUntil: null,
           });
           localStorage.setItem(_key(addr), JSON.stringify(cur));
@@ -97,40 +91,46 @@
     localStorage.removeItem(oldKey);
   }
 
-  /* ════ عدّاد الاسم المعروض — محلي بحت، يزيد فقط عند نجاح حقيقي ════ */
-  function _peekNextDisplayName(addr) {
-    const n = (parseInt(localStorage.getItem(_seqKey(addr)) || '0', 10) || 0) + 1;
-    return '0x' + n;
-  }
-  function _consumeDisplayName(addr) {
-    const n = (parseInt(localStorage.getItem(_seqKey(addr)) || '0', 10) || 0) + 1;
-    try { localStorage.setItem(_seqKey(addr), String(n)); } catch {}
-    return '0x' + n;
-  }
-  function _backfillDisplayNames(addr, arr) {
-    let changed = false;
-    arr.forEach(rec => {
-      if (!rec.displayName) { rec.displayName = _consumeDisplayName(addr); changed = true; }
-    });
-    return changed;
-  }
-
   function _loadAll(addr) {
     _migrateV1(addr);
-    let list;
-    try { list = JSON.parse(localStorage.getItem(_key(addr)) || '[]'); } catch { list = []; }
-    if (_backfillDisplayNames(addr, list)) _saveAll(addr, list);
-    return list;
+    try { return JSON.parse(localStorage.getItem(_key(addr)) || '[]'); } catch { return []; }
   }
   function _saveAll(addr, list) { try { localStorage.setItem(_key(addr), JSON.stringify(list)); } catch {} }
 
-  function _isValid(rec) {
+  /* ════ عدّاد الاسم الجديد — محلي بحت، يزيد فقط عند نجاح اسم جديد فعلاً
+     (لا عند إعادة استخدام)، بلا فجوات، بلا تراجع أبداً ════ */
+  function _peekNextFreshSeq(addr) {
+    return (parseInt(localStorage.getItem(_seqKey(addr)) || '0', 10) || 0) + 1;
+  }
+  function _consumeFreshSeqAtLeast(addr, n) {
+    const cur = parseInt(localStorage.getItem(_seqKey(addr)) || '0', 10) || 0;
+    if (n > cur) { try { localStorage.setItem(_seqKey(addr), String(n)); } catch {} }
+  }
+
+  /* ════ أسماء حرّرناها نحن بأنفسنا صراحة (بالحذف) — راجع تعليق رأس
+     الملف لسبب الحاجة لهذا التتبّع المنفصل عن validUntil ════ */
+  function _loadFreedNames(addr) {
+    try { return new Set(JSON.parse(localStorage.getItem(_freedKey(addr)) || '[]')); } catch { return new Set(); }
+  }
+  function _saveFreedNames(addr, set) { try { localStorage.setItem(_freedKey(addr), JSON.stringify([...set])); } catch {} }
+  function _markFreed(addr, name) {
+    if (!name) return;
+    const s = _loadFreedNames(addr);
+    if (!s.has(name)) { s.add(name); _saveFreedNames(addr, s); }
+  }
+  function _unmarkFreed(addr, name) {
+    if (!name) return;
+    const s = _loadFreedNames(addr);
+    if (s.delete(name)) _saveFreedNames(addr, s);
+  }
+
+  function _isValidLocal(rec) {
     if (!rec || !rec.pk) return false;
-    if (!rec.validUntil) return true; // لا مزامنة خادم بعد — تفاؤل مؤقت حتى أول extraAgents
+    if (!rec.validUntil) return true;
     return Date.now() < rec.validUntil;
   }
 
-  /* ════ extraAgents — مصدر الحقيقة الوحيد (موثّق رسمياً) ════ */
+  /* ════ extraAgents — حقيقة الخادم الوحيدة لكل وكيل مُسمّى + غير مُسمّى ════ */
   async function _fetchExtraAgents(addr) {
     try {
       const r = await hlInfo({ type: 'extraAgents', user: addr });
@@ -138,12 +138,11 @@
     } catch { return null; } // null = فشل شبكة — لا نفترض فراغاً أبداً
   }
 
-  /* ✅ جديد — يُطهّر القائمة المحلية تلقائياً من أي وكيل لم يعد موجوداً
-     على الخادم إطلاقاً (حُذف فعلياً — من هذا الجهاز أو غيره) أو انتهت
-     صلاحيته فعلياً — بلا أي حالة "غير موجود، احذفه يدوياً" تحتاج فعلاً
-     يدوياً؛ القائمة المعروضة دائماً "وكلاء صالحون الآن" فقط. */
+  /* خلفية: يُحدّث/يُطهّر السجل المحلي (مفاتيحنا فقط) حسب حقيقة الخادم —
+     يخدم فقط تسريع مسار التوقيع بـ_ensureImpl؛ عرض القائمة الكاملة
+     بالواجهة يُبنى من extraAgents مباشرة في كل مرة (راجع _buildRows). */
   function _reconcile(addr, local, serverList) {
-    if (!Array.isArray(serverList)) return local; // فشل شبكة — لا تغيير
+    if (!Array.isArray(serverList)) return local;
     const byAddr = {};
     serverList.forEach(s => { byAddr[(s.address || '').toLowerCase()] = s; });
     const now = Date.now();
@@ -158,49 +157,59 @@
     return kept;
   }
 
-  /* اختيار خانة حقيقية قابلة للاستخدام الآن (فارغة كلياً، أو منتهية
-     فعلياً حسب الخادم) — لا علاقة لها بالاسم المعروض للمستخدم إطلاقاً. */
-  function _pickReusableSlot(serverList) {
+  /* يُصنِّف كل الوكلاء المُسمّين الحاليين حسب حقيقة الخادم: "مُشغولة
+     فعلاً" (لا يزال أحدهم يريدها) مقابل "قابلة لإعادة الاستخدام"
+     (منتهية فعلاً حسب validUntil، أو حرّرناها نحن بأنفسنا). */
+  function _classifyServerAgents(addr, serverList) {
     const now = Date.now();
-    const byName = {};
-    (serverList || []).forEach(s => { byName[s.name] = s; });
-    for (let n = 1; n <= NAMED_POOL_SIZE; n++) {
-      const nm = `${BASE_NAME}-${n}`;
-      const srv = byName[nm];
-      if (!srv || !srv.validUntil || srv.validUntil <= now) return nm;
+    const freed = _loadFreedNames(addr);
+    const local = _loadAll(addr);
+    const localAddrs = new Set(local.map(r => r.agentAddress.toLowerCase()));
+    const namedEntries = (serverList || []).filter(s => !!s.name);
+    const trulyOccupied = [], reusable = [];
+    namedEntries.forEach(s => {
+      const expired = s.validUntil && s.validUntil <= now;
+      if (expired || freed.has(s.name)) reusable.push(s); else trulyOccupied.push(s);
+    });
+    return { namedEntries, trulyOccupied, reusable, localAddrs };
+  }
+
+  async function _pickReuseFallback(addr) {
+    const serverList = await _fetchExtraAgents(addr);
+    if (!Array.isArray(serverList)) return null;
+    const { reusable, localAddrs } = _classifyServerAgents(addr, serverList);
+    if (!reusable.length) return null;
+    const foreign = reusable.filter(s => !localAddrs.has((s.address || '').toLowerCase()));
+    const pool = foreign.length ? foreign : reusable;
+    return pool.slice().sort((a, b) => (a.validUntil || 0) - (b.validUntil || 0))[0].name;
+  }
+
+  /* القرار الرئيسي قبل أي توقيع إنشاء: اسم جديد كلياً لو وُجدت مساحة
+     حقيقية الآن (بعد استبعاد ما حرّرناه نحن من "المُشغول")، أو إعادة
+     استخدام خانة قائمة لو كانت ممتلئة فعلياً — بلا رفض، بلا سؤال. */
+  async function _pickNamedApproach(addr) {
+    const serverList = await _fetchExtraAgents(addr);
+    if (!Array.isArray(serverList)) {
+      const n = _peekNextFreshSeq(addr);
+      return { name: '0x' + n, seqUsed: n, fresh: true };
     }
-    return null;
+    const { namedEntries, trulyOccupied, reusable, localAddrs } = _classifyServerAgents(addr, serverList);
+    const allNames = new Set(namedEntries.map(s => s.name));
+
+    if (trulyOccupied.length < NAMED_DOC_CAP) {
+      let n = _peekNextFreshSeq(addr), candidate = '0x' + n, guard = 0;
+      while (allNames.has(candidate) && guard < 200) { n++; candidate = '0x' + n; guard++; }
+      return { name: candidate, seqUsed: n, fresh: true };
+    }
+    if (!reusable.length) return { name: null, fresh: false };
+    const foreign = reusable.filter(s => !localAddrs.has((s.address || '').toLowerCase()));
+    const pool = foreign.length ? foreign : reusable;
+    return { name: pool.slice().sort((a, b) => (a.validUntil || 0) - (b.validUntil || 0))[0].name, fresh: false };
   }
 
-  function _info(rec) {
-    if (!rec) return null;
-    const expiresAt = rec.validUntil || (rec.createdAt + AGENT_TTL_MS);
-    return {
-      displayName: rec.displayName, address: rec.agentAddress, createdAt: rec.createdAt,
-      expiresAt, daysLeft: Math.max(0, Math.ceil((expiresAt - Date.now()) / 86400000)),
-      valid: _isValid(rec), estimated: !rec.validUntil,
-    };
-  }
-
-  /* أحدث وكيل صالح محلياً — لا مفهوم "مفضَّل" يدوي بعد الآن (راجع
-     تعليق رأس الملف): الأحدث إنشاءً هو المُستخدَم تلقائياً. */
-  function getInfo(address) {
-    const addr = address || State.wallet?.address;
-    if (!addr) return null;
-    const best = _loadAll(addr).filter(_isValid).sort((a, b) => b.createdAt - a.createdAt)[0];
-    return _info(best);
-  }
-
-  function list(address) {
-    const addr = address || State.wallet?.address;
-    if (!addr) return [];
-    return _loadAll(addr).sort((a, b) => b.createdAt - a.createdAt).map(_info);
-  }
-
-  /* ════ نافذة التفويض — ذاتية الحقن بالكامل، تُستخدم للإنشاء فقط
-     (الحذف يمر مباشرة بـ_confirm الأحمر ثم التوقيع، بلا معاينة عنوان
-     جديد — لا شيء جديد ليُعاين عند الحذف). ════ */
-  function _confirmApproval(agentAddress, displayName) {
+  /* ════ نافذة التفويض — ذاتية الحقن، للإنشاء فقط (الحذف يمر مباشرة عبر
+     _confirm الأحمر ثم التوقيع — لا شيء جديد ليُعاين). ════ */
+  function _confirmApproval(agentAddress, name) {
     return new Promise((resolve, reject) => {
       const box   = document.getElementById('agApproveModal');
       const okBtn = document.getElementById('agApproveConfirm');
@@ -210,49 +219,71 @@
         reject(_uerr('تعذّر فتح نافذة التفويض — أعد تحميل الصفحة وحاول مجدداً'));
         return;
       }
-      setTxt('agApprovePreview', `${displayName} — ${agentAddress}`);
+      setTxt('agApprovePreview', `${name} — ${agentAddress}`);
       box.classList.add('open');
       okBtn.onclick = () => { box.classList.remove('open'); resolve(); };
       noBtn.onclick = () => { box.classList.remove('open'); reject(new Error('CANCELLED')); };
     });
   }
 
-  async function _createAndApprove(addr) {
-    const serverList = await _fetchExtraAgents(addr);
-    const slot = _pickReusableSlot(serverList);
-    if (!slot) throw _uerr('لديك 3 وكلاء فعّالين الآن — الحد الأقصى المسموح من Hyperliquid لكل حساب. احذف أحدهم أولاً لإضافة وكيل جديد');
+  /* ════ توقيع approveAgent موحَّد — للإنشاء وللحذف معاً. realName فارغ/
+     null = الوكيل غير المُسمّى. يطابق approve_agent الرسمي حرفياً:
+     التوقيع يُحسَب بحقل agentName حاضراً (فارغاً لو بلا اسم)، ثم الحقل
+     يُحذف كلياً من الحمولة المُرسَلة لحالة "بلا اسم" تحديداً — لا قبلها. ════ */
+  async function _signApprove(agentAddress, realName, validUntilMs, nonce) {
+    const nameOnChain = realName ? `${realName} valid_until ${validUntilMs}` : '';
+    const action = {
+      type: 'approveAgent', hyperliquidChain: 'Mainnet', signatureChainId: '0xa4b1',
+      agentAddress, agentName: nameOnChain, nonce,
+    };
+    const sig = await State.wallet.signTypedData(
+      { name: 'HyperliquidSignTransaction', version: '1', chainId: 42161,
+        verifyingContract: '0x0000000000000000000000000000000000000000' },
+      { 'HyperliquidTransaction:ApproveAgent': [
+          { name: 'hyperliquidChain', type: 'string' },
+          { name: 'agentAddress',     type: 'address' },
+          { name: 'agentName',        type: 'string' },
+          { name: 'nonce',            type: 'uint64' },
+      ]},
+      { hyperliquidChain: 'Mainnet', agentAddress, agentName: nameOnChain, nonce }
+    );
+    const { r, s, v } = ethers.Signature.from(sig);
+    if (!realName) delete action.agentName;
+    const body = { action, nonce, signature: { r, s, v } };
+    const d = HL.isOpen() ? await HL.post(body, true).catch(() => _restExchange(body)) : await _restExchange(body);
+    if (d.status !== 'ok') throw new Error(typeof d.response === 'string' ? d.response : JSON.stringify(d));
+  }
 
+  async function _createAndApprove(addr) {
     const agent = ethers.Wallet.createRandom();
-    const previewName = _peekNextDisplayName(addr); // معاينة فقط — لا يُستهلَك إلا بعد نجاح حقيقي
-    await _confirmApproval(agent.address, previewName);
+    const approach = await _pickNamedApproach(addr);
+    if (!approach.name) throw _uerr('لا توجد خانة وكيل متاحة الآن حتى بإعادة الاستخدام — أعد المحاولة بعد قليل');
+    await _confirmApproval(agent.address, approach.name);
 
     showLoader('بانتظار توقيعك...');
     try {
-      const nonce      = Date.now();
-      const validUntil = nonce + AGENT_TTL_MS;
-      const nameOnChain = `${slot} valid_until ${validUntil}`; // موثّق رسمياً
-      const action = {
-        type: 'approveAgent', hyperliquidChain: 'Mainnet', signatureChainId: '0xa4b1',
-        agentAddress: agent.address, agentName: nameOnChain, nonce,
-      };
-      const sig = await State.wallet.signTypedData(
-        { name: 'HyperliquidSignTransaction', version: '1', chainId: 42161,
-          verifyingContract: '0x0000000000000000000000000000000000000000' },
-        { 'HyperliquidTransaction:ApproveAgent': [
-            { name: 'hyperliquidChain', type: 'string' },
-            { name: 'agentAddress',     type: 'address' },
-            { name: 'agentName',        type: 'string' },
-            { name: 'nonce',            type: 'uint64' },
-        ]},
-        { hyperliquidChain: 'Mainnet', agentAddress: agent.address, agentName: nameOnChain, nonce }
-      );
-      const { r, s, v } = ethers.Signature.from(sig);
-      const body = { action, nonce, signature: { r, s, v } };
-      const d = HL.isOpen() ? await HL.post(body, true).catch(() => _restExchange(body)) : await _restExchange(body);
-      if (d.status !== 'ok') throw new Error(typeof d.response === 'string' ? d.response : JSON.stringify(d));
+      let usedName = approach.name;
+      let usedNonce = Date.now();
+      let usedValidUntil = usedNonce + AGENT_TTL_MS;
 
-      const displayName = _consumeDisplayName(addr); // يُستهلَك الآن فقط — نجاح مؤكَّد، بلا فجوات بالترقيم
-      const rec = { pk: agent.privateKey, agentAddress: agent.address, agentName: slot, displayName, createdAt: nonce, validUntil };
+      try {
+        await _signApprove(agent.address, usedName, usedValidUntil, usedNonce);
+      } catch (e1) {
+        /* رفض حقيقي من الخادم (نادر لو approach.fresh) — تراجع تلقائي
+           فوري لإعادة استخدام خانة قائمة، بلا إظهار خطأ لمحاولة أولى فقط. */
+        if (!approach.fresh) throw e1;
+        const fallback = await _pickReuseFallback(addr);
+        if (!fallback) throw e1;
+        usedName = fallback;
+        usedNonce = Date.now();
+        usedValidUntil = usedNonce + AGENT_TTL_MS;
+        await _signApprove(agent.address, usedName, usedValidUntil, usedNonce);
+      }
+
+      if (approach.fresh && usedName === approach.name) _consumeFreshSeqAtLeast(addr, approach.seqUsed);
+      _unmarkFreed(addr, usedName); // لم يعد فارغاً — أصبح مُستخدَماً فعلياً من جديد
+
+      const rec = { pk: agent.privateKey, agentAddress: agent.address, agentName: usedName, createdAt: usedNonce, validUntil: usedValidUntil };
       const all = _loadAll(addr); all.push(rec); _saveAll(addr, all);
       State.agent = agent;
       _refreshUI();
@@ -273,7 +304,7 @@
     let local = _loadAll(addr);
 
     if (!forceNew) {
-      const usable = local.filter(_isValid).sort((a, b) => b.createdAt - a.createdAt)[0];
+      const usable = local.filter(_isValidLocal).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (usable) {
         _fetchExtraAgents(addr).then(sl => _reconcile(addr, _loadAll(addr), sl)); // مزامنة صامتة بالخلفية
         try { State.agent = new ethers.Wallet(usable.pk); return State.agent; } catch {}
@@ -284,64 +315,38 @@
     local = _reconcile(addr, local, serverList);
 
     if (!forceNew) {
-      const stillValid = local.filter(_isValid).sort((a, b) => b.createdAt - a.createdAt)[0];
+      const stillValid = local.filter(_isValidLocal).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (stillValid) { try { State.agent = new ethers.Wallet(stillValid.pk); return State.agent; } catch {} }
     }
 
     return _createAndApprove(addr);
   }
 
-  /* ════════════════════════════════════════════════
-     ✅ حذف حقيقي بتوقيع — يعيد اعتماد نفس الخانة الحقيقية (rec.agentName)
-     بمفتاح عشوائي يُهمَل فوراً (لا يُحفظ بأي مكان، لا يُعرَض، لا فائدة
-     منه سوى إشغال الاسم بدل الوكيل القديم) — فيُبطل مفتاح الوكيل
-     المحذوف فعلياً عند Hyperliquid. هذه الآلية الوحيدة الموثّقة (ضمنياً
-     عبر غياب أي إجراء بديل + سلوك استبدال نفس الاسم المُجرَّب سابقاً
-     بهذا المشروع) لإبطال وكيل قبل انتهاء صلاحيته الطبيعية — راجع تعليق
-     رأس الملف. توقيع واحد، بالضبط كالإنشاء.
-  ════════════════════════════════════════════════ */
-  async function _revokeSigned(addr, rec) {
+  /* ════ حذف حقيقي بتوقيع — لا يحتاج مفتاح الوكيل المحذوف إطلاقاً، فقط
+     اسمه الحقيقي (من extraAgents) وتوقيع واحد من المحفظة الرئيسية. يعيد
+     اعتماد نفس الاسم بمفتاح عشوائي يُهمَل فوراً — Hyperliquid يستبدل
+     حامل الاسم السابق بهذا الجديد، فيُبطل الوكيل المحذوف فعلياً بصرف
+     النظر عن مصدر إنشائه. ════ */
+  async function _revokeSigned(realName) {
     const throwaway = ethers.Wallet.createRandom();
     const nonce = Date.now();
-    const nameOnChain = `${rec.agentName} valid_until ${nonce + AGENT_TTL_MS}`;
-    const action = {
-      type: 'approveAgent', hyperliquidChain: 'Mainnet', signatureChainId: '0xa4b1',
-      agentAddress: throwaway.address, agentName: nameOnChain, nonce,
-    };
-    const sig = await State.wallet.signTypedData(
-      { name: 'HyperliquidSignTransaction', version: '1', chainId: 42161,
-        verifyingContract: '0x0000000000000000000000000000000000000000' },
-      { 'HyperliquidTransaction:ApproveAgent': [
-          { name: 'hyperliquidChain', type: 'string' },
-          { name: 'agentAddress',     type: 'address' },
-          { name: 'agentName',        type: 'string' },
-          { name: 'nonce',            type: 'uint64' },
-      ]},
-      { hyperliquidChain: 'Mainnet', agentAddress: throwaway.address, agentName: nameOnChain, nonce }
-    );
-    const { r, s, v } = ethers.Signature.from(sig);
-    const body = { action, nonce, signature: { r, s, v } };
-    const d = HL.isOpen() ? await HL.post(body, true).catch(() => _restExchange(body)) : await _restExchange(body);
-    if (d.status !== 'ok') throw new Error(typeof d.response === 'string' ? d.response : JSON.stringify(d));
+    await _signApprove(throwaway.address, realName || null, nonce + AGENT_TTL_MS, nonce);
   }
 
-  async function revokeOne(address, agentAddress) {
+  async function revokeOne(address, agentAddress, realName) {
     const addr = address || State.wallet?.address;
     if (!addr || !State.wallet) throw _uerr('سجّل الدخول أولاً');
-    const all = _loadAll(addr);
-    const rec = all.find(a => a.agentAddress.toLowerCase() === agentAddress.toLowerCase());
-    if (!rec) return;
-    await _revokeSigned(addr, rec); // يرمي استثناءً لو رفض المستخدم التوقيع أو فشلت الشبكة — القائمة المحلية تبقى كما هي
-    _saveAll(addr, all.filter(a => a.agentAddress.toLowerCase() !== agentAddress.toLowerCase()));
+    await _revokeSigned(realName);
+    _markFreed(addr, realName); // ✅ يُصحِّح فحص السعة القادم فوراً — راجع تعليق رأس الملف
+    _saveAll(addr, _loadAll(addr).filter(a => a.agentAddress.toLowerCase() !== agentAddress.toLowerCase()));
     if (State.agent?.address?.toLowerCase() === agentAddress.toLowerCase()) State.agent = null;
-    _refreshUI();
   }
 
   /* حذف محلي جماعي فقط — يُستخدم حصراً بمسار "نسيت رمز PIN" (تنظيف
-     طارئ لبيانات هذا الجهاز). لا توقيع هنا عمداً: تلك لحظة طوارئ قد لا
-     يريد فيها المستخدم التعامل مع توقيعات متعددة؛ الوكلاء الفعليون
-     يبقون صالحين عند Hyperliquid حتى انتهاء صلاحيتهم الطبيعية، ويمكن
-     حذفهم لاحقاً بأمان بنفس هذا الملف (revokeOne) من أي جهاز مُتصل. */
+     طارئ، بلا توقيعات متعددة بلحظة طوارئ). الوكلاء الفعليون يبقون
+     صالحين عند Hyperliquid حتى انتهاء صلاحيتهم، أو يمكن حذفهم لاحقاً
+     بأمان من هنا (revokeOne) من أي جهاز — القائمة تعرضهم دائماً بصرف
+     النظر عن هذا المسح المحلي. */
   function revoke(address) {
     const addr = address || State.wallet?.address;
     if (!addr) return;
@@ -351,6 +356,21 @@
   }
 
   function clearSession() { State.agent = null; }
+
+  /* أحدث وكيل صالح محلياً — فحص محلي سريع (بلا جولة شبكة)، يُستخدم
+     داخلياً بـauth.js لتقرير هل يوجد مفتاح جاهز للتوقيع أصلاً. */
+  function getInfo(address) {
+    const addr = address || State.wallet?.address;
+    if (!addr) return null;
+    const best = _loadAll(addr).filter(_isValidLocal).sort((a, b) => b.createdAt - a.createdAt)[0];
+    if (!best) return null;
+    const expiresAt = best.validUntil || (best.createdAt + AGENT_TTL_MS);
+    return {
+      name: best.agentName, address: best.agentAddress, createdAt: best.createdAt,
+      expiresAt, daysLeft: Math.max(0, Math.ceil((expiresAt - Date.now()) / 86400000)),
+      valid: _isValidLocal(best),
+    };
+  }
 
   function buildLink(agentAddress, target) {
     if (!State.wallet || typeof AgentLink === 'undefined') return null;
@@ -386,14 +406,16 @@
 .ag-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;
   border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;gap:10px;}
 .ag-row:last-child{border-bottom:none;}
-.ag-row-k{color:#94a3b8;font-weight:700;flex-shrink:0;}
+.ag-row-k{color:#94a3b8;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
 .ag-row-v{font-family:'IBM Plex Mono',monospace;font-weight:800;color:var(--text-primary,#f1f5f9);
   direction:ltr;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ag-status{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;
-  padding:3px 10px;border-radius:99px;white-space:nowrap;}
+  padding:3px 10px;border-radius:99px;white-space:nowrap;flex-shrink:0;}
 .ag-status.ok{background:rgba(16,185,129,.16);color:#10b981;}
 .ag-status.warn{background:rgba(245,158,11,.16);color:#f59e0b;}
 .ag-status.bad{background:rgba(239,68,68,.16);color:#ef4444;}
+.ag-foreign-tag{font-size:10px;font-weight:800;color:#94a3b8;background:rgba(148,163,184,.14);
+  padding:2px 8px;border-radius:99px;white-space:nowrap;}
 .ag-addr-box{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.22);
   border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:9px 11px;margin-top:8px;}
 .ag-addr-txt{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-primary,#f1f5f9);
@@ -488,45 +510,92 @@
 
   function _fmtDate(ms) { return new Date(ms).toLocaleDateString('ar-EG', { day:'2-digit', month:'2-digit', year:'numeric' }); }
 
-  function _agentCardHtml(info) {
-    const statusCls = !info.valid ? 'bad' : info.daysLeft <= 14 ? 'warn' : 'ok';
-    const statusTxt = !info.valid ? 'منتهي' : info.daysLeft <= 14 ? 'ينتهي قريباً' : 'نشط';
+  function _agentCardHtml(row) {
+    const now = Date.now();
+    const valid = !row.expiresAt || row.expiresAt > now;
+    const daysLeft = row.expiresAt ? Math.max(0, Math.ceil((row.expiresAt - now) / 86400000)) : null;
+    const statusCls = !valid ? 'bad' : (daysLeft !== null && daysLeft <= 14) ? 'warn' : 'ok';
+    const statusTxt = !valid ? 'منتهي' : (daysLeft !== null && daysLeft <= 14) ? 'ينتهي قريباً' : 'نشط';
+    const label = row.realName || 'بلا اسم (افتراضي)';
+    const nameAttr = row.realName ? row.realName.replace(/"/g, '&quot;') : '';
+
+    const actions = row.hasKey
+      ? `<div class="ag-actions-3">
+           <button class="ag-btn rot" data-act="link" data-addr="${row.address}">🔗 رابط</button>
+           <button class="ag-btn" data-act="key" data-addr="${row.address}">🔑 المفتاح</button>
+           <button class="ag-btn del" data-act="del" data-addr="${row.address}" data-name="${nameAttr}">🗑 حذف</button>
+         </div>`
+      : `<div class="ag-actions-3" style="grid-template-columns:1fr;">
+           <button class="ag-btn del" data-act="del" data-addr="${row.address}" data-name="${nameAttr}">🗑 حذف — يُبطله عند Hyperliquid</button>
+         </div>`;
+
     return `
       <div class="ag-card-box">
-        <div class="ag-row"><span class="ag-row-k">${info.displayName}</span><span class="ag-status ${statusCls}">● ${statusTxt}</span></div>
-        <div class="ag-row"><span class="ag-row-k">تاريخ الانتهاء</span><span class="ag-row-v">${_fmtDate(info.expiresAt)}${info.estimated ? ' (تقديري)' : ''}</span></div>
-        <div class="ag-row"><span class="ag-row-k">الأيام المتبقية</span><span class="ag-row-v">${info.daysLeft} يوم</span></div>
+        <div class="ag-row"><span class="ag-row-k">${label}${row.hasKey ? '' : ' <span class="ag-foreign-tag">🌐 من مكان آخر</span>'}</span><span class="ag-status ${statusCls}">● ${statusTxt}</span></div>
+        <div class="ag-row"><span class="ag-row-k">تاريخ الانتهاء</span><span class="ag-row-v">${row.expiresAt ? _fmtDate(row.expiresAt) : '—'}</span></div>
+        ${daysLeft !== null ? `<div class="ag-row"><span class="ag-row-k">الأيام المتبقية</span><span class="ag-row-v">${daysLeft} يوم</span></div>` : ''}
         <div class="ag-addr-box">
-          <span class="ag-addr-txt">${info.address}</span>
-          <button class="ag-copy-btn" data-copy="${info.address}" title="نسخ">⧉</button>
+          <span class="ag-addr-txt">${row.address}</span>
+          <button class="ag-copy-btn" data-copy="${row.address}" title="نسخ">⧉</button>
         </div>
-        <div class="ag-actions-3">
-          <button class="ag-btn rot" data-act="link" data-addr="${info.address}">🔗 رابط</button>
-          <button class="ag-btn" data-act="key" data-addr="${info.address}">🔑 المفتاح</button>
-          <button class="ag-btn del" data-act="del" data-addr="${info.address}">🗑 حذف</button>
-        </div>
+        ${actions}
       </div>`;
   }
 
-  function _render() {
+  /* ════ يبني القائمة الكاملة من extraAgents (حقيقة الخادم)، مع إخفاء
+     أي اسم حرّرناه نحن بأنفسنا (بالنسبة للمستخدم هو محذوف فعلاً — راجع
+     تعليق رأس الملف)، ودمج أي مفتاح محلي نملكه لنفس العنوان. ════ */
+  async function _buildRows(addr) {
+    const serverList = await _fetchExtraAgents(addr);
+    const local = _loadAll(addr);
+    const localByAddr = {};
+    local.forEach(r => { localByAddr[r.agentAddress.toLowerCase()] = r; });
+
+    if (Array.isArray(serverList)) {
+      const freed = _loadFreedNames(addr);
+      const rows = serverList
+        .filter(s => !(s.name && freed.has(s.name)))
+        .map(s => {
+          const rec = localByAddr[(s.address || '').toLowerCase()];
+          return { realName: s.name || null, address: s.address, expiresAt: s.validUntil || null, hasKey: !!rec };
+        });
+      rows.sort((a, b) => (b.expiresAt || 0) - (a.expiresAt || 0));
+      return { rows, networkFailed: false };
+    }
+
+    const rows = local.map(r => ({ realName: r.agentName, address: r.agentAddress, expiresAt: r.validUntil, hasKey: true }));
+    rows.sort((a, b) => (b.expiresAt || 0) - (a.expiresAt || 0));
+    return { rows, networkFailed: true };
+  }
+
+  async function _render() {
     const body = document.getElementById('agBody');
     if (!body || !State.wallet) return;
-    const infos = list();
+    const addr = State.wallet.address;
 
-    const agentsHtml = infos.length
-      ? infos.map(_agentCardHtml).join('') + `<button class="ag-btn rot wide" id="agAddMore">+ إنشاء وكيل جديد</button>`
+    if (!body.dataset.rendered) {
+      body.innerHTML = `<div class="ag-empty">⏳ جاري جلب الوكلاء المرتبطين بمحفظتك من Hyperliquid...</div>`;
+    }
+
+    const { rows, networkFailed } = await _buildRows(addr);
+    if (!document.getElementById('agModal')?.classList.contains('open')) return; // أُغلقت أثناء الجلب
+
+    const agentsHtml = rows.length
+      ? rows.map(_agentCardHtml).join('') + `<button class="ag-btn rot wide" id="agAddMore">+ إنشاء وكيل جديد</button>`
       : `<div class="ag-empty">🔒 لا يوجد وكيل نشط حالياً
           <button class="ag-btn rot wide" id="agActivate" style="margin-top:14px;">⚡ تفعيل الوكيل الآن</button>
         </div>`;
 
     body.innerHTML = `
-      <div class="ag-sec-title">الوكلاء (${infos.length})</div>
+      <div class="ag-sec-title">الوكلاء (${rows.length})</div>
+      ${networkFailed ? `<div class="ag-note" style="border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06);">⚠️ تعذّر الاتصال بـ Hyperliquid الآن — القائمة أدناه من آخر ما هو معروف بهذا الجهاز فقط، وقد لا تشمل كل الوكلاء الفعليين حتى تعود الشبكة.</div>` : ''}
       ${agentsHtml}
       <div class="ag-note">
         🛡 كل وكيل يوقّع الصفقات فقط — لا يقدر إطلاقاً على سحب أو تحويل أموالك.
-        حذف أي وكيل من هنا يُبطله فعلياً عند Hyperliquid (يتطلب توقيعك)، فلا يبقى صالحاً للتداول بأي مكان آخر بعدها.
+        حذف أي وكيل من هنا يُبطله فعلياً عند Hyperliquid (توقيع واحد من محفظتك)، بصرف النظر عن مكان إنشائه — حتى لو أُنشئ من الموقع الرسمي أو جهاز آخر.
       </div>`;
 
+    body.dataset.rendered = '1';
     _wireActions();
   }
 
@@ -553,19 +622,22 @@
         const link = buildLink(addr);
         link ? _copy(link) : toast('تعذّر توليد الرابط', 'err');
       } else if (act === 'key') {
-        _showReveal(_loadAll(State.wallet.address).find(a => a.agentAddress === addr));
+        const rec = _loadAll(State.wallet.address).find(a => a.agentAddress.toLowerCase() === addr.toLowerCase());
+        _showReveal(rec);
       } else if (act === 'del') {
+        const realName = b.dataset.name || null;
         _confirm(
-          'سيتطلب هذا توقيعاً واحداً من محفظتك لإبطال الوكيل فعلياً عند Hyperliquid — لن يعود صالحاً للتداول بأي مكان بعدها. صفقاتك المفتوحة تبقى كما هي.',
+          'سيتطلب هذا توقيعاً واحداً من محفظتك لإبطال الوكيل فعلياً عند Hyperliquid — لن يعود صالحاً للتداول بأي مكان بعدها، بصرف النظر عن مكان إنشائه. صفقاتك المفتوحة تبقى كما هي.',
           async () => {
             showLoader('بانتظار توقيعك...');
             try {
-              await revokeOne(State.wallet.address, addr);
+              await revokeOne(State.wallet.address, addr, realName);
               toast('🗑 تم إبطال الوكيل فعلياً', 'ok');
             } catch (e) {
               _showAgentError(e);
             } finally {
               hideLoader();
+              _refreshUI();
             }
           }
         );
@@ -578,7 +650,7 @@
     const box = document.getElementById('agReveal');
     if (!box) { console.error('[agents.js] #agReveal غير موجود'); return; }
     const link = typeof AgentLink !== 'undefined' ? AgentLink.build(State.wallet.address, rec.pk) : null;
-    setTxt('agRevealTitle', `🔑 ${rec.displayName}`);
+    setTxt('agRevealTitle', `🔑 ${rec.agentName || 'بلا اسم'}`);
     setTxt('agRevealPk', rec.pk);
     box.classList.add('open');
     const byId = id => document.getElementById(id);
@@ -606,10 +678,12 @@
 
   function _open() {
     if (State.isGuest || !State.wallet) { toast('سجّل الدخول أولاً', 'err'); return; }
-    _render();
     document.getElementById('agModal')?.classList.add('open');
+    const body = document.getElementById('agBody');
+    if (body) body.dataset.rendered = '';
+    _render();
     clearInterval(_tickTimer);
-    _tickTimer = setInterval(_render, 60000);
+    _tickTimer = setInterval(_render, 30000);
   }
   function _close() {
     document.getElementById('agModal')?.classList.remove('open');
@@ -623,7 +697,7 @@
   document.getElementById('agModal')?.addEventListener('click', (e) => { if (e.target.id === 'agModal') _close(); });
 
   window.Agents = {
-    ensure, revoke, revokeOne, clearSession, getInfo, list, buildLink,
+    ensure, revoke, revokeOne, clearSession, getInfo, buildLink,
     openModal: _open, closeModal: _close, TTL_MS: AGENT_TTL_MS,
   };
 })();
