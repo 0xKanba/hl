@@ -9,9 +9,9 @@
    الـAction سيرفعها تلقائياً مجدداً بأول push فعلي، هذا فقط ضمان
    لأول تحميل مباشر بعد نسخ هذي الملفات. */
 
-const CACHE_APP   = 'hltrade-app-202609121558-a81fb71';
-const CACHE_IMGS  = 'hltrade-img-202609121558-a81fb71';
-const CACHE_FONTS = 'hltrade-fnt-202609121558-a81fb71';
+const CACHE_APP   = 'hltrade-app-202609131013-28dee74';
+const CACHE_IMGS  = 'hltrade-img-202609131013-28dee74';
+const CACHE_FONTS = 'hltrade-fnt-202609131013-28dee74';
 
 const APP_SHELL = [
   '/',
