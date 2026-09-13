@@ -1,75 +1,62 @@
-
 /* ═══════════════════════════════════════════════════════════════
-   agents.js — إدارة محافظ الوكلاء (Hyperliquid Agent/API Wallets) — v4
+   agents.js — إدارة محافظ الوكلاء (Hyperliquid Agent/API Wallets) — v5
 
-   ⚠️ السبب المباشر لهذا الإصدار — تجربة حقيقية أبلغ عنها المستخدم: إنشاء
-   0x1/0x2/0x3 ثم حذف 0x1 و0x2، فمحاولة إنشاء 0x4 كانت تُرفض بـ"وكلاء
-   كثيرة الآن" رغم الحذف. السبب الجذري: "الحذف" (إعادة اعتماد نفس الاسم
-   بمفتاح عشوائي مُهمَل) يضع مع ذلك المفتاح صلاحية 180 يوماً كاملة (تماماً
-   كأي اعتماد عادي — ضرورية لضمان قبول الخادم للحذف نفسه). فحص السعة
-   القديم كان يعتمد فقط على validUntil من الخادم، فيرى تلك الخانة
-   "مُشغولة وصالحة" رغم أنها فعلياً فارغة (لا أحد يملك ذلك المفتاح
-   العشوائي). الحل: تتبّع محلي صريح لكل اسم حرّرناه نحن بأنفسنا
-   (hl_agent_freed_<addr>) — يُعامَل كفارغ فعلياً بصرف النظر عمّا يُظهره
-   validUntil، ويُزال من القائمة تلقائياً حين يُعاد استخدامه لاحقاً.
+   ⚠️ العطل المُبلَّغ عنه (v4): حذف "0x3" من داخل المشروع لم ينعكس عند
+   https://app.hyperliquid.xyz/API — بقي مرئياً بنفس الحالة. v4 كانت
+   تُصدّق status:'ok' من الخادم كدليل نجاح كافٍ، مع منطق ديناميكي معقّد
+   (عدّاد أسماء متسلسل + "خانات مُحرَّرة" محلياً + تفادي تصادم بين أجهزة)
+   لاختيار اسم جديد أو إعادة استخدام قائم. هذا التعقيد يصعب التحقق منه
+   ويُخفي أي فشل صامت حقيقي بآلية إعادة الاستخدام بالاسم (التي لا بديل
+   موثّق لها أصلاً — راجع v4 لتفاصيل البحث). بدلاً من الاستمرار بتخمين
+   سبب دقيق غير مؤكَّد، هذا الإصدار يعتمد نهجين معاً:
 
-   ⚠️ إصلاح إضافي مصاحب — تصادم أسماء بين أجهزة مختلفة لنفس المحفظة:
-   بما أن الاسم الحقيقي المُرسَل لـHyperliquid صار مطابقاً للرقم المتسلسل
-   المعروض (0x1، 0x2...)، وهذا الرقم يُولَّد من عدّاد محلي بحت لكل جهاز/
-   متصفح على حدة — جهازان مختلفان بنفس المحفظة (كلاهما بعدّاد يبدأ من
-   الصفر) قد يحاولان كلاهما اعتماد "0x1" فيُسقط أحدهما الآخر صامتاً (نفس
-   عطل "وكيلان بجهازين" التاريخي بهذا المشروع). الإصلاح: قبل التوقيع،
-   يُتحقَّق من extraAgents الحقيقي أن الاسم المُقترَح غير مُستخدَم فعلياً
-   على الخادم (بأي جهاز)؛ لو كان مُستخدَماً، يُتخطّى تلقائياً للرقم التالي.
+   1) تبسيط جذري: 3 خانات ثابتة فقط بأسماء عربية دائمة — "وكيل-1"،
+      "وكيل-2"، "وكيل-3" (بطلب المستخدم مباشرة، ومناسبة لمنصة عربية).
+      لا عدّاد، لا "تحرير" محلي، لا تصادم أجهزة مُحتمَل — نفس 3 الأسماء
+      دائماً، يُستعلَم عن حالة كل واحدة من extraAgents مباشرة في كل مرة.
+      واجهة "الوكلاء" تعرض دائماً 3 بطاقات: فارغة (⚡ تفعيل) أو مُفعَّلة
+      (🔗🔑🗑). زر "إنشاء جديد" العام حُذف تماماً — كل خانة زرّها الخاص،
+      بدل ملاحظة "الحد الأقصى 3" العائمة (بطلب المستخدم، البديل الأبسط).
 
-   🔍 التحقق المباشر (بحث فعلي 2026-09، لا افتراض) — exchange-endpoint
-   ونونces-and-api-wallets فُحصا مباشرة:
-   • حساب واحد: وكيل غير مُسمّى واحد + حتى 3 وكلاء مُسمّين — رقم حقيقي
-     موثّق، يُستخدَم هنا فقط كتلميح لاختيار الاسم قبل التوقيع (تفادي
-     توقيعين بالحالة الشائعة)، لا حاجزاً يمنع الإنشاء.
-   • آلية الإبطال المبكر الوحيدة الموثّقة: إرسال ApproveAgent بنفس الاسم
-     الحقيقي القائم فعلاً — يستبدل حامله السابق (يشمل الوكيل غير المُسمّى
-     أيضاً، بإرسال ApproveAgent بلا حقل agentName إطلاقاً — يطابق تماماً
-     approve_agent الرسمي بـPython SDK: التوقيع يُحسَب بقيمة فارغة أولاً،
-     ثم يُحذف الحقل من الحمولة المُرسَلة تحديداً لهذه الحالة).
+   2) ✅ تحقّق فعلي إلزامي بعد كل إنشاء/حذف — لا نُصدّق status:'ok' وحده
+      أبداً بعد الآن. بعد أي توقيع approveAgent (إنشاء أو حذف)، يُعاد
+      استعلام extraAgents فعلياً (حتى 3 محاولات بفواصل قصيرة، مراعاةً
+      لزمن انتشار الحالة بالخادم) للتأكد أن العنوان/الاسم أصبحا كما
+      يُفترَض حقاً — لا افتراضاً من رمز استجابة فقط. لو فشل التحقّق رغم
+      قبول التوقيع، يظهر خطأ صريح للمستخدم (لا نجاح وهمي) — وهذا بالضبط
+      ما كان يجب أن يظهر بالعطل المذكور أعلاه لو كان حاضراً حينها، وسيكشف
+      فوراً لو تكرر العطل نفسه بمحاولة تالية.
 
-   ✅ القائمة تُبنى دائماً من extraAgents (حقيقة الخادم) — أي وكيل مرتبط
-   بالمحفظة الرئيسية فعلياً يظهر، بصرف النظر عن مصدر إنشائه (هذا التطبيق،
-   الموقع الرسمي مباشرة، أو جهاز آخر) — تطابق تام مع app.hyperliquid.xyz
-   API. الحذف لا يحتاج مفتاح الوكيل نفسه إطلاقاً، فقط توقيع من المحفظة
-   الرئيسية — فأي وكيل بالقائمة قابل للحذف من هنا. 🔗 رابط تداول و🔑 كشف
-   المفتاح يظهران فقط للوكلاء التي أنشأها هذا المتصفح (نملك مفتاحها).
+   🔍 المرجع الرسمي (بحث مباشر 2026-09، لا افتراض): exchange-endpoint
+   يؤكد صراحة حد "1 غير مُسمّى + حتى 3 مُسمّين" لكل حساب. nonces-and-
+   api-wallets يؤكد أن الآلية الوحيدة الموثّقة للإبطال المبكر هي إرسال
+   ApproveAgent بنفس الاسم القائم فعلاً (يشمل الوكيل غير المُسمّى، عبر
+   عدم إرسال حقل agentName إطلاقاً — يطابق approve_agent الرسمي بـ
+   Python SDK حرفياً). لا إجراء "إلغاء" منفصل موجود بكامل الـAPI.
 
-   ✅ الإنشاء لا يُرفض أبداً من جهة التطبيق نفسه: اسم جديد كلياً (0xN)
-   لو وُجدت مساحة حقيقية الآن، وإلا إعادة استخدام خانة قائمة تلقائياً
-   (أولوية لما حرّرناه نحن بأنفسنا، ثم الأقدم انتهاءً) — توقيع واحد. رفض
-   حقيقي من الخادم رغم كل هذا (احتياط أخير) يُعالَج بتراجع تلقائي فوري،
-   لا بإظهار خطأ لمحاولة أولى فقط.
+   ✅ القائمة تشمل أي وكيل آخر مرتبط بالمحفظة الرئيسية فعلياً (بلا اسم،
+   أو باسم غير "وكيل-N" — من الموقع الرسمي مباشرة، جهاز آخر، أو إصدار
+   سابق لهذا المشروع) — قسم منفصل أسفل الخانات الثلاث، قابل للحذف من
+   هنا أيضاً (الحذف لا يحتاج مفتاح الوكيل نفسه إطلاقاً، فقط توقيع من
+   المحفظة الرئيسية). 🔗 رابط و🔑 مفتاح يظهران فقط لما أنشأه هذا المتصفح.
 
-   ✅ تبسيط الواجهة — بطاقة كل وكيل: 🔗 رابط · 🔑 المفتاح (فقط لو نملكه
-   محلياً) · 🗑 حذف (دائماً). حُذف: تصدير/استيراد JSON، التفعيل اليدوي
-   (أحدث وكيل صالح محلياً يُستخدَم تلقائياً للتوقيع)، صندوق عنوان المحفظة.
-
-   ✅ عزل كامل بين المحافظ بلا تغيير — كل تخزين محلي (مفاتيح الوكلاء،
-   عدّاد الاسم، أسماء المُحرَّرة) مفتاح بعنوان المحفظة.
+   ✅ عزل كامل بين المحافظ بلا تغيير — التخزين المحلي مفتاح بعنوان
+   المحفظة (hl_agents_<addr>).
 ═══════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
 
   const AGENT_TTL_MS        = 180 * 24 * 3600 * 1000; // الحد الأقصى الموثّق رسمياً لـvalid_until
-  const AGENT_KEY_PREFIX    = 'hl_agents_';       // مصفوفة الوكلاء التي نملك مفاتيحها محلياً، لكل محفظة
-  const AGENT_KEY_PREFIX_V1 = 'hl_agent_';        // v1 القديم: كائن وكيل مفرد (يُرحَّل تلقائياً)
-  const SEQ_KEY_PREFIX      = 'hl_agent_seq_';    // عدّاد الاسم الجديد كلياً (0x1، 0x2...) — محلي بحت
-  const FREED_KEY_PREFIX    = 'hl_agent_freed_';  // أسماء حرّرناها نحن بأنفسنا (راجع تعليق رأس الملف)
-  const NAMED_DOC_CAP       = 3; // تلميح فقط — راجع تعليق رأس الملف
+  const AGENT_KEY_PREFIX    = 'hl_agents_';   // مصفوفة الوكلاء التي نملك مفاتيحها محلياً، لكل محفظة
+  const AGENT_KEY_PREFIX_V1 = 'hl_agent_';    // v1 القديم: كائن وكيل مفرد (يُرحَّل تلقائياً)
+  const SLOT_NAMES = ['وكيل-1', 'وكيل-2', 'وكيل-3']; // الأسماء الحقيقية الثابتة — 3 خانات دائماً، لا أكثر ولا أقل
 
   let _ensurePromise = null;
   let _tickTimer     = null;
 
   function _uerr(msg) { return new Error(msg); }
-  function _key(addr)      { return AGENT_KEY_PREFIX + addr.toLowerCase(); }
-  function _seqKey(addr)   { return SEQ_KEY_PREFIX + addr.toLowerCase(); }
-  function _freedKey(addr) { return FREED_KEY_PREFIX + addr.toLowerCase(); }
+  function _key(addr) { return AGENT_KEY_PREFIX + addr.toLowerCase(); }
+  function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   function _migrateV1(addr) {
     const oldKey = AGENT_KEY_PREFIX_V1 + addr.toLowerCase();
@@ -81,7 +68,7 @@
         const cur = JSON.parse(localStorage.getItem(_key(addr)) || '[]');
         if (!cur.some(a => a.agentAddress.toLowerCase() === m.agentAddress.toLowerCase())) {
           cur.push({
-            pk: m.pk, agentAddress: m.agentAddress, agentName: m.agentName || 'agent-1',
+            pk: m.pk, agentAddress: m.agentAddress, agentName: m.agentName || SLOT_NAMES[0],
             createdAt: m.createdAt || Date.now(), validUntil: null,
           });
           localStorage.setItem(_key(addr), JSON.stringify(cur));
@@ -97,33 +84,6 @@
   }
   function _saveAll(addr, list) { try { localStorage.setItem(_key(addr), JSON.stringify(list)); } catch {} }
 
-  /* ════ عدّاد الاسم الجديد — محلي بحت، يزيد فقط عند نجاح اسم جديد فعلاً
-     (لا عند إعادة استخدام)، بلا فجوات، بلا تراجع أبداً ════ */
-  function _peekNextFreshSeq(addr) {
-    return (parseInt(localStorage.getItem(_seqKey(addr)) || '0', 10) || 0) + 1;
-  }
-  function _consumeFreshSeqAtLeast(addr, n) {
-    const cur = parseInt(localStorage.getItem(_seqKey(addr)) || '0', 10) || 0;
-    if (n > cur) { try { localStorage.setItem(_seqKey(addr), String(n)); } catch {} }
-  }
-
-  /* ════ أسماء حرّرناها نحن بأنفسنا صراحة (بالحذف) — راجع تعليق رأس
-     الملف لسبب الحاجة لهذا التتبّع المنفصل عن validUntil ════ */
-  function _loadFreedNames(addr) {
-    try { return new Set(JSON.parse(localStorage.getItem(_freedKey(addr)) || '[]')); } catch { return new Set(); }
-  }
-  function _saveFreedNames(addr, set) { try { localStorage.setItem(_freedKey(addr), JSON.stringify([...set])); } catch {} }
-  function _markFreed(addr, name) {
-    if (!name) return;
-    const s = _loadFreedNames(addr);
-    if (!s.has(name)) { s.add(name); _saveFreedNames(addr, s); }
-  }
-  function _unmarkFreed(addr, name) {
-    if (!name) return;
-    const s = _loadFreedNames(addr);
-    if (s.delete(name)) _saveFreedNames(addr, s);
-  }
-
   function _isValidLocal(rec) {
     if (!rec || !rec.pk) return false;
     if (!rec.validUntil) return true;
@@ -138,9 +98,17 @@
     } catch { return null; } // null = فشل شبكة — لا نفترض فراغاً أبداً
   }
 
-  /* خلفية: يُحدّث/يُطهّر السجل المحلي (مفاتيحنا فقط) حسب حقيقة الخادم —
-     يخدم فقط تسريع مسار التوقيع بـ_ensureImpl؛ عرض القائمة الكاملة
-     بالواجهة يُبنى من extraAgents مباشرة في كل مرة (راجع _buildRows). */
+  /* يُعيد الاستعلام حتى تتحقّق شرط، بمهلات قصيرة — يمنح الخادم وقتاً
+     لنشر الحالة قبل الحكم بفشل حقيقي. */
+  async function _verifyAgentState(addr, predicate, attempts, delayMs) {
+    for (let i = 0; i < attempts; i++) {
+      await _sleep(delayMs);
+      const list = await _fetchExtraAgents(addr);
+      if (Array.isArray(list) && predicate(list)) return true;
+    }
+    return false;
+  }
+
   function _reconcile(addr, local, serverList) {
     if (!Array.isArray(serverList)) return local;
     const byAddr = {};
@@ -157,58 +125,8 @@
     return kept;
   }
 
-  /* يُصنِّف كل الوكلاء المُسمّين الحاليين حسب حقيقة الخادم: "مُشغولة
-     فعلاً" (لا يزال أحدهم يريدها) مقابل "قابلة لإعادة الاستخدام"
-     (منتهية فعلاً حسب validUntil، أو حرّرناها نحن بأنفسنا). */
-  function _classifyServerAgents(addr, serverList) {
-    const now = Date.now();
-    const freed = _loadFreedNames(addr);
-    const local = _loadAll(addr);
-    const localAddrs = new Set(local.map(r => r.agentAddress.toLowerCase()));
-    const namedEntries = (serverList || []).filter(s => !!s.name);
-    const trulyOccupied = [], reusable = [];
-    namedEntries.forEach(s => {
-      const expired = s.validUntil && s.validUntil <= now;
-      if (expired || freed.has(s.name)) reusable.push(s); else trulyOccupied.push(s);
-    });
-    return { namedEntries, trulyOccupied, reusable, localAddrs };
-  }
-
-  async function _pickReuseFallback(addr) {
-    const serverList = await _fetchExtraAgents(addr);
-    if (!Array.isArray(serverList)) return null;
-    const { reusable, localAddrs } = _classifyServerAgents(addr, serverList);
-    if (!reusable.length) return null;
-    const foreign = reusable.filter(s => !localAddrs.has((s.address || '').toLowerCase()));
-    const pool = foreign.length ? foreign : reusable;
-    return pool.slice().sort((a, b) => (a.validUntil || 0) - (b.validUntil || 0))[0].name;
-  }
-
-  /* القرار الرئيسي قبل أي توقيع إنشاء: اسم جديد كلياً لو وُجدت مساحة
-     حقيقية الآن (بعد استبعاد ما حرّرناه نحن من "المُشغول")، أو إعادة
-     استخدام خانة قائمة لو كانت ممتلئة فعلياً — بلا رفض، بلا سؤال. */
-  async function _pickNamedApproach(addr) {
-    const serverList = await _fetchExtraAgents(addr);
-    if (!Array.isArray(serverList)) {
-      const n = _peekNextFreshSeq(addr);
-      return { name: '0x' + n, seqUsed: n, fresh: true };
-    }
-    const { namedEntries, trulyOccupied, reusable, localAddrs } = _classifyServerAgents(addr, serverList);
-    const allNames = new Set(namedEntries.map(s => s.name));
-
-    if (trulyOccupied.length < NAMED_DOC_CAP) {
-      let n = _peekNextFreshSeq(addr), candidate = '0x' + n, guard = 0;
-      while (allNames.has(candidate) && guard < 200) { n++; candidate = '0x' + n; guard++; }
-      return { name: candidate, seqUsed: n, fresh: true };
-    }
-    if (!reusable.length) return { name: null, fresh: false };
-    const foreign = reusable.filter(s => !localAddrs.has((s.address || '').toLowerCase()));
-    const pool = foreign.length ? foreign : reusable;
-    return { name: pool.slice().sort((a, b) => (a.validUntil || 0) - (b.validUntil || 0))[0].name, fresh: false };
-  }
-
-  /* ════ نافذة التفويض — ذاتية الحقن، للإنشاء فقط (الحذف يمر مباشرة عبر
-     _confirm الأحمر ثم التوقيع — لا شيء جديد ليُعاين). ════ */
+  /* ════ نافذة التفويض — ذاتية الحقن، للتفعيل فقط (الحذف يمر مباشرة عبر
+     _confirm الأحمر ثم التوقيع). ════ */
   function _confirmApproval(agentAddress, name) {
     return new Promise((resolve, reject) => {
       const box   = document.getElementById('agApproveModal');
@@ -226,10 +144,10 @@
     });
   }
 
-  /* ════ توقيع approveAgent موحَّد — للإنشاء وللحذف معاً. realName فارغ/
+  /* ════ توقيع approveAgent موحَّد — للتفعيل وللحذف معاً. realName فارغ/
      null = الوكيل غير المُسمّى. يطابق approve_agent الرسمي حرفياً:
      التوقيع يُحسَب بحقل agentName حاضراً (فارغاً لو بلا اسم)، ثم الحقل
-     يُحذف كلياً من الحمولة المُرسَلة لحالة "بلا اسم" تحديداً — لا قبلها. ════ */
+     يُحذف كلياً من الحمولة المُرسَلة لحالة "بلا اسم" تحديداً. ════ */
   async function _signApprove(agentAddress, realName, validUntilMs, nonce) {
     const nameOnChain = realName ? `${realName} valid_until ${validUntilMs}` : '';
     const action = {
@@ -254,37 +172,29 @@
     if (d.status !== 'ok') throw new Error(typeof d.response === 'string' ? d.response : JSON.stringify(d));
   }
 
-  async function _createAndApprove(addr) {
+  /* تُفعِّل خانة ثابتة بعينها (وكيل-1/2/3) بمفتاح جديد كلياً — توقيع
+     واحد، ثم تحقّق فعلي من extraAgents قبل إخبار المستخدم بالنجاح. */
+  async function _activateSlot(addr, slotName) {
     const agent = ethers.Wallet.createRandom();
-    const approach = await _pickNamedApproach(addr);
-    if (!approach.name) throw _uerr('لا توجد خانة وكيل متاحة الآن حتى بإعادة الاستخدام — أعد المحاولة بعد قليل');
-    await _confirmApproval(agent.address, approach.name);
+    await _confirmApproval(agent.address, slotName);
 
     showLoader('بانتظار توقيعك...');
     try {
-      let usedName = approach.name;
-      let usedNonce = Date.now();
-      let usedValidUntil = usedNonce + AGENT_TTL_MS;
+      const nonce = Date.now();
+      const validUntil = nonce + AGENT_TTL_MS;
+      await _signApprove(agent.address, slotName, validUntil, nonce);
 
-      try {
-        await _signApprove(agent.address, usedName, usedValidUntil, usedNonce);
-      } catch (e1) {
-        /* رفض حقيقي من الخادم (نادر لو approach.fresh) — تراجع تلقائي
-           فوري لإعادة استخدام خانة قائمة، بلا إظهار خطأ لمحاولة أولى فقط. */
-        if (!approach.fresh) throw e1;
-        const fallback = await _pickReuseFallback(addr);
-        if (!fallback) throw e1;
-        usedName = fallback;
-        usedNonce = Date.now();
-        usedValidUntil = usedNonce + AGENT_TTL_MS;
-        await _signApprove(agent.address, usedName, usedValidUntil, usedNonce);
-      }
+      showLoader('جاري التأكد من الخادم...');
+      const ok = await _verifyAgentState(
+        addr,
+        list => list.some(s => s.name === slotName && (s.address || '').toLowerCase() === agent.address.toLowerCase()),
+        3, 600
+      );
+      if (!ok) throw _uerr(`لم يُفعَّل "${slotName}" فعلياً عند Hyperliquid رغم قبول التوقيع — تحقّق من app.hyperliquid.xyz/API وحاول مجدداً`);
 
-      if (approach.fresh && usedName === approach.name) _consumeFreshSeqAtLeast(addr, approach.seqUsed);
-      _unmarkFreed(addr, usedName); // لم يعد فارغاً — أصبح مُستخدَماً فعلياً من جديد
-
-      const rec = { pk: agent.privateKey, agentAddress: agent.address, agentName: usedName, createdAt: usedNonce, validUntil: usedValidUntil };
-      const all = _loadAll(addr); all.push(rec); _saveAll(addr, all);
+      const rec = { pk: agent.privateKey, agentAddress: agent.address, agentName: slotName, createdAt: nonce, validUntil };
+      const all = _loadAll(addr).filter(a => a.agentName !== slotName);
+      all.push(rec); _saveAll(addr, all);
       State.agent = agent;
       _refreshUI();
       _showReveal(rec);
@@ -319,25 +229,33 @@
       if (stillValid) { try { State.agent = new ethers.Wallet(stillValid.pk); return State.agent; } catch {} }
     }
 
-    return _createAndApprove(addr);
+    const now = Date.now();
+    const byName = {};
+    (serverList || []).forEach(s => { if (s.name) byName[s.name] = s; });
+    const emptySlot = SLOT_NAMES.find(n => { const s = byName[n]; return !s || (s.validUntil && s.validUntil <= now); });
+    if (!emptySlot) throw _uerr('الخانات الثلاث كلها مُشغولة الآن بوكلاء صالحين — احذف واحداً من قسم "الوكلاء" أولاً');
+    return _activateSlot(addr, emptySlot);
   }
 
   /* ════ حذف حقيقي بتوقيع — لا يحتاج مفتاح الوكيل المحذوف إطلاقاً، فقط
-     اسمه الحقيقي (من extraAgents) وتوقيع واحد من المحفظة الرئيسية. يعيد
-     اعتماد نفس الاسم بمفتاح عشوائي يُهمَل فوراً — Hyperliquid يستبدل
-     حامل الاسم السابق بهذا الجديد، فيُبطل الوكيل المحذوف فعلياً بصرف
-     النظر عن مصدر إنشائه. ════ */
-  async function _revokeSigned(realName) {
-    const throwaway = ethers.Wallet.createRandom();
-    const nonce = Date.now();
-    await _signApprove(throwaway.address, realName || null, nonce + AGENT_TTL_MS, nonce);
-  }
-
+     اسمه الحقيقي (من extraAgents) وتوقيع واحد من المحفظة الرئيسية. ثم
+     تحقّق فعلي إلزامي من extraAgents قبل إخبار المستخدم بالنجاح — لا
+     نصدّق status:'ok' وحده لعملية بهذه الحساسية. ════ */
   async function revokeOne(address, agentAddress, realName) {
     const addr = address || State.wallet?.address;
     if (!addr || !State.wallet) throw _uerr('سجّل الدخول أولاً');
-    await _revokeSigned(realName);
-    _markFreed(addr, realName); // ✅ يُصحِّح فحص السعة القادم فوراً — راجع تعليق رأس الملف
+
+    const throwaway = ethers.Wallet.createRandom();
+    const nonce = Date.now();
+    await _signApprove(throwaway.address, realName || null, nonce + AGENT_TTL_MS, nonce);
+
+    const ok = await _verifyAgentState(
+      addr,
+      list => !list.some(s => (s.address || '').toLowerCase() === agentAddress.toLowerCase() && (realName ? s.name === realName : !s.name)),
+      3, 600
+    );
+    if (!ok) throw _uerr('لم يتم إبطال الوكيل فعلياً عند Hyperliquid — العنوان ما زال مرتبطاً بنفس الاسم عند الخادم بعد عدة محاولات تحقّق. تحقّق يدوياً من app.hyperliquid.xyz/API وحاول مجدداً');
+
     _saveAll(addr, _loadAll(addr).filter(a => a.agentAddress.toLowerCase() !== agentAddress.toLowerCase()));
     if (State.agent?.address?.toLowerCase() === agentAddress.toLowerCase()) State.agent = null;
   }
@@ -345,8 +263,7 @@
   /* حذف محلي جماعي فقط — يُستخدم حصراً بمسار "نسيت رمز PIN" (تنظيف
      طارئ، بلا توقيعات متعددة بلحظة طوارئ). الوكلاء الفعليون يبقون
      صالحين عند Hyperliquid حتى انتهاء صلاحيتهم، أو يمكن حذفهم لاحقاً
-     بأمان من هنا (revokeOne) من أي جهاز — القائمة تعرضهم دائماً بصرف
-     النظر عن هذا المسح المحلي. */
+     بأمان من هنا (revokeOne). */
   function revoke(address) {
     const addr = address || State.wallet?.address;
     if (!addr) return;
@@ -357,8 +274,6 @@
 
   function clearSession() { State.agent = null; }
 
-  /* أحدث وكيل صالح محلياً — فحص محلي سريع (بلا جولة شبكة)، يُستخدم
-     داخلياً بـauth.js لتقرير هل يوجد مفتاح جاهز للتوقيع أصلاً. */
   function getInfo(address) {
     const addr = address || State.wallet?.address;
     if (!addr) return null;
@@ -510,6 +425,17 @@
 
   function _fmtDate(ms) { return new Date(ms).toLocaleDateString('ar-EG', { day:'2-digit', month:'2-digit', year:'numeric' }); }
 
+  function _slotCardHtml(row) {
+    if (row.empty) {
+      return `
+        <div class="ag-card-box">
+          <div class="ag-row"><span class="ag-row-k">${row.realName}</span><span class="ag-status" style="background:rgba(148,163,184,.14);color:#94a3b8;">○ فارغة</span></div>
+          <button class="ag-btn rot wide" data-slot-activate="${row.realName}" style="margin-top:10px;">⚡ تفعيل ${row.realName}</button>
+        </div>`;
+    }
+    return _agentCardHtml(row);
+  }
+
   function _agentCardHtml(row) {
     const now = Date.now();
     const valid = !row.expiresAt || row.expiresAt > now;
@@ -542,30 +468,45 @@
       </div>`;
   }
 
-  /* ════ يبني القائمة الكاملة من extraAgents (حقيقة الخادم)، مع إخفاء
-     أي اسم حرّرناه نحن بأنفسنا (بالنسبة للمستخدم هو محذوف فعلاً — راجع
-     تعليق رأس الملف)، ودمج أي مفتاح محلي نملكه لنفس العنوان. ════ */
   async function _buildRows(addr) {
     const serverList = await _fetchExtraAgents(addr);
     const local = _loadAll(addr);
     const localByAddr = {};
     local.forEach(r => { localByAddr[r.agentAddress.toLowerCase()] = r; });
 
-    if (Array.isArray(serverList)) {
-      const freed = _loadFreedNames(addr);
-      const rows = serverList
-        .filter(s => !(s.name && freed.has(s.name)))
-        .map(s => {
-          const rec = localByAddr[(s.address || '').toLowerCase()];
-          return { realName: s.name || null, address: s.address, expiresAt: s.validUntil || null, hasKey: !!rec };
-        });
-      rows.sort((a, b) => (b.expiresAt || 0) - (a.expiresAt || 0));
-      return { rows, networkFailed: false };
+    if (!Array.isArray(serverList)) {
+      const slotRows = SLOT_NAMES.map(n => {
+        const rec = local.find(r => r.agentName === n);
+        return rec
+          ? { realName: n, address: rec.agentAddress, expiresAt: rec.validUntil, hasKey: true, empty: false }
+          : { realName: n, empty: true };
+      });
+      const otherRows = local
+        .filter(r => !SLOT_NAMES.includes(r.agentName))
+        .map(r => ({ realName: r.agentName, address: r.agentAddress, expiresAt: r.validUntil, hasKey: true }));
+      return { slotRows, otherRows, networkFailed: true };
     }
 
-    const rows = local.map(r => ({ realName: r.agentName, address: r.agentAddress, expiresAt: r.validUntil, hasKey: true }));
-    rows.sort((a, b) => (b.expiresAt || 0) - (a.expiresAt || 0));
-    return { rows, networkFailed: true };
+    const now = Date.now();
+    const byName = {};
+    serverList.forEach(s => { if (s.name) byName[s.name] = s; });
+
+    const slotRows = SLOT_NAMES.map(slotName => {
+      const s = byName[slotName];
+      const valid = s && (!s.validUntil || s.validUntil > now);
+      if (!valid) return { realName: slotName, empty: true };
+      const rec = localByAddr[(s.address || '').toLowerCase()];
+      return { realName: slotName, address: s.address, expiresAt: s.validUntil || null, hasKey: !!rec, empty: false };
+    });
+
+    const otherRows = serverList
+      .filter(s => !(s.name && SLOT_NAMES.includes(s.name)))
+      .map(s => {
+        const rec = localByAddr[(s.address || '').toLowerCase()];
+        return { realName: s.name || null, address: s.address, expiresAt: s.validUntil || null, hasKey: !!rec };
+      });
+
+    return { slotRows, otherRows, networkFailed: false };
   }
 
   async function _render() {
@@ -574,25 +515,23 @@
     const addr = State.wallet.address;
 
     if (!body.dataset.rendered) {
-      body.innerHTML = `<div class="ag-empty">⏳ جاري جلب الوكلاء المرتبطين بمحفظتك من Hyperliquid...</div>`;
+      body.innerHTML = `<div class="ag-empty">⏳ جاري جلب الوكلاء من Hyperliquid...</div>`;
     }
 
-    const { rows, networkFailed } = await _buildRows(addr);
+    const { slotRows, otherRows, networkFailed } = await _buildRows(addr);
     if (!document.getElementById('agModal')?.classList.contains('open')) return; // أُغلقت أثناء الجلب
 
-    const agentsHtml = rows.length
-      ? rows.map(_agentCardHtml).join('') + `<button class="ag-btn rot wide" id="agAddMore">+ إنشاء وكيل جديد</button>`
-      : `<div class="ag-empty">🔒 لا يوجد وكيل نشط حالياً
-          <button class="ag-btn rot wide" id="agActivate" style="margin-top:14px;">⚡ تفعيل الوكيل الآن</button>
-        </div>`;
+    const otherHtml = otherRows.length
+      ? `<div class="ag-sec-title">وكلاء أخرى مرتبطة بحسابك</div>${otherRows.map(_agentCardHtml).join('')}`
+      : '';
 
     body.innerHTML = `
-      <div class="ag-sec-title">الوكلاء (${rows.length})</div>
-      ${networkFailed ? `<div class="ag-note" style="border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06);">⚠️ تعذّر الاتصال بـ Hyperliquid الآن — القائمة أدناه من آخر ما هو معروف بهذا الجهاز فقط، وقد لا تشمل كل الوكلاء الفعليين حتى تعود الشبكة.</div>` : ''}
-      ${agentsHtml}
+      <div class="ag-sec-title">الوكلاء</div>
+      ${networkFailed ? `<div class="ag-note" style="border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06);">⚠️ تعذّر الاتصال بـ Hyperliquid الآن — الحالة أدناه من آخر ما هو معروف بهذا الجهاز فقط.</div>` : ''}
+      ${slotRows.map(_slotCardHtml).join('')}
+      ${otherHtml}
       <div class="ag-note">
-        🛡 كل وكيل يوقّع الصفقات فقط — لا يقدر إطلاقاً على سحب أو تحويل أموالك.
-        حذف أي وكيل من هنا يُبطله فعلياً عند Hyperliquid (توقيع واحد من محفظتك)، بصرف النظر عن مكان إنشائه — حتى لو أُنشئ من الموقع الرسمي أو جهاز آخر.
+        🛡 كل وكيل يوقّع الصفقات فقط — لا يقدر إطلاقاً على سحب أو تحويل أموالك. Hyperliquid يسمح بحد أقصى 3 وكلاء مُسمّين لكل حساب — لهذا 3 خانات ثابتة فقط. حذف أي وكيل من هنا يُبطله فعلياً عند Hyperliquid (توقيع واحد)، بصرف النظر عن مكان إنشائه — ويُتحقَّق من ذلك آلياً بعد كل عملية.
       </div>`;
 
     body.dataset.rendered = '1';
@@ -602,19 +541,18 @@
   function _showAgentError(e) {
     if (!e || e.message === 'CANCELLED') return;
     const msg = typeof errToAr === 'function' ? errToAr(e.message) : e.message;
-    toast('⚠️ ' + msg, 'err');
-  }
-
-  async function _createFlow() {
-    try { await ensure(true); }
-    catch (e) { _showAgentError(e); }
+    toast('⚠️ ' + msg, 'err', 6000);
   }
 
   function _wireActions() {
-    document.getElementById('agActivate')?.addEventListener('click', _createFlow);
-    document.getElementById('agAddMore')?.addEventListener('click', _createFlow);
-
     document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => _copy(b.dataset.copy)));
+
+    document.querySelectorAll('[data-slot-activate]').forEach(b => b.addEventListener('click', async () => {
+      const slot = b.dataset.slotActivate;
+      try { await _activateSlot(State.wallet.address, slot); }
+      catch (e) { _showAgentError(e); }
+      finally { _refreshUI(); }
+    }));
 
     document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
       const addr = b.dataset.addr, act = b.dataset.act;
@@ -627,12 +565,12 @@
       } else if (act === 'del') {
         const realName = b.dataset.name || null;
         _confirm(
-          'سيتطلب هذا توقيعاً واحداً من محفظتك لإبطال الوكيل فعلياً عند Hyperliquid — لن يعود صالحاً للتداول بأي مكان بعدها، بصرف النظر عن مكان إنشائه. صفقاتك المفتوحة تبقى كما هي.',
+          'سيتطلب هذا توقيعاً واحداً من محفظتك لإبطال الوكيل فعلياً عند Hyperliquid — لن يعود صالحاً للتداول بأي مكان بعدها. صفقاتك المفتوحة تبقى كما هي. سيُتحقَّق آلياً من الخادم قبل تأكيد النجاح.',
           async () => {
             showLoader('بانتظار توقيعك...');
             try {
               await revokeOne(State.wallet.address, addr, realName);
-              toast('🗑 تم إبطال الوكيل فعلياً', 'ok');
+              toast('🗑 تم إبطال الوكيل فعلياً — تأكَّد آلياً من الخادم', 'ok');
             } catch (e) {
               _showAgentError(e);
             } finally {
