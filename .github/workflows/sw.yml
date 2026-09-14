@@ -3,20 +3,24 @@ name: Update sw.js cache version
 on:
   push:
     branches:
-      - '**'
+      - "**"
     paths:
-      - '**.html'
-      - 'css/**'
-      - 'js/**'
-      - 'manifest.json'
-      - '!sw.js'
+      - "**.html"
+      - "css/**"
+      - "js/**"
+      - "manifest.json"
+      - "!sw.js"
+      - "!.github/workflows/**"
+
   workflow_dispatch:
 
 permissions:
   contents: write
 
+# يجب استخدام نفس group في أي Workflow آخر يقوم بالـ push
+# إلى نفس الفروع.
 concurrency:
-  group: swjs-update-${{ github.ref_name }}
+  group: repository-write-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -30,28 +34,58 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Build cache tag
         id: tag
-        run: echo "value=$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "value=$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Update sw.js and push safely
         env:
-          BRANCH: ${{ github.ref_name }}
           TAG: ${{ steps.tag.outputs.value }}
+          BRANCH: ${{ github.ref_name }}
+        shell: bash
         run: |
           set -euo pipefail
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          for i in 1 2 3 4 5 6; do
-            git fetch origin "$BRANCH"
+          update_sw() {
+            test -f sw.js || {
+              echo "::error::sw.js not found"
+              exit 1
+            }
+
+            perl -0pi -e '
+              s/(CACHE_APP\s*=\s*\x27)[^\x27]*(\x27)/
+                $1 . "hltrade-app-$ENV{TAG}" . $2
+              /eg;
+
+              s/(CACHE_IMGS\s*=\s*\x27)[^\x27]*(\x27)/
+                $1 . "hltrade-img-$ENV{TAG}" . $2
+              /eg;
+
+              s/(CACHE_FONTS\s*=\s*\x27)[^\x27]*(\x27)/
+                $1 . "hltrade-fnt-$ENV{TAG}" . $2
+              /eg;
+            ' sw.js
+          }
+
+          for attempt in 1 2 3 4 5; do
+            echo "Push attempt: $attempt/5"
+
+            # جلب آخر نسخة من الفرع قبل كل محاولة
+            git fetch --prune origin "$BRANCH"
+
+            # مزامنة مجلد العمل مع آخر Commit على الفرع
             git reset --hard "origin/$BRANCH"
 
-            test -f sw.js || { echo "::error::sw.js not found"; exit 1; }
-
-            perl -0pi -e 's/(CACHE_APP\s*=\s*\x27)[^\x27]*(\x27)/$1 . "hltrade-app-$ENV{TAG}" . $2/eg; s/(CACHE_IMGS\s*=\s*\x27)[^\x27]*(\x27)/$1 . "hltrade-img-$ENV{TAG}" . $2/eg; s/(CACHE_FONTS\s*=\s*\x27)[^\x27]*(\x27)/$1 . "hltrade-fnt-$ENV{TAG}" . $2/eg;' sw.js
+            # تطبيق تعديل sw.js على أحدث نسخة
+            update_sw
 
             if git diff --quiet -- sw.js; then
               echo "sw.js already up to date"
@@ -59,16 +93,19 @@ jobs:
             fi
 
             git add sw.js
-            git commit -m "chore: bump sw.js cache version to ${TAG}"
+            git commit -m "chore: bump sw.js cache version"
 
-            if git push origin "HEAD:${BRANCH}"; then
-              echo "Pushed on attempt $i"
+            # الدفع إلى الفرع المحدد صراحةً
+            if git push origin "HEAD:refs/heads/$BRANCH"; then
+              echo "Push completed successfully"
               exit 0
             fi
 
-            echo "Push failed on attempt $i, retrying..."
-            sleep $((i * 2))
+            echo "Push rejected because the branch changed concurrently."
+
+            # انتظار قصير قبل إعادة المحاولة
+            sleep $((attempt * 2))
           done
 
-          echo "::warning::Could not push sw.js after retries. The run will not fail."
-          exit 0
+          echo "::error::Failed to push after 5 attempts"
+          exit 1

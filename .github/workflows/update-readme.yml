@@ -2,6 +2,10 @@ name: Auto Update Project Tree
 
 on:
   push:
+    paths-ignore:
+      - "README.md"
+      - "md/files.json"
+      - ".github/workflows/**"
 
 permissions:
   contents: write
@@ -17,49 +21,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect relevant changes
-        id: changes
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          BEFORE="${{ github.event.before }}"
-          AFTER="${{ github.sha }}"
-
-          # First push / new branch / forced edge case
-          if [[ -z "${BEFORE:-}" || "$BEFORE" =~ ^0+$ ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          CHANGED="$(git diff --name-status "$BEFORE" "$AFTER" || true)"
-          echo "$CHANGED"
-
-          # Ignore our generated outputs only
-          if echo "$CHANGED" | awk '
-            $2 == "README.md" { next }
-            $2 == "md/files.json" { next }
-            $2 ~ /^\.github\/workflows\/.*\.ya?ml$/ { next }
-            $1 ~ /^(A|D|M|R)/ { found=1 }
-            END { exit !found }
-          '; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Skip if only generated files changed
-        if: steps.changes.outputs.run != 'true'
-        run: echo "No relevant content changes."
 
       - name: Build md/files.json
-        if: steps.changes.outputs.run == 'true'
-        shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p md
 
           python3 - <<'PY'
@@ -67,7 +33,13 @@ jobs:
           import json
 
           md = Path("md")
-          names = sorted(p.stem for p in md.glob("*.md") if p.is_file())
+
+          names = sorted(
+              p.stem
+              for p in md.glob("*.md")
+              if p.is_file()
+          )
+
           Path("md/files.json").write_text(
               json.dumps(names, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8"
@@ -75,8 +47,6 @@ jobs:
           PY
 
       - name: Build README tree
-        if: steps.changes.outputs.run == 'true'
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -84,26 +54,45 @@ jobs:
           from pathlib import Path
           import re
 
-          ignore_dirs = {".git", ".github", "node_modules"}
-          ignore_files = {"README.md"}
+          ignore_dirs = {
+              ".git",
+              ".github",
+              "node_modules",
+          }
+
+          ignore_files = {
+              "README.md",
+          }
 
           def walk(path: Path, prefix: str = ""):
               items = []
-              for p in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+
+              for p in sorted(
+                  path.iterdir(),
+                  key=lambda x: (not x.is_dir(), x.name.lower())
+              ):
                   if p.name in ignore_dirs:
                       continue
+
                   if p.name in ignore_files:
                       continue
+
                   items.append(p)
 
               lines = []
+
               for i, p in enumerate(items):
                   last = i == len(items) - 1
                   branch = "└── " if last else "├── "
+
                   lines.append(prefix + branch + p.name)
+
                   if p.is_dir():
-                      ext = "    " if last else "│   "
-                      lines.extend(walk(p, prefix + ext))
+                      extension = "    " if last else "│   "
+                      lines.extend(
+                          walk(p, prefix + extension)
+                      )
+
               return lines
 
           tree_lines = ["."]
@@ -122,9 +111,17 @@ jobs:
           ])
 
           readme = Path("README.md")
+
           if readme.exists():
               text = readme.read_text(encoding="utf-8")
-              text = re.sub(r"\n?<!-- TREE START -->.*?<!-- TREE END -->\n?", "\n", text, flags=re.S)
+
+              text = re.sub(
+                  r"\n?<!-- TREE START -->.*?<!-- TREE END -->\n?",
+                  "\n",
+                  text,
+                  flags=re.S
+              )
+
               text = text.rstrip() + "\n\n" + new_block
           else:
               text = new_block
@@ -133,10 +130,9 @@ jobs:
           PY
 
       - name: Commit and push
-        if: steps.changes.outputs.run == 'true'
-        shell: bash
         run: |
           set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -148,4 +144,4 @@ jobs:
           fi
 
           git commit -m "🔄 Auto-update project tree"
-          git push
+          git push origin "HEAD:${GITHUB_REF_NAME}"

@@ -1,0 +1,23 @@
+{
+  "brand": "سيولة",
+  "brand_latin": "Siyula",
+  "title": "سيولة | تداول الذهب والنفط لامركزياً 24/7",
+  "description": "سيولة — منصة عربية لتداول الذهب والنفط بعقود دائمة، بلا وسطاء ولا حساب. وصّل محفظتك وابدأ فوراً.",
+  "keywords": ["تداول ذهب", "تداول نفط", "منصة تداول عربية", "سيولة", "Siyula", "Hyperliquid"],
+  "open_graph": {
+    "og:title": "سيولة | تداول الذهب والنفط",
+    "og:description": "ذهب، نفط، فضة — عقود دائمة لامركزية 24/7، بواجهة عربية بسيطة.",
+    "og:image": "/og/siyula-cover.png",
+    "og:locale": "ar_AR"
+  },
+  "twitter": {
+    "twitter:card": "summary_large_image",
+    "twitter:title": "سيولة | تداول الذهب والنفط",
+    "twitter:description": "وصّل محفظتك وتداول الذهب والنفط فوراً."
+  },
+  "robots": "index,follow",
+  "canonical": "https://siyula.app/",
+  "lang": "ar",
+  "h1": "سيولة",
+  "h1_tagline": "تداول الذهب والنفط بلا وسطاء، على مدار الساعة"
+}

@@ -24,6 +24,10 @@
       المحفظة" (useExportWallet أدناه) يكفي وحده كنسخة احتياطية حقيقية
       (يعرض المفتاح الخاص/العبارة السرية مباشرة)، وكان وجود الاثنين
       تكراراً بلا فائدة إضافية حقيقية للمستخدم.
+   ✅ إعادة تلوين (2026-08) — accentColor مودال Privy كان #00ccff
+      (سماوي)، بلا أي علاقة بلوحة التطبيق. الآن #8b5cf6 (نفس البنفسجي
+      الأساسي بكل مكان آخر) — نافذة الدخول بالبريد تطابق هوية التطبيق
+      بصرياً بدل الظهور بلون غريب منفصل.
 ═══════════════════════════════════════════════════════════════ */
 import React, { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -137,7 +141,7 @@ createRoot(mountNode).render(
       appearance: {
         name: 'ماركت ليك',
         theme: 'dark',
-        accentColor: '#00ccff',
+        accentColor: '#8b5cf6',
         logo: 'https://hl.kanba.pw/images/icon-192x192.png',
       },
     }}

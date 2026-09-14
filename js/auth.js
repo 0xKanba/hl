@@ -35,7 +35,7 @@
       (دليل رسمي محايد لاختيار محفظة) بتبويب جديد.
 
    ✅ FIX (2026-08) — إعادة ترتيب جوهرية لتسلسل toasts أول اتصال، بعد
-      ملاحظة أن مستخدماً جديداً كلياً (بريد Privy، رصيد $0) كان يشاهد
+      ملاحظة أن مستخداً جديداً كلياً (بريد Privy، رصيد $0) كان يشاهد
       ثلاث رسائل متتالية بلا أي فاصل زمني حقيقي: "مرحباً" ثم فوراً
       "أودع USDC أولاً" ثم بعد 2.5 ثانية "صدّر مفتاح محفظتك" — وبما أن
       toast() تستبدل نفس عنصر DOM في كل نداء، الرسالتان الأوليان كانتا
@@ -52,6 +52,31 @@
          يُستدعى فوراً هنا فقط لحساب *مموَّل بالفعل* (إعادة اتصال مثلاً).
          للحساب الجديد، الاستدعاء انتقل لـdoDeposit بaccount.js بعد أول
          إيداع ناجح — عندها فقط يصبح التذكير منطقياً وذا معنى فعلي.
+
+   ✅ جديد (إعادة هيكلة UI) —
+      1) _showGuestBanner كانت تُدرِج قبل ".footer" (عنصر لم يعد موجوداً
+         بعد استبدال الفوتر بـtabbar سفلي) — كانت ستسقط لـappendChild
+         بآخر #appScreen (بعد tabbar نفسها بالـDOM)، فتظهر البانر تحت
+         الشريط السفلي بدل مكانها الصحيح. الآن تُدرَج داخل شاشة الرئيسية
+         (#screenHome .screen-scroll) في أعلاها، قبل بطاقة الرصيد —
+         نفس الفكرة الأصلية (أول عنصر يراه من ليس متصلاً) بمكان صحيح.
+      2) doLogout يستدعي _renderBalanceFromState() صراحة بعد ضبط
+         isGuest=true — البطاقة الدائمة الجديدة تعرض "—" تلقائياً
+         بفضل شرط isGuest بداخل الدالة (راجع account.js)، فلا حاجة
+         لتصفير State.balance يدوياً؛ فقط الاستدعاء كافٍ لتحديث العرض
+         فوراً بدل بقاء أرقام الجلسة السابقة ظاهرة بعد قطع الاتصال.
+
+   ✅ إصلاح توقيت (2026-08) — State._identityReady تُضبط الآن true بشكل
+      متزامن في كل من _onWalletConnected() و_onAgentLinkConnected()،
+      بأول سطر ممكن (قبل أي await فعلي) — إشارة دقيقة "قرار الهوية
+      اتُّخذ" (ضيف أم متصل) يستهلكها js/lastplace.js بدل الانتظار
+      الخاطئ سابقاً لـState._sessionTimer (لا يُضبط إلا بعد اكتمال جلب
+      بيانات الحساب الشبكي بالكامل — بطيء وغير ضروري لهذا الغرض تحديداً).
+      راجع state.js لتعريف الحقل، وjs/lastplace.js لكيفية استهلاكه.
+
+   ✅ جديد — connectWallet(): الدرج المنبثق القديم (openDrawer) استُبدل
+      بالدوك الدائم الجديد (openDock) — راجع app.js لسبب هذا التغيير
+      بالكامل (الدرج لم يعد موجوداً إطلاقاً بالمشروع).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -78,6 +103,8 @@ function _loadPrivyBridge() {
 
 function initGuestMode() {
   State.isGuest = true;
+  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. متزامن، أول سطرين بالدالة. */
+  State._identityReady = true;
   $('loginScreen')?.classList.add('hidden');
   $('appScreen')?.classList.remove('hidden');
   _showGuestBanner();
@@ -87,7 +114,7 @@ function initGuestMode() {
 }
 
 function connectWallet() {
-  if (!State.isGuest) return openOptions();
+  if (!State.isGuest) return openDock();
   _walletListOpenedAt = Date.now();
   _renderExtWalletList();
   if (typeof Wallets !== 'undefined') Wallets.onListChanged(_renderExtWalletList);
@@ -222,6 +249,8 @@ async function _onWalletConnected(walletObj) {
 
   State.wallet = walletObj;
   State.isGuest = false;
+  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. متزامن، قبل أي await هنا. */
+  State._identityReady = true;
 
   if (walletObj.walletClientType === 'privy') {
     localStorage.setItem(PRIVY_FLAG_KEY, '1');
@@ -231,7 +260,7 @@ async function _onWalletConnected(walletObj) {
     localStorage.removeItem(PRIVY_FLAG_KEY);
   }
 
-  updateNavAddressDisplay();
+  updateAddrPopoverText();
   $('withdrawAddress').value = State.wallet.address;
 
   closeModal('modalLogin');
@@ -243,7 +272,8 @@ async function _onWalletConnected(walletObj) {
   toast('مرحباً 🤝', 'ok', 2200);
 
   /* ✅ لقطة الحساب أولاً — تُعبّئ State.balance/positions/fillsCache
-     قبل أي قرار بخصوص تفويض الوكيل (راجع تعليق رأس الملف). */
+     قبل أي قرار بخصوص تفويض الوكيل (راجع تعليق رأس الملف). initAccountFeeds
+     نفسها ترسم بطاقة الرصيد الدائمة فور اكتمال اللقطة (راجع account.js). */
   try { await initAccountFeeds(); } catch (e) { console.warn('[initAccountFeeds]', e); }
 
   /* ✅ تحميل تقويم التداول تدريجياً بصمت — بلا انتظار فتح "التقويم" يدوياً */
@@ -271,12 +301,49 @@ async function _onWalletConnected(walletObj) {
        (doDeposit بaccount.js). التأخير هنا (900ms) يمنع تصادم "أودع
        USDC أولاً" مع "مرحباً" أعلاه — راجع تعليق رأس الملف. */
     setTimeout(() => {
-      toast('💵 أودع USDC أولاً لتفعيل حسابك — اضغط ⚙️ الخيارات ← 💵 إيداع', 'warn', 9000);
+      toast('💵 أودع USDC أولاً لتفعيل حسابك — اضغط ☰ القائمة ← 💵 إيداع', 'warn', 9000);
     }, 900);
   }
 
-  if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true')
-    setTimeout(function () { if (State.wallet) lockApp(); }, 300);
+  /* ✅ إصلاح توقيت (2026-08) — نسخة القفل المؤجَّلة هنا (كانت
+     setTimeout(...,300) بلا داعٍ حقيقي) حُذفت. القفل الآن يحدث مرة
+     واحدة فقط، فوراً، بأول سطر بتسلسل إقلاع app.js — قبل حتى بدء أي
+     مسار اتصال (بما فيها هذه الدالة نفسها) — فلا حاجة لمحاولة ثانية
+     هنا إطلاقاً؛ لو كان القفل مطلوباً، يكون قد فتح شاشته بالفعل قبل
+     وصولنا لهذه النقطة أصلاً. راجع app.js لمكان الفحص الوحيد الآن. */
+}
+
+/* ════════════════════════════════════════════════
+   ✅ جديد — وضع "رابط وكيل" (js/agentlink.js): AgentLink.tryConsume()
+   يضبط State.wallet/State.agent مباشرة بلا أي توقيع (المفتاح المرفق
+   بالرابط هو أصلاً وكيل مُصرَّح مسبقاً). مسار إقلاع مبسّط عمداً —
+   بلا Agents.ensure (الوكيل جاهز أصلاً)، بلا أعلام PRIVY/EXTWALLET
+   (جلسة الرابط لا تُحفظ محلياً — أمان: لا يبقى مفتاح وكيل بجهاز غريب
+   بعد إغلاق التبويب)، بلا تذكير تصدير/إيداع (لا معنى لهما هنا).
+════════════════════════════════════════════════ */
+async function _onAgentLinkConnected() {
+  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. AgentLink.tryConsume() (يُستدعى
+     قبل هذه الدالة بـapp.js) يضبط State.isGuest=false بالفعل بشكل
+     متزامن؛ هذا السطر يُثبّت الإشارة صراحة هنا أيضاً كأول شيء تفعله هذه
+     الدالة، قبل أي await، لضمان دقتها بصرف النظر عن أي تغيير مستقبلي
+     بترتيب agentlink.js. */
+  State._identityReady = true;
+
+  updateAddrPopoverText();
+  updateConnectBtn();
+  _hideGuestBanner();
+  toast('🔗 وضع رابط وكيل — تداول فقط، بلا صلاحية سحب أو تعديل إعدادات', 'info', 6000);
+  try { await initAccountFeeds(); } catch (e) { console.warn('[agentlink]', e); }
+  setTimeout(() => { if (typeof preloadCalendarData === 'function') preloadCalendarData(); }, 3000);
+}
+
+/* ════ روابط المستكشف الخارجية — تُبنى ديناميكياً من عنوان المحفظة
+   الحالي عند كل فتح للـpopover (راجع app.js:_toggleAddrPopover). ════ */
+function _updateExplorerLinks() {
+  const addr = State.wallet?.address;
+  const ex = $('addrPopoverExplorer'), st = $('addrPopoverStatus');
+  if (ex) ex.href = addr ? `https://blockscan.com/address/${addr}` : '#';
+  if (st) st.href = addr ? `https://hyperscreener.asxn.xyz/profile/${addr}` : '#';
 }
 
 function _maybePromptExportBackup(walletObj) {
@@ -284,11 +351,13 @@ function _maybePromptExportBackup(walletObj) {
   const flag = 'hl_export_prompted_' + walletObj.address.toLowerCase();
   if (localStorage.getItem(flag)) return;
   localStorage.setItem(flag, '1');
-  setTimeout(function () { toast('🔑 صدّر مفتاح محفظتك واحفظه بمكان آمن كنسخة احتياطية — الخيارات ⚙️', 'info', 8000); }, 2500);
+  setTimeout(function () { toast('🔑 صدّر مفتاح محفظتك واحفظه بمكان آمن كنسخة احتياطية — ☰ القائمة', 'info', 8000); }, 2500);
 }
 
 async function exportWallet() {
   if (State.isGuest || !State.wallet) return toast('سجّل الدخول أولاً', 'err');
+  if (State.wallet.isAgentLink)
+    return toast('وضع رابط الوكيل — لا يوجد مفتاح محفظة رئيسية هنا لتصديره، فقط مفتاح الوكيل نفسه', 'info', 6000);
   if (State.wallet.walletClientType !== 'privy')
     return toast('محفظتك خارجية — صدّرها من داخل تطبيق المحفظة نفسه (مفتاحها لا يمر أبداً عبر هذا التطبيق)', 'info', 6000);
   try {
@@ -348,12 +417,20 @@ function doLogout() {
 
   _showGuestBanner();
   updateConnectBtn();
+  if (typeof _toggleAddrPopover === 'function') _toggleAddrPopover(false);
   resetPosFingerprint();
   renderPositions();
+  /* ✅ جديد — يعيد بطاقة الرصيد الدائمة إلى حالة "—" فوراً (بدل بقاء
+     أرقام الجلسة السابقة ظاهرة) — الشرط isGuest داخل الدالة نفسها
+     (account.js) يكفي، لا حاجة لتصفير State.balance يدوياً. */
+  if (typeof _renderBalanceFromState === 'function') _renderBalanceFromState();
   toast('🔌 تم إلغاء الاتصال', 'info');
   startSessionPolling();
 }
 
+/* ✅ جديد — تُدرَج الآن داخل شاشة الرئيسية (screen-scroll) في أعلاها،
+   قبل بطاقة الرصيد، بدل الاعتماد على ".footer" الذي لم يعد موجوداً
+   (راجع تعليق رأس الملف). fallback دفاعي لو لأي سبب لم توجد الشاشة. */
 function _showGuestBanner() {
   let b = $('guestBanner');
   if (!b) {
@@ -361,11 +438,12 @@ function _showGuestBanner() {
     b.id = 'guestBanner';
     b.className = 'guest-banner';
     b.innerHTML = '<span class="gb-msg">🔒 اربط محفظتك لبدء التداول وعرض صفقاتك المفتوحة</span><button class="gb-btn" onclick="connectWallet()">اتصال ←</button>';
-    const main = $('appScreen');
-    if (main) {
-      const footer = main.querySelector('.footer');
-      if (footer) main.insertBefore(b, footer);
-      else main.appendChild(b);
+    const scroller = document.querySelector('#screenHome .screen-scroll');
+    if (scroller) {
+      scroller.insertBefore(b, scroller.firstChild);
+    } else {
+      const main = $('appScreen');
+      if (main) main.appendChild(b);
     }
   }
   b.classList.remove('hidden');
@@ -378,8 +456,10 @@ function _hideGuestBanner() {
 
 function openLoginModal() { connectWallet(); }
 
-/* ✅ FIX — الزر الآن مدمج (اتصال + قطع اتصال بزر واحد بالشريط العلوي).
-   updateConnectBtn تكتفي بتلوين/تسمية #btnConnect فقط. */
+/* ✅ الزر الآن مدمج بالـappbar — متصل: يعرض العنوان المختصر ويفتح
+   .addr-popover عند النقر (راجع app.js:_toggleAddrPopover)؛ ضيف: يعرض
+   "اتصال" ويفتح modalLogin مباشرة. updateConnectBtn تكتفي بتلوين/
+   تسمية #btnConnect فقط. */
 function updateConnectBtn() {
   const btn = $('btnConnect');
   if (btn) {
@@ -394,15 +474,18 @@ function updateConnectBtn() {
 
     let lbl = 'اتصال';
     if (hasWallet) {
-      lbl = State.wallet.walletClientType === 'privy'
-        ? '📧 بريد'
-        : (State.wallet.walletName || 'متصل');
+      lbl = State.wallet.isAgentLink
+        ? '🔗 ' + State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4)
+        : State.wallet.address.slice(0, 6) + '...' + State.wallet.address.slice(-4);
     }
     btn.innerHTML = '<span class="cb-dot"></span><span class="cb-lbl">' + lbl + '</span>';
   }
 }
 
-function updateNavAddressDisplay() {
+/* ✅ العنوان الكامل الآن يُعرَض بداخل .addr-popover بالـappbar (نسخ +
+   إلغاء اتصال) بدل بطاقة الدرج المحذوفة — العنوان المختصر بالزر نفسه
+   يُدار من updateConnectBtn أعلاه. */
+function updateAddrPopoverText() {
   if (!State.wallet) return;
-  setTxt('navAddress', State.wallet.address.slice(0,6) + '...' + State.wallet.address.slice(-4));
+  setTxt('addrPopoverTxt', State.wallet.address);
 }

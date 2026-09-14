@@ -48,6 +48,12 @@
       مسبق صامت بدأ لتوّه + فتح المستخدم "التقويم" يدوياً بنفس اللحظة
       قبل أن يكتمل الأول) — بدون هذا القفل كان يمكن لطلبين متزامنين
       لنفس النافذة الزمنية أن يتسابقا على إعادة ضبط _fills/_dayMap.
+   ✅ إعادة تلوين (2026-08) — كل الألوان الحرفية بهذا الملف (كانت
+      برتقالي/أخضر/أحمر/ذهبي HL القديمة) استُبدلت باللوحة الجديدة:
+      بنفسجي (#8b5cf6) للتمييز/الحدود النشطة/دوّار التحميل، success
+      (#10b981) للربح، danger (#ef4444) للخسارة، warning (#f59e0b)
+      لرسوم التمويل بتفاصيل اليوم. رمادي النصوص الثانوية (#8a8278
+      القديم) بات #94a3b8 من اللوحة الجديدة.
 */
 (function(){
 'use strict';
@@ -59,7 +65,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 /* ── نافذة التقويم الرئيسية ── */
 #calMod{
   position:fixed;inset:0;z-index:500;
-  background:var(--bg-app,#131210);
+  background:var(--bg-app,#0f172a);
   display:none;flex-direction:column;overflow:hidden;
   font-family:'Cairo',sans-serif;direction:rtl;
 }
@@ -70,13 +76,13 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   display:flex;align-items:center;justify-content:space-between;
   padding:14px 18px 12px;
   border-bottom:1px solid rgba(255,255,255,.08);
-  flex-shrink:0;background:var(--bg-card,#1e1c18);
+  flex-shrink:0;background:var(--bg-card,#1e293b);
 }
-.cal-title{font-size:17px;font-weight:900;color:var(--text-primary,#f0ece4);
+.cal-title{font-size:17px;font-weight:900;color:var(--text-primary,#f1f5f9);
   display:flex;align-items:center;gap:8px;}
 .cal-back{
   background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.15);
-  color:var(--text-primary,#f0ece4);border-radius:20px;padding:7px 18px;
+  color:var(--text-primary,#f1f5f9);border-radius:20px;padding:7px 18px;
   font-size:13px;font-weight:800;cursor:pointer;font-family:'Cairo',sans-serif;
   transition:all .15s;
 }
@@ -86,21 +92,21 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .cal-stats{
   display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
   padding:10px 14px 8px;flex-shrink:0;
-  background:var(--bg-app,#131210);
+  background:var(--bg-app,#0f172a);
 }
 .cal-stat{
-  background:var(--bg-card,#1e1c18);border-radius:10px;
+  background:var(--bg-card,#1e293b);border-radius:10px;
   padding:10px 6px;text-align:center;
   border:1px solid rgba(255,255,255,.07);
   transition:transform .15s, opacity .2s;
 }
 .cal-stat:hover{transform:translateY(-1px);}
-.cal-stat-l{font-size:10px;color:#8a8278;display:block;margin-bottom:3px;font-weight:700;letter-spacing:.5px;}
+.cal-stat-l{font-size:10px;color:#94a3b8;display:block;margin-bottom:3px;font-weight:700;letter-spacing:.5px;}
 .cal-stat-v{font-size:13px;font-weight:900;font-family:'IBM Plex Mono',monospace;}
-.cal-stat-v.up{color:#34c85a;} .cal-stat-v.dn{color:#f05248;} .cal-stat-v.dim{color:#8a8278;}
+.cal-stat-v.up{color:#10b981;} .cal-stat-v.dn{color:#ef4444;} .cal-stat-v.dim{color:#94a3b8;}
 .cal-stat-pending .cal-stat-v{opacity:.72;}
 .cal-mini-spin{display:inline-block;width:7px;height:7px;margin-right:3px;
-  border:1.5px solid rgba(224,114,72,.3);border-top-color:#e07248;border-radius:50%;
+  border:1.5px solid rgba(139,92,246,.3);border-top-color:#8b5cf6;border-radius:50%;
   animation:cSpin .7s linear infinite;vertical-align:middle;}
 
 /* ── Nav ── */
@@ -109,15 +115,15 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   gap:16px;padding:10px 14px 6px;flex-shrink:0;
 }
 .cal-nav-btn{
-  background:var(--bg-card,#1e1c18);border:1.5px solid rgba(255,255,255,.12);
-  color:var(--text-primary,#f0ece4);
+  background:var(--bg-card,#1e293b);border:1.5px solid rgba(255,255,255,.12);
+  color:var(--text-primary,#f1f5f9);
   width:32px;height:32px;border-radius:50%;font-size:18px;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
   transition:all .15s;
 }
 .cal-nav-btn:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);}
 .cal-month{
-  font-size:16px;font-weight:900;color:var(--text-primary,#f0ece4);
+  font-size:16px;font-weight:900;color:var(--text-primary,#f1f5f9);
   min-width:160px;text-align:center;letter-spacing:.3px;
 }
 
@@ -129,8 +135,8 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   padding:0 14px 4px;flex-shrink:0;
 }
 .cal-ghdr span{
-  text-align:center;font-weight:800;color:#8a8278;
-  background:var(--bg-card,#1e1c18);padding:5px 2px;border-radius:4px;
+  text-align:center;font-weight:800;color:#94a3b8;
+  background:var(--bg-card,#1e293b);padding:5px 2px;border-radius:4px;
   white-space:nowrap;overflow:hidden;
 }
 
@@ -151,8 +157,8 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .cal-jump-hint{
   position:absolute;inset:0 14px 14px;display:none;
   align-items:center;justify-content:center;gap:8px;
-  background:color-mix(in srgb, var(--bg-app,#131210) 78%, transparent);
-  border-radius:12px;font-size:12.5px;font-weight:800;color:#8a8278;
+  background:color-mix(in srgb, var(--bg-app,#0f172a) 78%, transparent);
+  border-radius:12px;font-size:12.5px;font-weight:800;color:#94a3b8;
   backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:3;
 }
 
@@ -160,7 +166,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
    CELL — يوم واحد
 ══════════════════════════════ */
 .cal-day{
-  background:var(--bg-card,#1e1c18);border-radius:7px;
+  background:var(--bg-card,#1e293b);border-radius:7px;
   display:flex;flex-direction:column;
   justify-content:space-between;
   padding:5px 4px 4px;
@@ -171,20 +177,20 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   min-height:0;
 }
 .cal-day:hover:not(.dim){
-  border-color:#e07248;
+  border-color:#8b5cf6;
   transform:scale(1.04);
-  box-shadow:0 3px 12px rgba(224,114,72,.2);
+  box-shadow:0 3px 12px rgba(139,92,246,.2);
   z-index:2;position:relative;
 }
 .cal-day.dim{opacity:.18;pointer-events:none;}
-.cal-day.profit{background:rgba(52,200,90,.12);border-color:rgba(52,200,90,.35);}
-.cal-day.loss{background:rgba(240,82,72,.12);border-color:rgba(240,82,72,.35);}
-.cal-day.today{border-color:#e07248!important;box-shadow:0 0 0 1px rgba(224,114,72,.3);}
-.cal-day.today .cal-dn{color:#e07248;font-weight:900;}
+.cal-day.profit{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.35);}
+.cal-day.loss{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35);}
+.cal-day.today{border-color:#8b5cf6!important;box-shadow:0 0 0 1px rgba(139,92,246,.3);}
+.cal-day.today .cal-dn{color:#8b5cf6;font-weight:900;}
 
 /* رقم اليوم */
 .cal-dn{
-  font-size:11px;font-weight:700;color:#8a8278;line-height:1;
+  font-size:11px;font-weight:700;color:#94a3b8;line-height:1;
   text-align:right;padding-right:1px;
 }
 
@@ -198,7 +204,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   font-family:'IBM Plex Mono',monospace;
   word-break:break-all;
 }
-.cal-dv.up{color:#34c85a;} .cal-dv.dn{color:#f05248;}
+.cal-dv.up{color:#10b981;} .cal-dv.dn{color:#ef4444;}
 
 /* ══════════════════════════════
    HEADER SKELETON — أول تحميل حقيقي فقط (لا كاش بعد)
@@ -207,13 +213,13 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .cal-skel-wrap{padding:10px 14px;flex:1;display:flex;flex-direction:column;min-height:0;}
 .cal-skel-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;flex-shrink:0;}
 .cal-skel-stat,.cal-skel-day{
-  background:linear-gradient(90deg, var(--bg-input,#302d28) 25%, var(--border-strong,#5a554c) 45%, var(--bg-input,#302d28) 65%);
+  background:linear-gradient(90deg, var(--bg-input,#334155) 25%, var(--border-strong,#334155) 45%, var(--bg-input,#334155) 65%);
   background-size:300% 100%;animation:calShimmer 1.5s ease-in-out infinite;
 }
 .cal-skel-stat{height:50px;border-radius:10px;}
 .cal-skel-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;flex:1;min-height:0;}
 .cal-skel-day{border-radius:7px;aspect-ratio:1/.95;}
-.cal-skel-txt{text-align:center;color:#8a8278;font-size:12.5px;font-weight:700;
+.cal-skel-txt{text-align:center;color:#94a3b8;font-size:12.5px;font-weight:700;
   padding-top:12px;flex-shrink:0;}
 
 /* ══════════════════════════════
@@ -235,7 +241,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
     backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   }
   .cal-inner{
-    background:var(--bg-app,#131210);
+    background:var(--bg-app,#0f172a);
     border-radius:20px;
     border:1px solid rgba(255,255,255,.1);
     box-shadow:0 24px 80px rgba(0,0,0,.7);
@@ -306,11 +312,11 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .cal-load{
   flex:1;display:flex;flex-direction:column;
   align-items:center;justify-content:center;
-  gap:14px;color:#8a8278;font-size:14px;font-weight:700;
+  gap:14px;color:#94a3b8;font-size:14px;font-weight:700;
 }
 .cal-spin{
   width:28px;height:28px;border:3px solid rgba(255,255,255,.1);
-  border-top-color:#e07248;border-radius:50%;
+  border-top-color:#8b5cf6;border-radius:50%;
   animation:cSpin .8s linear infinite;
 }
 @keyframes cSpin{to{transform:rotate(360deg);}}
@@ -320,7 +326,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 ══════════════════════════════ */
 .cal-det{
   position:absolute;inset:0;z-index:10;
-  background:var(--bg-app,#131210);
+  background:var(--bg-app,#0f172a);
   display:none;flex-direction:column;
   border-radius:inherit;
 }
@@ -328,7 +334,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .cal-det-hdr{
   display:flex;align-items:center;justify-content:space-between;
   padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.08);
-  flex-shrink:0;background:var(--bg-card,#1e1c18);
+  flex-shrink:0;background:var(--bg-card,#1e293b);
   border-radius:inherit inherit 0 0;
 }
 .cal-det-body{flex:1;overflow-y:auto;padding:12px 14px;}
@@ -338,32 +344,32 @@ document.head.insertAdjacentHTML('beforeend',`<style>
   letter-spacing:-.5px;
 }
 .cal-tcard{
-  background:var(--bg-card,#1e1c18);border-radius:12px;
+  background:var(--bg-card,#1e293b);border-radius:12px;
   padding:12px;margin-bottom:10px;
   border:1px solid rgba(255,255,255,.07);
   transition:border-color .15s;
 }
 .cal-tcard:hover{border-color:rgba(255,255,255,.14);}
 .cal-tt{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
-.cal-tc{font-weight:900;font-size:15px;color:var(--text-primary,#f0ece4);}
+.cal-tc{font-weight:900;font-size:15px;color:var(--text-primary,#f1f5f9);}
 .cal-ts{font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px;}
-.cal-ts.buy{background:rgba(52,200,90,.2);color:#34c85a;}
-.cal-ts.sell{background:rgba(240,82,72,.2);color:#f05248;}
+.cal-ts.buy{background:rgba(16,185,129,.2);color:#10b981;}
+.cal-ts.sell{background:rgba(239,68,68,.2);color:#ef4444;}
 .cal-tg{
   display:grid;grid-template-columns:1fr 1fr;gap:6px;
   background:rgba(0,0,0,.2);border-radius:8px;padding:8px;
 }
 .cal-ti{display:flex;flex-direction:column;gap:2px;}
-.cal-tl{font-size:9px;color:#8a8278;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
-.cal-tv{font-size:13px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:var(--text-primary,#f0ece4);}
+.cal-tl{font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.cal-tv{font-size:13px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:var(--text-primary,#f1f5f9);}
 .cal-tp{margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:900;}
-.cal-tp.up{color:#34c85a;} .cal-tp.dn{color:#f05248;}
-.cal-empty{text-align:center;padding:50px 20px;color:#8a8278;font-size:14px;font-weight:700;}
+.cal-tp.up{color:#10b981;} .cal-tp.dn{color:#ef4444;}
+.cal-empty{text-align:center;padding:50px 20px;color:#94a3b8;font-size:14px;font-weight:700;}
 .cal-fund-card{
-  background:rgba(224,114,72,.08);border:1.5px solid rgba(224,114,72,.25);
+  background:rgba(139,92,246,.08);border:1.5px solid rgba(139,92,246,.25);
   border-radius:12px;padding:12px;margin-bottom:10px;
 }
-.cal-fund-title{font-size:12px;font-weight:700;color:#e07248;margin-bottom:6px;}
+.cal-fund-title{font-size:12px;font-weight:700;color:#8b5cf6;margin-bottom:6px;}
 
 @media (min-width:768px){
   .cal-det-body{padding:16px 20px;}
@@ -772,7 +778,7 @@ function showDay(date){
 
   const trad=fills.reduce((s,f)=>s+parseFloat(f.closedPnl||0)-parseFloat(f.fee||0),0);
   const total=trad+fund;
-  const totColor=total>=0?'#34c85a':'#f05248';
+  const totColor=total>=0?'#10b981':'#ef4444';
 
   body.insertAdjacentHTML('beforeend',`
     <div class="cal-tot" style="color:${totColor}">
@@ -783,7 +789,7 @@ function showDay(date){
     body.insertAdjacentHTML('beforeend',`
       <div class="cal-fund-card">
         <div class="cal-fund-title">💰 رسوم التمويل (${fund>=0?'ربحت':'دفعت'})</div>
-        <div style="font-family:'IBM Plex Mono';font-size:18px;font-weight:900;color:${fund>=0?'#34c85a':'#f05248'}">
+        <div style="font-family:'IBM Plex Mono';font-size:18px;font-weight:900;color:${fund>=0?'#10b981':'#ef4444'}">
           ${fund>=0?'+':'-'}$${Math.abs(fund).toFixed(6)}
         </div>
       </div>`);
@@ -804,7 +810,7 @@ function showDay(date){
         <div class="cal-ti"><span class="cal-tl">السعر</span><span class="cal-tv">$${parseFloat(f.px).toFixed(2)}</span></div>
         <div class="cal-ti"><span class="cal-tl">الحجم</span><span class="cal-tv">${parseFloat(f.sz).toFixed(4)}</span></div>
         <div class="cal-ti"><span class="cal-tl">الوقت</span><span class="cal-tv">${tm}</span></div>
-        <div class="cal-ti"><span class="cal-tl">رسوم التداول</span><span class="cal-tv" style="color:#f0be30">-$${parseFloat(f.fee||0).toFixed(4)}</span></div>
+        <div class="cal-ti"><span class="cal-tl">رسوم التداول</span><span class="cal-tv" style="color:#f59e0b">-$${parseFloat(f.fee||0).toFixed(4)}</span></div>
       </div>
       <div class="cal-tp ${pCls}">${pnl>=0?'+':'-'}$${Math.abs(pnl).toFixed(2)}</div>`;
     body.appendChild(c);
@@ -861,7 +867,7 @@ async function load(addr){
   const ok = await _fetchChunk(addr, now - CHUNK_DAYS*86400000, now);
 
   if(!ok){
-    $('calLoad').innerHTML=`<div class="cal-load"><span style="color:#f05248;font-size:14px">❌ ${typeof errToAr==='function'?errToAr(''):'تعذّر جلب السجل'}</span></div>`;
+    $('calLoad').innerHTML=`<div class="cal-load"><span style="color:#ef4444;font-size:14px">❌ ${typeof errToAr==='function'?errToAr(''):'تعذّر جلب السجل'}</span></div>`;
     _loading = false;
     return;
   }
@@ -926,7 +932,7 @@ window.openCalendar=function(){
   const addr=getAddr();
   if(!addr){
     $('calLoad').style.display='flex';
-    $('calLoad').innerHTML='<span style="color:#8a8278;font-size:14px">⚠️ سجّل الدخول أولاً</span>';
+    $('calLoad').innerHTML='<span style="color:#94a3b8;font-size:14px">⚠️ سجّل الدخول أولاً</span>';
     $('calMain').style.display='none';
     return;
   }
