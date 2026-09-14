@@ -368,9 +368,19 @@
     };
   }
 
+  /* ✅ v6.1 — FIX: كانت المقارنة حساسة لحالة الأحرف (===) بينما كل مقارنة
+     عنوان أخرى بالملف تُطبَّع بـ.toLowerCase() أولاً. extraAgents يُعيد
+     العنوان بصيغة تختلف حالة أحرفها عن ethers.Wallet.createRandom().address
+     المخزَّن محلياً (checksummed/mixed-case) — فالمطابقة الحرفية كانت تفشل
+     دائماً لزر "🔗 رابط" بالبطاقة الرئيسية (يستدعي buildLink(row.address)
+     مباشرة من عنوان الخادم)، بينما مسار "🔑 المفتاح"→"نسخ رابط" كان يعمل
+     لأنه يمرّ بمقارنة مُطبَّعة بمكان آخر (_wireActions: act==='key') ثم
+     يُمرِّر rec الجاهز مباشرة لـ_showReveal بلا أي استدعاء لـbuildLink
+     إطلاقاً. */
   function buildLink(agentAddress, target) {
-    if (!State.wallet || typeof AgentLink === 'undefined') return null;
-    const rec = _loadAll(State.wallet.address).find(a => a.agentAddress === agentAddress);
+    if (!State.wallet || typeof AgentLink === 'undefined' || !agentAddress) return null;
+    const needle = agentAddress.toLowerCase();
+    const rec = _loadAll(State.wallet.address).find(a => a.agentAddress.toLowerCase() === needle);
     return rec ? AgentLink.build(State.wallet.address, rec.pk, target) : null;
   }
 
