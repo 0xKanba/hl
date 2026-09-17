@@ -1,5 +1,10 @@
 /* ═══════════════════════════════════════
    state.js — الحالة العامة للتطبيق
+   ✅ جديد (منصة "فتح صفقة جديدة") — pendingTrade حُذف (كان حصرياً
+      لـaskTrade/execTrade القديمتين بtrading.js، حُذفتا معاً — راجع
+      تعليق رأس ذلك الملف). js/order/index.js يحمل حالته المؤقتة
+      الخاصة محلياً بداخل وحدته (OM)، لا يستخدم State للتنسيق بين
+      خطوة "فتح تأكيد" وخطوة "تنفيذ" كما كانت الحالة القديمة تفعل.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -47,7 +52,6 @@ const State = {
   _clockTimer:   null,
   _sessionTimer: null,
 
-  pendingTrade: null,
   pendingClose: null,
   pendingTP:    null,
   pendingSL:    null,

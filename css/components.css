@@ -65,6 +65,18 @@
       فلا اهتزاز تخطيط عند كل نقرة ☰. .dock-backdrop حُذف بالكامل —
       لم يعد ضرورياً بما أن التمدد لم يعد يغطّي كامل الشاشة (راجع
       app.js:_initDock لمنطق الإغلاق بالنقر خارج الدوك البديل الآن).
+
+   ✅ جولة سادسة (منصة "فتح صفقة جديدة") — شاشة الرئيسية تبسّطت لبطاقة
+      رصيد + بطاقة صفقات فقط، فحُذف من هذا الملف كل ما كان حصرياً
+      لعناصرها المحذوفة من index.html: قسم ASSET TABS بالكامل
+      (.tabs/.tab/.tab-left/.tab-img/.tab-right/.tab-price)، قسم
+      PRICE CARD بالكامل (.price-card → .price-timer)، وقسم TRADE PANEL
+      بالكامل (.trade-panel/.qty-*/.trade-buttons/.btn-trade/.btn-buy/
+      .btn-sell/.btn-label/.btn-price) — مع تنظيف إشاراتها من قسم
+      PERFORMANCE HINTS ومن نقاط توقّف الديسكتوب. أُضيف بدلاً منها
+      لا شيء — الشريط الوحيد (.om-bar) وكامل شاشة التداول يعيشان
+      بـcss/order.css (ملف تنسيق حقيقي، لا حقن من JS)، ويُبنيان من
+      js/order/bar.js وjs/order/ui.js. راجع رأس css/order.css.
 ════════════════════════════════════════════════════════════════ */
 
 @layer components {
@@ -610,164 +622,6 @@
 .m-en   { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-muted); font-weight: var(--fw-bold); }
 
 /* ════════════════════════════════════
-   ASSET TABS
-════════════════════════════════════ */
-.tabs {
-  display: flex; gap: 3px;
-  padding: var(--space-1) 0;
-  flex-shrink: 0; overflow: hidden;
-}
-.tab {
-  flex: 1; min-width: 0; border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-elev);
-  display: flex; flex-direction: column; align-items: stretch;
-  overflow: hidden; transition: border-color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
-  cursor: pointer;
-}
-.tab:active { transform: scale(.95); }
-.tab.active { border-color: var(--ac); box-shadow: var(--glow-ac); background: var(--bg-input); }
-
-.tab-left {
-  width: 100%; height: clamp(28px,6.5vw,42px);
-  display: flex; align-items: center; justify-content: center;
-  background: color-mix(in srgb, var(--bg-input) 70%, transparent);
-  padding: clamp(2px,.8vw,5px);
-}
-.tab-img {
-  width: auto; height: 100%; max-width: 100%;
-  object-fit: contain; display: block;
-  filter: drop-shadow(0 1px 4px rgba(0,0,0,.6));
-}
-.tab-right {
-  width: 100%; display: flex; align-items: center;
-  justify-content: center; padding: 2px 1px 3px;
-  border-top: 1px solid var(--border);
-}
-.tab-price {
-  font-family: var(--font-mono);
-  font-size: clamp(8px,1.6vw,11px);
-  font-weight: var(--fw-black); color: var(--text-primary);
-  line-height: 1; text-align: center;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  padding: 0 1px; width: 100%;
-}
-.tab-price.up { color: var(--up); }
-.tab-price.dn { color: var(--dn); }
-
-/* ════════════════════════════════════
-   PRICE CARD
-════════════════════════════════════ */
-.price-card {
-  border-radius: var(--r-lg); overflow: hidden;
-  border: 1.5px solid var(--border-strong);
-  background: var(--bg-elev); flex-shrink: 0;
-  display: flex; flex-direction: row; align-items: stretch;
-  min-height: clamp(76px,18vw,105px); box-shadow: var(--glow-bdr);
-}
-.price-img-wrap {
-  width: 48%; display: flex; align-items: center;
-  justify-content: center; background: var(--bg-input);
-  padding: var(--space-2); flex-shrink: 0;
-}
-.price-img-wrap img {
-  width: 85%; max-width: clamp(60px,13vw,95px);
-  height: auto; object-fit: contain; display: block;
-  filter: drop-shadow(0 3px 10px rgba(0,0,0,.7));
-}
-.price-data {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: var(--space-2) 6px; gap: 3px;
-  text-align: center; overflow: hidden;
-}
-.price-asset {
-  font-size: var(--fs-xs); font-weight: var(--fw-semibold);
-  color: var(--text-secondary);
-  letter-spacing: .8px; text-transform: uppercase;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;
-}
-.price-value {
-  font-family: var(--font-mono);
-  font-size: clamp(18px,5vw,26px);
-  font-weight: var(--fw-black); line-height: 1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;
-  transition: color 160ms ease;
-}
-.price-value.up { color: var(--up); text-shadow: var(--tglow-up); }
-.price-value.dn { color: var(--dn); text-shadow: var(--tglow-dn); }
-.price-value.n  { color: var(--text-primary); }
-
-.price-delta { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: var(--fw-bold); white-space: nowrap; }
-.price-delta.up { color: var(--up); }
-.price-delta.dn { color: var(--dn); }
-.price-delta.n  { color: var(--text-secondary); }
-
-.price-session {
-  display: flex; align-items: center; justify-content: center;
-  gap: 5px; width: 100%; flex-wrap: nowrap;
-  background: var(--bg-input); border-radius: var(--r-xs);
-  padding: 4px var(--space-2); margin-top: 2px; overflow: hidden;
-}
-.price-session.hidden { display: none !important; }
-.ps-chg { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: var(--fw-black); }
-.ps-chg.up { color: var(--up); } .ps-chg.dn { color: var(--dn); } .ps-chg.n { color: var(--text-secondary); }
-.ps-h { font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--up); white-space: nowrap; }
-.ps-l { font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--dn); white-space: nowrap; }
-.ps-divider { color: var(--border-strong); font-size: var(--fs-2xs); }
-
-.price-meta-row {
-  display: flex; align-items: center; justify-content: space-between;
-  width: 100%; gap: 3px; overflow: hidden;
-}
-.price-bid-ask { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-secondary); font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.price-timer   { font-size: var(--fs-2xs); color: var(--text-muted); font-family: var(--font-mono); font-weight: var(--fw-bold); white-space: nowrap; }
-
-/* ════════════════════════════════════
-   TRADE PANEL
-════════════════════════════════════ */
-.trade-panel {
-  background: var(--bg-card); border: 1.5px solid var(--border-strong);
-  border-radius: var(--r-lg); padding: 11px;
-  display: flex; flex-direction: column; gap: var(--space-2);
-  flex-shrink: 0; box-shadow: var(--glow-bdr);
-}
-.qty-input-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: stretch; }
-.qty-input {
-  width: 100%; font-family: var(--font-mono);
-  font-size: clamp(18px,4.5vw,22px); font-weight: var(--fw-bold);
-  padding: 9px var(--space-3); text-align: center; direction: ltr;
-  border-radius: var(--r-sm);
-  background: var(--bg-input); border: 1.5px solid var(--border-strong); min-width: 0;
-}
-.qty-input:focus { border-color: var(--ac); box-shadow: 0 0 0 3px var(--ac-dim), var(--glow-ac); }
-.qty-100 {
-  background: var(--ac-soft); color: var(--text-primary); border: 1.5px solid var(--ac);
-  border-radius: var(--r-sm); padding: 0 var(--space-3);
-  font-size: var(--fs-xs); font-weight: var(--fw-bold); font-family: var(--font-mono);
-  white-space: nowrap; flex-shrink: 0;
-}
-.qty-100:hover { filter: brightness(1.1); }
-.qty-unit {
-  font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-secondary);
-  text-align: center; min-width: 32px;
-  display: flex; align-items: center; justify-content: center; white-space: nowrap;
-}
-.trade-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.btn-trade {
-  border-radius: var(--r-md); min-height: 42px;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 1px; border: none;
-  transition: transform var(--dur-fast) var(--ease-standard), filter var(--dur-fast) var(--ease-standard);
-}
-.btn-trade:disabled { opacity: .45; pointer-events: none; }
-.btn-buy  { background: linear-gradient(155deg, var(--up-2), color-mix(in srgb, var(--up-2) 78%, black)); box-shadow: var(--glow-up), 0 3px 12px rgba(0,0,0,.4); }
-.btn-sell { background: linear-gradient(155deg, var(--dn-2), color-mix(in srgb, var(--dn-2) 78%, black)); box-shadow: var(--glow-dn), 0 3px 12px rgba(0,0,0,.4); }
-.btn-label { font-size: var(--fs-lg); font-weight: var(--fw-black); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
-.btn-price { font-family: var(--font-mono); font-size: var(--fs-xs); color: rgba(255,255,255,.88); font-weight: var(--fw-bold); }
-
-/* ════════════════════════════════════
    POSITIONS
 ════════════════════════════════════ */
 .positions-card {
@@ -846,30 +700,6 @@
   text-align: center; transition: all var(--dur-base) var(--ease-standard);
 }
 .btn-pos-close:hover { background: var(--dn); color: #fff; box-shadow: var(--glow-dn); }
-
-/* ════════════════════════════════════
-   GUEST BANNER — يُدرَج ديناميكياً أعلى شاشة الرئيسية (auth.js)
-════════════════════════════════════ */
-.guest-banner {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--space-3); padding: 11px var(--space-4);
-  background: color-mix(in srgb, var(--ac) 12%, var(--bg-elev));
-  border: 1.5px solid color-mix(in srgb, var(--ac) 40%, transparent);
-  border-radius: var(--r-lg);
-  flex-shrink: 0; animation: slideDownBanner var(--dur-base) var(--ease-out);
-}
-.guest-banner.hidden { display: none !important; }
-@keyframes slideDownBanner { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
-.gb-msg { font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text-secondary); flex: 1; line-height: 1.4; }
-.gb-btn {
-  background: var(--ac-soft);
-  color: var(--text-primary); border: 1.5px solid var(--ac); border-radius: var(--r-pill);
-  padding: 7px var(--space-4); font-size: var(--fs-base); font-weight: var(--fw-bold);
-  cursor: pointer; white-space: nowrap;
-  transition: filter var(--dur-base) var(--ease-standard); flex-shrink: 0;
-}
-.gb-btn:hover  { filter: brightness(1.08); }
-.gb-btn:active { transform: scale(.94); }
 
 /* ════════════════════════════════════
    MODALS
@@ -1159,13 +989,13 @@
 /* ════════════════════════════════════
    PERFORMANCE HINTS
 ════════════════════════════════════ */
-.tab, .price-card, .position-item, .btn-trade, .positions-card,
-.nav-connect-btn, .modal, .balance-card, .market-card, .dock-scroll, .app-screen {
+.position-item, .positions-card, .nav-connect-btn, .modal,
+.balance-card, .market-card, .dock-scroll, .app-screen {
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
 }
-.price-value, .pos-pnl, .tab-price { contain: layout style paint; }
+.pos-pnl { contain: layout style paint; }
 
 /* ════════════════════════════════════
    DESKTOP BREAKPOINTS — تركيز التصميم على الموبايل؛ هنا فقط نمنع
@@ -1177,8 +1007,6 @@
   .modal-overlay { padding: var(--space-5); }
   .overlay-fs .modal { max-width: 100%; max-height: 100dvh; border-radius: 0; margin: 0; height: 100dvh; }
   .dock.expanded .dock-scroll { width: 260px; }
-  .price-value { font-size: var(--fs-6xl); }
-  .btn-trade   { min-height: 48px; }
   .nav-connect-btn { height: 30px; max-width: 140px; }
   #loader { left: 20px; bottom: max(24px, env(safe-area-inset-bottom)); }
 
@@ -1187,8 +1015,6 @@
 }
 @media (min-width: 900px) {
   .nav-connect-btn .cb-lbl { max-width: 100px; }
-  .tabs { gap: 4px; }
-  .tab-price { font-size: clamp(10px,1.4vw,13px); }
 }
 
 } /* @layer components */

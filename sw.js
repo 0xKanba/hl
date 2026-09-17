@@ -1,17 +1,18 @@
 'use strict';
 
 /* Version strings below are rewritten automatically on every push by
-   .github/workflows/bump-sw-version.yml — never edit by hand, never
-   needs to be remembered. A stale value here only ever means "the
-   cache tag didn't change"; it never blocks a real deploy, because
-   the app shell below is network-first, not stale-while-revalidate.
-   ✅ رُفعت يدوياً هذه المرة (lastplace.js جديد + إعادة تلوين كاملة) —
-   الـAction سيرفعها تلقائياً مجدداً بأول push فعلي، هذا فقط ضمان
-   لأول تحميل مباشر بعد نسخ هذي الملفات. */
+   .github/workflows/sw.yml — never edit by hand, never needs to be
+   remembered. A stale value here only ever means "the cache tag didn't
+   change"; it never blocks a real deploy, because the app shell below
+   is network-first, not stale-while-revalidate.
+   ✅ رُفعت يدوياً هذه المرة (إعادة هيكلة صفحة واحدة: css/order.css
+   وjs/order/bar.js جديدان، وindex.html صار مُحمِّلاً فقط) — الـAction سيرفعها
+   تلقائياً مجدداً بأول push فعلي، هذا فقط ضمان لأول تحميل مباشر بعد
+   نسخ هذي الملفات. */
 
-const CACHE_APP   = 'hltrade-app-202609142058-5032b79';
-const CACHE_IMGS  = 'hltrade-img-202609142058-5032b79';
-const CACHE_FONTS = 'hltrade-fnt-202609142058-5032b79';
+const CACHE_APP   = 'hltrade-app-202609181120-order2';
+const CACHE_IMGS  = 'hltrade-img-202609181120-order2';
+const CACHE_FONTS = 'hltrade-fnt-202609181120-order2';
 
 const APP_SHELL = [
   '/',
@@ -19,6 +20,7 @@ const APP_SHELL = [
   '/css/base.css',
   '/css/themes.css',
   '/css/components.css',
+  '/css/order.css',
   '/css/agentlink.css',
   '/manifest.json',
   '/js/config.js',
@@ -34,6 +36,12 @@ const APP_SHELL = [
   '/js/account.js',
   '/js/trading.js',
   '/js/tpsl.js',
+  '/js/order/state.js',
+  '/js/order/book.js',
+  '/js/order/logic.js',
+  '/js/order/ui.js',
+  '/js/order/index.js',
+  '/js/order/bar.js',
   '/js/assets.js',
   '/js/pin.js',
   '/js/auth.js',

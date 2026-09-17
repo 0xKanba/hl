@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/themes.css">
   <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/order.css">
   <link rel="stylesheet" href="/css/agentlink.css">
 
   <link rel="preload" as="image" href="/images/oil.svg">
@@ -231,8 +232,10 @@
     <section class="app-screen hidden" data-screen="home" id="screenHome">
       <div class="screen-scroll">
 
-        <!-- guestBanner يُدرَج هنا ديناميكياً (أعلى الشاشة) بواسطة
-             auth.js:_showGuestBanner عند عدم الاتصال -->
+        <!-- ⚠️ لا تضف أي عنصر واجهة هنا. شريط "فتح صفقة جديدة" (.om-bar)
+             يُدرَج بأعلى هذه الشاشة وقت التشغيل من js/order/bar.js، ويُنسَّق
+             من css/order.css. القاعدة بهذا المشروع: index.html مُحمِّل فقط
+             (link/script + الصدفة الثابتة)، وأي واجهة جديدة = js + css. -->
 
         <!-- ✅ بطاقة الرصيد الدائمة — تُغذّى من account.js:_renderBalanceFromState -->
         <div class="balance-card" id="balanceCard">
@@ -251,76 +254,6 @@
               <span class="bc-stat-label">🔒 الهامش</span>
               <span class="bc-stat-value" id="bcMargin">—</span>
             </div>
-          </div>
-        </div>
-
-        <!-- تابات تبديل الأصل السريعة -->
-        <div class="tabs">
-          <button class="tab" data-asset="XAU">
-            <div class="tab-left">
-              <img class="tab-img" src="/images/gold.svg" alt="XAU" loading="eager"
-                   style="filter:sepia(1) saturate(2) hue-rotate(10deg)">
-            </div>
-            <div class="tab-right"><span class="tab-price" id="priceXAU">—</span></div>
-          </button>
-          <button class="tab" data-asset="NQ">
-            <div class="tab-left"><img class="tab-img" src="/images/100.png" alt="NQ" loading="eager"></div>
-            <div class="tab-right"><span class="tab-price" id="priceNQ">—</span></div>
-          </button>
-          <button class="tab" data-asset="GOLD">
-            <div class="tab-left"><img class="tab-img" src="/images/gold.svg" alt="GOLD" loading="eager"></div>
-            <div class="tab-right"><span class="tab-price" id="priceGOLD">—</span></div>
-          </button>
-          <button class="tab" data-asset="SILVER">
-            <div class="tab-left"><img class="tab-img" src="/images/silver.svg" alt="SILVER" loading="eager"></div>
-            <div class="tab-right"><span class="tab-price" id="priceSILVER">—</span></div>
-          </button>
-          <button class="tab active" data-asset="CL">
-            <div class="tab-left"><img class="tab-img" src="/images/oil.svg" alt="CL" loading="eager"></div>
-            <div class="tab-right"><span class="tab-price" id="priceCL">—</span></div>
-          </button>
-        </div>
-
-        <!-- بطاقة السعر -->
-        <div class="price-card" id="priceCard">
-          <div class="price-img-wrap" id="priceImgWrap">
-            <img id="priceAssetImg" src="/images/oil.svg" alt="asset" loading="eager">
-          </div>
-          <div class="price-data">
-            <div class="price-asset" id="priceAssetName">نفط خام</div>
-            <div class="price-value n" id="priceValue">—</div>
-            <div class="price-delta n" id="priceDelta"></div>
-            <div class="price-session hidden" id="priceSession">
-              <span class="ps-chg n" id="psChg"></span>
-              <span class="ps-divider">|</span>
-              <span class="ps-h" id="psH"></span>
-              <span class="ps-divider">|</span>
-              <span class="ps-l" id="psL"></span>
-            </div>
-            <div class="price-meta-row">
-              <span class="price-bid-ask" id="priceBidAsk"></span>
-              <span class="price-timer"   id="priceTimer">↻ —</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- لوحة التداول -->
-        <div class="trade-panel">
-          <div class="qty-input-row">
-            <input type="number" class="qty-input" id="qtyInput"
-                   placeholder="0.00" min="0" step="any" inputmode="decimal">
-            <button class="qty-100" id="qty100">100%</button>
-            <span class="qty-unit" id="qtyUnit">برميل</span>
-          </div>
-          <div class="trade-buttons">
-            <button class="btn-trade btn-buy" id="btnBuy">
-              <span class="btn-label">شراء ↑</span>
-              <span class="btn-price" id="buyPrice">—</span>
-            </button>
-            <button class="btn-trade btn-sell" id="btnSell">
-              <span class="btn-label">بيع ↓</span>
-              <span class="btn-price" id="sellPrice">—</span>
-            </button>
           </div>
         </div>
 
@@ -470,19 +403,6 @@
 
     <div class="modal-buttons modal-buttons-center" style="margin-top:18px;">
       <button class="btn-modal btn-cancel" id="loginClose">إغلاق</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay overlay-fs" id="modalConfirm">
-  <div class="modal modal-fs">
-    <div class="modal-handle"></div>
-    <h3 class="modal-title" id="confirmTitle">تأكيد الصفقة</h3>
-    <p class="modal-subtitle" id="confirmSubtitle"></p>
-    <div class="confirm-details" id="confirmDetails"></div>
-    <div class="modal-buttons">
-      <button class="btn-modal btn-cancel"  id="confirmCancel">إلغاء ✕</button>
-      <button class="btn-modal btn-confirm" id="confirmExecute">تأكيد ←</button>
     </div>
   </div>
 </div>
@@ -800,6 +720,12 @@
 <script src="/js/account.js"></script>
 <script src="/js/trading.js"></script>
 <script src="/js/tpsl.js"></script>
+<script src="/js/order/state.js"></script>
+<script src="/js/order/book.js"></script>
+<script src="/js/order/logic.js"></script>
+<script src="/js/order/ui.js"></script>
+<script src="/js/order/index.js"></script>
+<script src="/js/order/bar.js"></script>
 <script src="/js/assets.js"></script>
 <script src="/js/pin.js"></script>
 <script src="/js/auth.js"></script>

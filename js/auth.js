@@ -74,9 +74,24 @@
       بيانات الحساب الشبكي بالكامل — بطيء وغير ضروري لهذا الغرض تحديداً).
       راجع state.js لتعريف الحقل، وjs/lastplace.js لكيفية استهلاكه.
 
+   ✅ جديد (صفحة واحدة) — _showGuestBanner/_hideGuestBanner حُذفتا
+      بالكامل مع كل مواضع استدعائهما الأربعة. بانر الضيف ("اربط
+      محفظتك…/اتصال ←") استُبدل بشريط دائم واحد أعلى الرئيسية:
+      "فتح صفقة جديدة" + زر "فتح" — يُبنى من js/order/bar.js ويُنسَّق
+      من css/order.css، فلا HTML ولا CSS له هنا ولا بـindex.html.
+      الضيف لا يفقد التوجيه: OrderModule.open() تستدعي _promptConnect()
+      (توست + نبض زر الاتصال) قبل أي شيء — نية المستخدم أولاً، ثم ما
+      يلزم لتحقيقها، بدل حاجز ثابت قبل أن يطلب شيئاً أصلاً.
+
    ✅ جديد — connectWallet(): الدرج المنبثق القديم (openDrawer) استُبدل
       بالدوك الدائم الجديد (openDock) — راجع app.js لسبب هذا التغيير
       بالكامل (الدرج لم يعد موجوداً إطلاقاً بالمشروع).
+
+   ✅ جديد (منصة "فتح صفقة جديدة") — OM.resumePendingWatch() تُستدعى بعد
+      استقرار initAccountFeeds: لو كان المستخدم قد وضع "أمر إيقاف" مع
+      TP/SL بجلسة سابقة ولم يُفعَّل بعد، يستأنف المراقب إلحاق TP/SL
+      تلقائياً فور تفعيله فعلاً — بلا حاجة لأن يفتح المستخدم شاشة
+      "فتح صفقة جديدة" مجدداً. راجع js/order/index.js:_tickPendingWatch.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -107,7 +122,6 @@ function initGuestMode() {
   State._identityReady = true;
   $('loginScreen')?.classList.add('hidden');
   $('appScreen')?.classList.remove('hidden');
-  _showGuestBanner();
   switchAsset('CL');
   startSessionPolling();
   updateConnectBtn();
@@ -264,7 +278,6 @@ async function _onWalletConnected(walletObj) {
   $('withdrawAddress').value = State.wallet.address;
 
   closeModal('modalLogin');
-  _hideGuestBanner();
   loadQuickState();
 
   /* ✅ يظهر فوراً — لا يعتمد على أي بيانات حساب، فلا داعي لانتظارها */
@@ -275,6 +288,14 @@ async function _onWalletConnected(walletObj) {
      قبل أي قرار بخصوص تفويض الوكيل (راجع تعليق رأس الملف). initAccountFeeds
      نفسها ترسم بطاقة الرصيد الدائمة فور اكتمال اللقطة (راجع account.js). */
   try { await initAccountFeeds(); } catch (e) { console.warn('[initAccountFeeds]', e); }
+
+  /* ✅ جديد — استئناف مراقبة أوامر الإيقاف المعلّقة (TP/SL بانتظار
+     التفعيل) من أي جلسة سابقة — راجع تعليق رأس الملف + order/index.js.
+     يعمل بعد initAccountFeeds لأنه يعتمد على State.openOrders/fillsCache/
+     positions المُعبّأة للتو. */
+  if (typeof OM !== 'undefined' && typeof OM.resumePendingWatch === 'function') {
+    try { OM.resumePendingWatch(); } catch (e) { console.warn('[order] resumePendingWatch', e); }
+  }
 
   /* ✅ تحميل تقويم التداول تدريجياً بصمت — بلا انتظار فتح "التقويم" يدوياً */
   setTimeout(() => { if (typeof preloadCalendarData === 'function') preloadCalendarData(); }, 3000);
@@ -331,9 +352,11 @@ async function _onAgentLinkConnected() {
 
   updateAddrPopoverText();
   updateConnectBtn();
-  _hideGuestBanner();
   toast('🔗 وضع رابط وكيل — تداول فقط، بلا صلاحية سحب أو تعديل إعدادات', 'info', 6000);
   try { await initAccountFeeds(); } catch (e) { console.warn('[agentlink]', e); }
+  if (typeof OM !== 'undefined' && typeof OM.resumePendingWatch === 'function') {
+    try { OM.resumePendingWatch(); } catch (e) {}
+  }
   setTimeout(() => { if (typeof preloadCalendarData === 'function') preloadCalendarData(); }, 3000);
 }
 
@@ -381,6 +404,12 @@ function doLogout() {
   clearInterval(State._sessionTimer);
   teardownAccountFeeds();
   if (typeof teardownCalendarPreload === 'function') teardownCalendarPreload();
+  /* ✅ جديد — أغلق شاشة "فتح صفقة جديدة" لو كانت مفتوحة، وأوقف مراقبها
+     (يتوقف ذاتياً بأول نبضة بعد تصفير State.wallet أدناه، لكن الإغلاق
+     الصريح هنا يمنع بقاء شاشة تداول ظاهرة فوق واجهة زائر). */
+  if (typeof OrderModule !== 'undefined' && typeof OrderModule.close === 'function') {
+    try { OrderModule.close(); } catch (e) {}
+  }
 
   if (State.wallet && typeof State.wallet._teardownListeners === 'function') {
     try { State.wallet._teardownListeners(); } catch {}
@@ -415,7 +444,6 @@ function doLogout() {
   closeModal('modalSetPIN');
   closeModal('modalForgotPIN');
 
-  _showGuestBanner();
   updateConnectBtn();
   if (typeof _toggleAddrPopover === 'function') _toggleAddrPopover(false);
   resetPosFingerprint();
@@ -426,32 +454,6 @@ function doLogout() {
   if (typeof _renderBalanceFromState === 'function') _renderBalanceFromState();
   toast('🔌 تم إلغاء الاتصال', 'info');
   startSessionPolling();
-}
-
-/* ✅ جديد — تُدرَج الآن داخل شاشة الرئيسية (screen-scroll) في أعلاها،
-   قبل بطاقة الرصيد، بدل الاعتماد على ".footer" الذي لم يعد موجوداً
-   (راجع تعليق رأس الملف). fallback دفاعي لو لأي سبب لم توجد الشاشة. */
-function _showGuestBanner() {
-  let b = $('guestBanner');
-  if (!b) {
-    b = document.createElement('div');
-    b.id = 'guestBanner';
-    b.className = 'guest-banner';
-    b.innerHTML = '<span class="gb-msg">🔒 اربط محفظتك لبدء التداول وعرض صفقاتك المفتوحة</span><button class="gb-btn" onclick="connectWallet()">اتصال ←</button>';
-    const scroller = document.querySelector('#screenHome .screen-scroll');
-    if (scroller) {
-      scroller.insertBefore(b, scroller.firstChild);
-    } else {
-      const main = $('appScreen');
-      if (main) main.appendChild(b);
-    }
-  }
-  b.classList.remove('hidden');
-}
-
-function _hideGuestBanner() {
-  const b = $('guestBanner');
-  if (b) b.classList.add('hidden');
 }
 
 function openLoginModal() { connectWallet(); }

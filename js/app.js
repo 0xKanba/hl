@@ -65,6 +65,19 @@
       JS لهذا السطر. راجع css/base.css وjs/pin.js:unlockApp لبقية
       الآلية. النسخة المكرَّرة من نفس الفحص بنهاية _onWalletConnected
       (auth.js) حُذفت أيضاً — مصدر واحد فقط الآن.
+
+   ✅ جديد (منصة "فتح صفقة جديدة") — تابات الأصول الخمسة/بطاقة السعر/
+      لوحة الشراء-البيع القديمة حُذفت بالكامل من شاشة الرئيسية (راجع
+      index.html) — استُبدلت بشريط واحد (.om-bar) يفتح شاشة
+      تداول كاملة جديدة (js/order/*.js، تُبنى ديناميكياً بنفس أسلوب
+      js/c.js وjs/agents.js — overlay ذاتي الحقن، خارج نظام switchScreen
+      تماماً). كل ربط قديم لـbtnBuy/btnSell/qty100/qtyInput/modalConfirm
+      حُذف من هنا (العناصر نفسها لم تعد موجودة بالـDOM). الشريط نفسه
+      يُبنى ويُربَط بالكامل من js/order/bar.js — لا سطر له هنا عمداً
+      (index.html صار مُحمِّلاً فقط؛ أي واجهة جديدة = js + css). بطاقة سوق تفتح
+      الآن شاشة التداول الجديدة مباشرة على أصلها (بدل العودة لرئيسية
+      شبه فارغة الآن)، بلا استدعاء switchScreen — تماماً كيف يعمل فتح
+      التقويم/الوكلاء فوق أي شاشة نشطة حالياً.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -166,30 +179,6 @@ function _initThemeToggle() {
     _setTheme(cur === 'dark' ? 'light' : 'dark');
   });
   _syncThemeToggleUI();
-}
-
-function _initQtyInput() {
-  const input = $('qtyInput');
-  if (!input) return;
-  const a = ASSETS[State.asset];
-  const defaultVal = a?.presets?.[0] ?? 1;
-  if (!input.value || +input.value <= 0) {
-    input.value = defaultVal;
-    State.qty   = defaultVal;
-  }
-  input.addEventListener('focus', () => { input.select?.(); });
-  input.addEventListener('blur', () => {
-    if (!input.value || +input.value <= 0) {
-      const asset = ASSETS[State.asset];
-      const def   = asset?.presets?.[0] ?? 1;
-      input.value = def;
-      State.qty   = def;
-    }
-  });
-  input.oninput = function () {
-    this._userEdited = true; /* ✅ إصلاح — كان العلم لا يُضبط أبداً */
-    State.qty = parseFloat(this.value) || 0;
-  };
 }
 
 function _initWithdrawFeeUI() {
@@ -413,7 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
   _initDock();
   _initAddrPopover();
   _initThemeToggle();
-  _initQtyInput();
   _initWithdrawFeeUI();
   _initAgentCopy();
   _initMarketInfoButtons();
@@ -422,14 +410,16 @@ document.addEventListener('DOMContentLoaded', () => {
   $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
   $('loaderClose')?.addEventListener('click', hideLoader);
 
-  /* تبويبات تبديل الأصل السريعة — تبقى بالرئيسية بلا أي تغيير */
-  document.querySelectorAll('.tab[data-asset]').forEach(t =>
-    t.onclick = () => switchAsset(t.dataset.asset)
-  );
-
-  /* بطاقات شاشة الأسواق — الضغط يبدّل الأصل ويعود للرئيسية */
+  /* بطاقات شاشة الأسواق — الضغط يبدّل الأصل ويفتح شاشة التداول الجديدة
+     مباشرة عليه (بدل العودة لرئيسية شبه فارغة الآن بعد حذف بطاقة
+     السعر/لوحة الشراء والبيع منها — راجع تعليق رأس الملف). overlay
+     فوق شاشة الأسواق نفسها، بلا أي استدعاء switchScreen — تماماً
+     كفتح التقويم/الوكلاء فوق أي شاشة نشطة حالياً. */
   document.querySelectorAll('.market-card[data-asset]').forEach(c =>
-    c.onclick = () => { switchAsset(c.dataset.asset); switchScreen('home'); }
+    c.onclick = () => {
+      switchAsset(c.dataset.asset);
+      if (typeof OrderModule !== 'undefined') OrderModule.open(c.dataset.asset);
+    }
   );
 
   /* ✅ Tabbar السفلي — 3 أزرار: رسم / رئيسية / أسواق (افتراضي الآن) —
@@ -466,24 +456,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (_blockIfAgentLink()) return;
     if (typeof Agents !== 'undefined') Agents.openModal();
   }));
-
-  _el('btnBuy').onclick  = () => askTrade(true);
-  _el('btnSell').onclick = () => askTrade(false);
-
-  _el('qty100').onclick = () => {
-    if (State.isGuest) return _promptConnect();
-    const a   = ASSETS[State.asset];
-    const bal = State.balance?.available || State.balance?.total || 0;
-    const px  = State.prices[State.asset]?.mid;
-    if (!bal || !px) return toast('رصيد غير متاح', 'err');
-    const qty100 = parseFloat(wire((bal * a.lev) / px, a.szDp));
-    State.qty = qty100;
-    _el('qtyInput').value = qty100;
-    toast(`✅ ${qty100} ${a.unit}`, 'ok');
-  };
-
-  _el('confirmCancel').onclick  = () => { closeModal('modalConfirm'); State.pendingTrade = null; };
-  _el('confirmExecute').onclick = () => requirePin(execTrade);
 
   _el('closeCancel').onclick  = () => { closeModal('modalClose'); State.pendingClose = null; };
   _el('closeExecute').onclick = () => requirePin(execClose);

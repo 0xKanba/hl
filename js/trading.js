@@ -1,108 +1,22 @@
 /* ═══════════════════════════════════════
    trading.js
-   ✅ FIX (2026-08) — "التصفية التقريبية" كانت رقماً مجرداً بلا أي شرح
-      داخل تأكيد الصفقة — أكثر مصطلح يربك مستخدماً جديداً كلياً يفتح
-      أول صفقة رافعة مالية بحياته (يبدو تحذيرياً بلا توضيح "ليش" ولا
-      "شو معناه"). أُضيف سطر توضيح واحد بلغة بسيطة تحت السطر مباشرة —
-      بلا حذف أو تخفيف الرقم نفسه (معلومة مخاطرة حقيقية تحمي المستخدم،
-      لا شيء يستحق الإخفاء لمجرد التبسيط).
+   ✅ جديد (منصة "فتح صفقة جديدة") — askTrade()/execTrade() ونافذة
+      modalConfirm المرتبطة بهما حُذفتا بالكامل: كانتا تُشغَّلان حصراً
+      من زرَّي شراء/بيع القديمين بشاشة الرئيسية (btnBuy/btnSell)،
+      وكلاهما حُذف من index.html — استُبدل التدفّق بالكامل بشاشة
+      "فتح صفقة جديدة" الجديدة (راجع js/order/*.js)، التي تبني تأكيدها
+      الخاص وتستدعي hlExchange مباشرة (تدعم سوق/حدّي/إيقاف + TP/SL
+      اختياريين معاً، بخلاف askTrade القديمة التي كانت سوقاً فقط).
+      _multiPoll/_registerClosedCoin/askClose/execClose/askCloseAll/
+      execCloseAll/_promptConnect بقيت بلا أي تغيير — ما زالت تُستدعى
+      من positions.js (إغلاق صفقة من البطاقة)، وjs/order/index.js
+      وjs/chart/trading.js وjs/tpsl.js (كلها تستدعي _multiPoll بعد أي
+      عملية ناجحة، وtradeErr من api.js لترجمة الأخطاء).
+   ✅ FIX (2026-08) — كانت "التصفية التقريبية" رقماً مجرداً بلا أي شرح
+      داخل تأكيد الصفقة القديم — هذا التوضيح انتقل الآن لملف
+      js/order/ui.js (نفس الفكرة، داخل تأكيد الشاشة الجديدة).
 ═══════════════════════════════════════ */
 'use strict';
-
-/* ════ Open trade confirm ════ */
-function askTrade(isBuy) {
-  if (State.isGuest) return _promptConnect();
-  const qty = parseFloat($('qtyInput').value || State.qty || 0);
-  if (!qty || qty <= 0) return toast('أدخل الكمية أولاً', 'err');
-  const a = ASSETS[State.asset], p = State.prices[State.asset];
-  if (!p?.mid) return toast('لا يوجد سعر — السوق مغلق؟', 'err');
-
-  const isGram   = !!a.gram;
-  const ozQty    = isGram ? qty / TROY : qty;
-  const dispQty  = isGram ? `${qty} غرام (≈ ${ozQty.toFixed(4)} أونصة)` : `${qty} ${a.unit}`;
-  const tradeMid = isGram ? p.mid * TROY : p.mid;
-  const usd      = (tradeMid * ozQty).toFixed(2);
-  const mgn      = (tradeMid * ozQty / a.lev).toFixed(2);
-  const fr       = feeRate(State.asset);
-  const feeOpen  = (tradeMid * ozQty * fr).toFixed(4);
-  const feeTot   = (tradeMid * ozQty * fr * 2).toFixed(4);
-  const sziLiq   = isBuy ? ozQty : -ozQty;
-  /* ✅ صفقة جديدة لم تُفتح بعد → ربحها/خسارتها العائم = صفر، والوسادة
-     الكاملة المتاحة لها = رصيد الحساب + ربح/خسارة كل صفقة أخرى مفتوحة
-     حالياً (راجع crossEquityExcluding بـutils.js وcalcLiqPrice بـ
-     positions.js لسبب هذا التغيير). */
-  const liqInfo  = liqPriceDisplay(State.asset, tradeMid, sziLiq, crossEquityExcluding(0));
-
-  setTxt('confirmTitle',    `${a.icon} ${isBuy ? 'شراء ↑' : 'بيع ↓'} — ${a.name}`);
-  setTxt('confirmSubtitle', `رافعة ${a.lev}x · تنفيذ فوري`);
-  $('confirmDetails').innerHTML = `
-    <div class="confirm-row"><span class="confirm-key">الكمية</span><span class="confirm-val">${dispQty}</span></div>
-    <div class="confirm-row"><span class="confirm-key">سعر ${isGram?'الغرام':'الوحدة'}</span><span class="confirm-val">${fmt(p.mid,a.pxDp)} $</span></div>
-    <div class="confirm-row"><span class="confirm-key">القيمة الكلية</span><span class="confirm-val">≈ $${usd}</span></div>
-    <div class="confirm-row"><span class="confirm-key">الهامش المطلوب</span><span class="confirm-val warn">≈ $${mgn}</span></div>
-    <div class="confirm-row"><span class="confirm-key">التصفية التقريبية</span><span class="confirm-val" style="color:var(--warn)">${liqInfo.text}</span></div>
-    <div class="confirm-hint">⚡ لو وصل السعر لهذا الرقم، تُغلق الصفقة تلقائياً لحماية رصيدك من خسارة أكبر</div>
-    <div class="confirm-row"><span class="confirm-key">رسوم الفتح</span><span class="confirm-val fee">$${feeOpen} (${feeRatePct(State.asset)})</span></div>
-    <div class="confirm-row"><span class="confirm-key">إجمالي الرسوم</span><span class="confirm-val fee">≈ $${feeTot}</span></div>`;
-
-  const btn = $('confirmExecute');
-  btn.className = `btn-modal btn-confirm ${isBuy ? 'btn-success' : 'btn-danger'}`;
-  btn.innerHTML = isBuy ? '✅ تأكيد الشراء' : '✅ تأكيد البيع';
-  State.pendingTrade = { isBuy, qty, sym: State.asset };
-  openModal('modalConfirm');
-}
-
-async function execTrade() {
-  if (!State.pendingTrade) { closeModal('modalConfirm'); return; }
-  const { isBuy, qty, sym } = State.pendingTrade;
-  const a        = ASSETS[sym], p = State.prices[sym];
-  const execQty  = a.gram ? +(qty / TROY).toFixed(4) : qty;
-  const execMid  = a.gram ? p.mid * TROY : p.mid;
-  const execSzDp = a.gram ? 4 : a.szDp;
-  if (!p?.mid) { toast('لا يوجد سعر', 'err'); closeModal('modalConfirm'); return; }
-
-  closeModal('modalConfirm');
-  State.pendingTrade = null;
-  toast(`⏳ ${a.icon} ${isBuy ? 'شراء' : 'بيع'} ${qty} ${a.unit}...`, 'info', 3000);
-  cornerStatus(`⏳ جاري ${isBuy ? 'الشراء' : 'البيع'}...`);
-
-  try {
-    try { await hlExchange({ type: 'updateLeverage', asset: a.idx, isCross: a.cross, leverage: a.lev }); } catch {}
-
-    const slip = 0.05;
-    const res  = await hlExchange({
-      type: 'order',
-      orders: [{ a: a.idx, b: isBuy,
-        p: wirePx(execMid * (isBuy ? 1 + slip : 1 - slip), execSzDp),
-        s: wireSz(execQty, execSzDp),
-        r: false, t: { limit: { tif: 'Ioc' } }
-      }],
-      grouping: 'na'
-    });
-
-    const status = res?.response?.data?.statuses?.[0];
-    if (status?.error) throw new Error(status.error);
-
-    if (status?.filled) {
-      const f      = status.filled;
-      const dispSz = a.gram ? (+f.totalSz * TROY).toFixed(2) : f.totalSz;
-      const dispPx = (parseFloat(f.avgPx) / (a.gram ? TROY : 1)).toFixed(a.pxDp);
-      toast(`✅ مُنفَّذ — ${a.icon} ${dispSz} ${a.unit} @ $${dispPx}`, 'ok', 5000);
-      playFillSound();
-    } else if (status?.resting) {
-      toast(`⏳ أمر معلق — ${a.icon} ${qty} ${a.unit}`, 'info', 4000);
-    } else {
-      toast('⚠️ لم يُنفَّذ — حاول مجدداً', 'err', 4000);
-    }
-
-    hideCornerStatus();
-    autoSetReferrer();
-    _multiPoll();
-  } catch (e) {
-    hideCornerStatus();
-    toast(tradeErr(e.message), 'err', 6000);
-  }
-}
 
 /* ════ Background poll after trade ════ */
 function _multiPoll() {
