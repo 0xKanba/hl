@@ -73,7 +73,6 @@
 ├── index.html
 ├── manifest.json
 ├── md.html
-├── s.c
 ├── seo.json
 └── sw.js
 ```
