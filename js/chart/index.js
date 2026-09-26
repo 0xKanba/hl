@@ -39,7 +39,7 @@ var CM = window.__cm = window.__cm || {};
       symbol: sym, interval: iv,
       datafeed: CM.datafeed,
       library_path: 'https://chart.kanba.pw/charting_library/',
-      locale: 'en',
+      locale: 'ar',
       timezone: 'Asia/Kuwait',   // display only — data is always UTC
       theme: dark ? 'Dark' : 'Light',
       overrides: {
