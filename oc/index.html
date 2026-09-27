@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<title>أسواق التوقعات — Hyperliquid</title>
+<meta name="description" content="تصفّح أسواق التوقعات على Hyperliquid: الأسعار الحيّة ودفتر الأوامر، واشترِ أو بِع «نعم» و«لا» مباشرة.">
+<meta name="theme-color" content="#0b0e11">
+<link rel="icon" href="../favicon.ico">
+<link rel="stylesheet" href="./css/base.css">
+<link rel="stylesheet" href="./css/themes.css">
+<link rel="stylesheet" href="./css/components.css">
+<link rel="stylesheet" href="./css/agentlink.css">
+<link rel="stylesheet" href="./css/oc.css">
+</head>
+<body>
+
+<div class="screen hidden" id="loginScreen">
+  <div class="login-brand">
+    <div class="login-icon">💧</div>
+    <div class="login-title">ماركت ليك</div>
+  </div>
+</div>
+
+
+<div class="app-shell hidden" id="appScreen">
+
+  <!-- ══ الشريط العلوي ══ -->
+  <header class="oc-appbar">
+    <button class="oc-ico-btn" id="btnMenu" title="القائمة">☰</button>
+    <div class="oc-brand">أسواق التوقعات<small>Hyperliquid · تسوية USDC</small></div>
+    <button class="oc-ico-btn" id="btnTheme" title="المظهر">🌙</button>
+    <button class="oc-ico-btn" id="btnLock" title="قفل">🔐</button>
+    <div style="position:relative;">
+      <button class="nav-connect-btn" id="btnConnect"><span class="cb-dot"></span><span class="cb-lbl">اتصال</span></button>
+      <div class="addr-popover hidden" id="addrPopover">
+        <div class="ag-addr-box">
+          <span class="ag-addr-txt" id="addrPopoverTxt">—</span>
+          <button class="ag-copy-btn" id="addrPopoverCopy" title="نسخ">⧉</button>
+        </div>
+        <button class="addr-popover-disconnect" id="addrPopoverDisconnect">🔌 إلغاء الاتصال</button>
+        <a class="addr-popover-link" id="addrPopoverExplorer" href="#" rel="noopener">🔍 المستكشف (Blockscan) ↗</a>
+        <a class="addr-popover-link" id="addrPopoverStatus" href="#" rel="noopener">📊 الحالة (Hyperscreener) ↗</a>
+      </div>
+
+    </div>
+  </header>
+
+  <main class="oc-wrap">
+
+    <!-- ══ الرصيد ══ -->
+    <section class="oc-bal" id="balanceCard">
+      <div><span>القيمة الكلية</span><b id="bcTotal">—</b></div>
+      <div><span>نقد متاح</span><b id="bcAvail">—</b></div>
+      <div><span>قيمة الأسهم</span><b id="bcShares">—</b></div>
+      <div><span>عدد المراكز</span><b id="bcCount">—</b></div>
+    </section>
+
+    <!-- ══ 1) قائمة الأسواق ══ -->
+    <section id="ocViewMarkets">
+      <div class="oc-tools">
+        <input class="oc-input" id="ocSearch" type="search" placeholder="🔎 ابحث في الأسواق — بيتكوين، مباراة، فائدة…">
+        <select class="oc-select" id="ocSort" aria-label="الترتيب">
+          <option value="time">الأقرب تسوية</option>
+          <option value="price">الأعلى احتمالاً</option>
+          <option value="volume">الأكثر احتمالات</option>
+        </select>
+      </div>
+      <div class="oc-cats" id="ocCats"></div>
+      <div class="oc-count" id="ocMarketCount"></div>
+      <div class="oc-list" id="ocMarketList"></div>
+    </section>
+
+    <!-- ══ 2) السوق المفتوح ══ -->
+    <section id="ocViewMarket" class="hidden">
+      <div class="oc-mkt-head">
+        <button class="oc-ico-btn" id="ocBack" title="رجوع">→</button>
+        <div style="flex:1;">
+          <h2 id="ocMktTitle">—</h2>
+          <div class="oc-mkt-meta">
+            <span id="ocMktSub"></span><span id="ocMktSettle"></span><span id="ocMktVenue"></span>
+          </div>
+        </div>
+      </div>
+
+      <div id="ocOutcomeWrap" class="hidden">
+        <h4 class="oc-h4">اختر الاحتمال</h4>
+        <div class="oc-ochips" id="ocOutcomeChips"></div>
+      </div>
+
+      <h4 class="oc-h4">اختر الجانب</h4>
+      <div class="oc-sides" id="ocSides"></div>
+
+      <div class="oc-two">
+        <div class="oc-panel">
+          <div class="oc-panel-t"><span>دفتر الأوامر</span><span>السعر · الأسهم · القيمة</span></div>
+          <div id="ocBookRows"></div>
+        </div>
+        <div class="oc-panel">
+          <div class="oc-panel-t"><span>آخر التداولات</span><span>السعر · الأسهم · الوقت</span></div>
+          <div id="ocTradeRows"></div>
+        </div>
+      </div>
+
+      <div class="oc-panel oc-ticket">
+        <div class="oc-panel-t"><span id="ocTicketSide">—</span><span><span id="ocAvailLbl">الرصيد المتاح</span>: <b id="ocAvail">—</b></span></div>
+
+        <div class="oc-seg">
+          <button data-dir="buy" class="active">شراء</button>
+          <button data-dir="sell">بيع</button>
+        </div>
+        <div class="oc-seg">
+          <button data-type="market" class="active">سوق (فوري)</button>
+          <button data-type="limit">حدّي</button>
+        </div>
+
+        <div class="oc-field hidden" id="ocPxWrap">
+          <label>السعر (0 – 1) <span>= احتمال النتيجة</span></label>
+          <input class="oc-input" id="ocPx" type="number" step="0.001" min="0.00001" max="0.99999" inputmode="decimal" dir="ltr">
+        </div>
+        <div class="oc-field">
+          <label>المبلغ بالدولار <span>USDC</span></label>
+          <input class="oc-input" id="ocUsd" type="number" step="1" min="0" placeholder="10" inputmode="decimal" dir="ltr">
+        </div>
+        <div class="oc-field">
+          <label>عدد الأسهم <span>كل سهم يُسوّى إلى $1 أو $0</span></label>
+          <input class="oc-input" id="ocSz" type="number" step="0.01" min="0" placeholder="0.00" inputmode="decimal" dir="ltr">
+        </div>
+        <div class="oc-quick">
+          <button data-quick="5">$5</button>
+          <button data-quick="25">$25</button>
+          <button data-quick="100">$100</button>
+          <button data-quick="max">الكل</button>
+        </div>
+
+        <div class="oc-sum" id="ocSummary"></div>
+        <button class="oc-submit buy" id="ocSubmit">اختر مبلغاً</button>
+        <p class="form-note" style="margin-top:10px;">ممولة بالكامل — بلا رفع مالي ولا تصفية. أقصى خسارة = المبلغ المدفوع.</p>
+      </div>
+    </section>
+
+    <!-- ══ 3) المحفظة ══ -->
+    <section id="ocViewPortfolio" class="hidden">
+      <div id="ocPortfolio"></div>
+    </section>
+
+  </main>
+
+  <!-- ══ الشريط السفلي ══ -->
+  <nav class="oc-tabbar">
+    <button class="oc-tab active" data-view="markets"><i>✦</i>الأسواق</button>
+    <button class="oc-tab" data-view="market"><i>📈</i>السوق</button>
+    <button class="oc-tab" data-view="portfolio"><i>👤</i>محفظتي</button>
+  </nav>
+</div>
+
+<!-- ══ الدرج ══ -->
+<div id="ocDock" data-dock-close>
+  <aside class="oc-dock-panel">
+    <div class="oc-dock-t">الحساب</div>
+    <button class="oc-dock-item" id="dockDeposit">💵 إيداع USDC</button>
+    <button class="oc-dock-item" id="dockWithdraw">📤 سحب USDC</button>
+    <button class="oc-dock-item" id="dockHistory">📜 سجل التداول</button>
+    <div class="oc-dock-t">الأمان</div>
+    <button class="oc-dock-item" id="dockAgents">🤖 محافظ التداول (الوكلاء)</button>
+    <button class="oc-dock-item" id="dockExport">🔑 تصدير المفتاح</button>
+    <button class="oc-dock-item" id="dockPin">🔐 رمز PIN</button>
+    <button class="oc-dock-item" id="dockLogout">🔌 إلغاء الاتصال</button>
+    <button class="oc-dock-item" data-dock-close style="margin-top:auto;">✕ إغلاق</button>
+  </aside>
+</div>
+
+<!-- ══ النوافذ (منسوخة كما هي من المشروع الأصلي) ══ -->
+<div class="modal-overlay" id="modalLogin">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-handle"></div>
+    <div class="login-brand" style="justify-content:center;margin-bottom:16px;">
+      <div class="login-icon">💧</div>
+      <div class="login-title">ماركت ليك</div>
+    </div>
+
+    <button class="login-btn" id="connectEmailBtn" style="margin-bottom:14px;">📧 الدخول بالبريد الإلكتروني ←</button>
+
+    <div class="login-header" style="text-align:center;margin:4px 0 10px;">أو</div>
+    <div id="extWalletList" style="display:flex;flex-direction:column;gap:8px;"></div>
+
+    <div class="modal-buttons modal-buttons-center" style="margin-top:18px;">
+      <button class="btn-modal btn-cancel" id="loginClose">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalHistory">
+  <div class="modal" style="display:flex;flex-direction:column;">
+    <h3 class="modal-title">📜 سجل الصفقات</h3>
+    <p class="modal-subtitle" id="historySubtitle">جاري التحميل...</p>
+    <div class="history-list" id="historyList">
+      <div class="balance-loading">⏳ جاري جلب السجل...</div>
+    </div>
+    <div class="modal-buttons modal-buttons-center" style="padding-top:16px;margin-top:auto;flex-shrink:0;">
+      <button class="btn-modal btn-cancel" id="historyClose">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalDeposit">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">💵 إيداع USDC</h3>
+    <div class="form-group">
+      <label>المبلغ (USDC)</label>
+      <input type="number" class="form-input" id="depositAmount" placeholder="10" min="5" inputmode="decimal">
+    </div>
+    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال أقل من دقيقة · يتطلب أيضاً القليل من ETH بمحفظتك لرسوم الشبكة.</p>
+    <div class="deposit-addr-note">
+      <span class="deposit-addr-lbl">⚠️ فقط شبكة Arbitrum One — أرسل USDC لهذا العنوان (اختر Arbitrum عند السحب من Binance أو أي منصة):</span>
+      <div class="ag-addr-box">
+        <span class="ag-addr-txt" id="depositAddrTxt">—</span>
+        <button class="ag-copy-btn" id="depositAddrCopy" title="نسخ">⧉</button>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel"              id="depositCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-success" id="depositExecute">إيداع ✓</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalWithdraw">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">📤 سحب USDC</h3>
+    <div class="withdraw-fee-warn">
+      ⚠️ رسوم السحب <strong id="wFeeAmt">$1.00</strong> تُخصم تلقائياً<br>
+      مثال: ترسل <strong id="wFeeExSend">$21.00</strong> ← يصلك صافي <strong id="wFeeExNet">$20.00</strong>
+    </div>
+    <div class="form-group">
+      <label>المبلغ المُرسَل (USDC)</label>
+      <input type="number" class="form-input" id="withdrawAmount" placeholder="21" min="2" inputmode="decimal">
+    </div>
+    <div class="withdraw-preview hidden" id="withdrawPreview">
+      <div class="wp-row"><span>📤 المبلغ المُرسَل</span><span class="wp-val" id="wpSend">—</span></div>
+      <div class="wp-row"><span>💸 رسوم Hyperliquid</span><span class="wp-val red" id="wpFee">- $1.00</span></div>
+      <div class="wp-row wp-net"><span>✅ يصلك صافي</span><span class="wp-val green" id="wpNet">—</span></div>
+    </div>
+    <div class="form-group">
+      <label>عنوان الوجهة — شبكة Arbitrum فقط</label>
+      <input type="text" class="form-input" id="withdrawAddress" placeholder="0x..." dir="ltr">
+      <span class="field-hint">مثال: عنوان إيداع USDC (شبكة Arbitrum) من Binance أو أي منصة/محفظة</span>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel"              id="withdrawCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-success" id="withdrawExecute">📤 سحب</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalLogout">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="logout-content">
+      <div class="logout-icon">🔌</div>
+      <h3 class="modal-title">إلغاء الاتصال</h3>
+      <p class="logout-text">
+        سيُحذف مفتاح الجلسة من هذا الجهاز، وستحتاج لتسجيل الدخول مجدداً.<br><br>
+        ✅ صفقاتك المفتوحة <strong>تبقى نشطة وآمنة</strong> على Hyperliquid ولا تتأثر إطلاقاً.<br>
+        ✅ محفظة التنفيذ (الوكيل) تبقى صالحة لنفس العنوان عند إعادة الاتصال — بلا حاجة لتوقيع جديد.<br>
+        ⚠️ رمز PIN المحلي (إن كان مفعَّلاً) سيُحذف أيضاً — ستحتاج تعيين رمز جديد لاحقاً لو أردت القفل مجدداً.
+      </p>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel"             id="logoutCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-danger" id="logoutExecute">🔌 قطع الاتصال</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalPIN">
+  <div class="lock-screen">
+    <div class="lock-header">
+      <div class="lock-icon">🔐</div>
+      <h3 class="lock-title">ماركت ليك</h3>
+      <p class="lock-subtitle">أدخل رمز PIN للمتابعة</p>
+    </div>
+    <div class="pin-dots" id="pinDots">
+      <div class="dot"></div><div class="dot"></div>
+      <div class="dot"></div><div class="dot"></div>
+    </div>
+    <div class="numpad">
+      <button class="num-btn" onclick="appendPin('1')">1</button>
+      <button class="num-btn" onclick="appendPin('2')">2</button>
+      <button class="num-btn" onclick="appendPin('3')">3</button>
+      <button class="num-btn" onclick="appendPin('4')">4</button>
+      <button class="num-btn" onclick="appendPin('5')">5</button>
+      <button class="num-btn" onclick="appendPin('6')">6</button>
+      <button class="num-btn" onclick="appendPin('7')">7</button>
+      <button class="num-btn" onclick="appendPin('8')">8</button>
+      <button class="num-btn" onclick="appendPin('9')">9</button>
+      <button class="num-btn num-empty"></button>
+      <button class="num-btn" onclick="appendPin('0')">0</button>
+      <button class="num-btn num-del" onclick="backspacePin()">⌫</button>
+    </div>
+    <div class="lock-footer">
+      <button id="pinLogout" class="lock-logout-btn">نسيت الرمز؟ تسجيل الخروج</button>
+      <button id="pinCancel" class="lock-cancel-btn">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalForgotPIN" style="z-index:9999;">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="logout-content">
+      <div class="logout-icon">⚠️</div>
+      <h3 class="modal-title">نسيان رمز PIN</h3>
+      <p class="logout-text">لاسترداد الوصول يجب حذف جميع البيانات المحلية.<br><strong>هذا الإجراء لا يمكن التراجع عنه.</strong></p>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-cancel"             id="forgotCancel">إلغاء</button>
+      <button class="btn-modal btn-confirm btn-danger" id="forgotStep1">تأكيد — حذف البيانات</button>
+      <button class="btn-modal btn-confirm btn-danger hidden" id="forgotStep2">تأكيد نهائي 🔒</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalSetPIN">
+  <div class="lock-screen">
+    <div class="lock-header">
+      <div class="lock-icon">🔑</div>
+      <h3 class="lock-title">تعيين رمز PIN</h3>
+      <p class="lock-subtitle">رمز من 4 أرقام لحماية صفقاتك</p>
+    </div>
+    <div class="pin-dots" id="setPinDots">
+      <div class="dot"></div><div class="dot"></div>
+      <div class="dot"></div><div class="dot"></div>
+    </div>
+    <div class="numpad">
+      <button class="num-btn" onclick="appendSetPin('1')">1</button>
+      <button class="num-btn" onclick="appendSetPin('2')">2</button>
+      <button class="num-btn" onclick="appendSetPin('3')">3</button>
+      <button class="num-btn" onclick="appendSetPin('4')">4</button>
+      <button class="num-btn" onclick="appendSetPin('5')">5</button>
+      <button class="num-btn" onclick="appendSetPin('6')">6</button>
+      <button class="num-btn" onclick="appendSetPin('7')">7</button>
+      <button class="num-btn" onclick="appendSetPin('8')">8</button>
+      <button class="num-btn" onclick="appendSetPin('9')">9</button>
+      <button class="num-btn num-empty"></button>
+      <button class="num-btn" onclick="appendSetPin('0')">0</button>
+      <button class="num-btn num-del" onclick="backspaceSetPin()">⌫</button>
+    </div>
+    <div class="lock-footer">
+      <button id="setPinCancel" class="lock-cancel-btn">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="privyRoot" style="display:none"></div>
+<div id="cornerStatus"></div>
+<div id="toast"></div>
+<div id="loader"><div class="spinner"></div><div class="loader-text" id="loaderText">جاري...</div><button class="loader-close" id="loaderClose" title="إخفاء">✕</button></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"></script>
+
+<!-- طبقة الاتصال/المحفظة/الحساب — منسوخة حرفياً من المشروع الأصلي -->
+<script src="./js/core/config.js"></script>
+<script src="./js/core/state.js"></script>
+<script src="./js/core/wallets.js"></script>
+<script src="./js/core/agentlink.js"></script>
+<script src="./js/core/utils.js"></script>
+<script src="./js/core/api.js"></script>
+<script src="./js/core/ws.js"></script>
+<script src="./js/core/pin.js"></script>
+<script src="./js/core/auth.js"></script>
+<script src="./js/core/agents.js"></script>
+
+<!-- طبقة أسواق التوقعات -->
+<script src="./js/oc-config.js"></script>
+<script src="./js/oc-format.js"></script>
+<script src="./js/oc-state.js"></script>
+<script src="./js/oc-meta.js"></script>
+<script src="./js/oc-shims.js"></script>
+<script src="./js/oc-prices.js"></script>
+<script src="./js/oc-book.js"></script>
+<script src="./js/oc-portfolio.js"></script>
+<script src="./js/oc-order.js"></script>
+<script src="./js/oc-funds.js"></script>
+<script src="./js/oc-ui.js"></script>
+<script src="./js/oc-app.js"></script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+/* ═══════════════════════════════════════════════════════════════
+   base.css — الأساس: مقاييس التصميم (خط/تباعد/انحناء/حركة) + Reset +
+   عناصر تحكم عامة (أزرار/حقول/سكرول بار) + أدوات مساعدة (utilities).
+   لا ألوان حرفية هنا إطلاقاً — كل شيء عبر var() من themes.css، فتبديل
+   لوحة الألوان بالكامل لا يلمس هذا الملف أبداً.
+   النصوص عريضة 100% بكل مكان عمداً (--fw-regular نفسها 900) — قرار
+   تصميم ثابت لهذا المشروع، ليس سهواً.
+═══════════════════════════════════════════════════════════════ */
+
+@layer base, themes, components;
+
+@layer base {
+
+:root {
+  /* الخطوط */
+  --font-ar:   'Cairo', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --fs-2xs: 10px;  --fs-xs: 11px;  --fs-sm: 12px;  --fs-md: 13px;
+  --fs-base: 14px; --fs-lg: 15px;  --fs-xl: 16px;  --fs-2xl: 18px;
+  --fs-3xl: 20px;  --fs-4xl: 22px; --fs-5xl: 26px; --fs-6xl: 32px;
+
+  --fw-regular:  900;
+  --fw-semibold: 900;
+  --fw-bold:     900;
+  --fw-black:    900;
+
+  --lh-base:  1.5;
+  --lh-loose: 1.75;
+
+  /* التباعد */
+  --space-1: 4px;  --space-2: 6px;  --space-3: 10px; --space-4: 14px;
+  --space-5: 18px; --space-6: 22px; --space-7: 28px; --space-8: 36px;
+  --space-9: 44px;
+
+  /* الانحناء */
+  --r-xs: 6px; --r-sm: 9px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px;
+  --r-pill: 999px;
+
+  /* الحركة */
+  --dur-fast: 120ms; --dur-base: 180ms; --dur-slow: 260ms;
+  --ease-standard: cubic-bezier(.4,0,.2,1);
+  --ease-out:      cubic-bezier(.22,1,.36,1);
+  --ease-bounce:   cubic-bezier(.34,1.56,.64,1);
+
+  /* طبقات z-index */
+  --z-screen:  1;
+  --z-opts:    200;
+  --z-modal:   300;
+  --z-toast:   350;
+  --z-loader:  360;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-ar);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body, p, span, div, button, input, textarea, select, a,
+h1, h2, h3, h4, h5, h6, label {
+  font-weight: var(--fw-regular) !important;
+}
+
+button, input, textarea, select {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+a { color: inherit; text-decoration: none; }
+
+img { max-width: 100%; display: block; }
+
+/* ════════════════════════════════════
+   تبديل المظهر — انتقال ناعم اختياري (يُفعَّل فقط لحظة الضغط على
+   ☀️/🌙 عبر _applyTheme(theme, true) بـapp.js، لا عند التحميل الأولي)
+════════════════════════════════════ */
+html.theme-transitioning,
+html.theme-transitioning * {
+  transition: background-color var(--dur-slow) var(--ease-standard),
+              border-color     var(--dur-slow) var(--ease-standard),
+              color            var(--dur-slow) var(--ease-standard) !important;
+}
+
+/* ════════════════════════════════════
+   ✅ قفل PIN قبل أول رسم — سكربت <head> بـindex.html يضبط هذه الخاصية
+   على <html> بشكل متزامن قبل تحليل <body> إطلاقاً لو كان القفل مفعَّلاً
+   آخر جلسة (PIN_KEY + LOCKED_KEY==='true') — فيُخفي .app-shell بالكامل
+   قبل أن يُتاح لأي محتوى حساب فرصة الرسم على الشاشة، بصرف النظر عن وقت
+   تحميل/تنفيذ بقية سكربتات الصفحة. تُزال فقط عند فتح القفل فعلياً
+   (راجع js/pin.js:unlockApp) — لا صلة لها بأي قفل يدوي لاحق بنفس
+   الجلسة (ذاك يعمل بالكامل عبر مودال #modalPIN العادي، فوق كل شيء
+   بصرياً أصلاً بحكم ترتيبه بالـDOM). visibility بدل display:none
+   عمداً — لا reflow عند الإزالة، فقط تبديل رسم.
+   ✅ #dock (عمود الأيقونات الجانبي) عنصر flex حقيقي داخل .app-shell
+   نفسها الآن (راجع components.css:.content-row) — يرث visibility:
+   hidden تلقائياً من هذه القاعدة الواحدة بلا أي استثناء يدوي إضافي،
+   بعكس نسخة سابقة كانت خارج .app-shell واحتاجت سطراً خاصاً بها. */
+html[data-boot-lock="1"] .app-shell { visibility: hidden; }
+
+/* ════════════════════════════════════
+   Scrollbar — عبر متغيّرات themes.css فقط
+════════════════════════════════════ */
+* { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-track:hover { background: var(--sb-track-hover); }
+*::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: var(--r-pill); }
+*::-webkit-scrollbar-thumb:hover  { background: var(--sb-thumb-hover); }
+*::-webkit-scrollbar-thumb:active { background: var(--ac); }
+
+/* ════════════════════════════════════
+   Utilities
+════════════════════════════════════ */
+.hidden { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+} /* @layer base */

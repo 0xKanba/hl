@@ -1,0 +1,1020 @@
+/* ═══════════════════════════════════════════════════════════════
+   components.css — ماركت ليك (Market Leak) · Component Library
+   Every rule here consumes tokens from base.css / themes.css.
+   No color literals, no [data-theme] blocks — theme-agnostic by design.
+
+   ✅ إعادة هيكلة UI/UX (2026-08) — بنية تطبيق أصلي بالكامل:
+      .nav (top bar) → .appbar (☰ + عنوان + اتصال)
+      .footer (رسم/خيارات) → .tabbar سفلي 3 أزرار (رسم|رئيسية|أسواق)
+      .opts-overlay (قائمة منبثقة وسط الشاشة) → .drawer ينزلق من اليمين
+      .main (عمودين) → .screens-viewport بشاشتين (رئيسية/أسواق) +
+      أنيميشن دخول لكل شاشة (fade+lift خفيف، لا سحب أفقي — يطابق نمط
+      تبديل التابات بالتطبيقات الأصلية أكثر من الدفع الأفقي المحجوز
+      عادة للتنقل الهرمي/التفصيلي).
+      .balance-grid/.balance-item/.balance-value (كانت داخل modalBalance
+      المحذوفة) → .balance-card بطاقة دائمة أعلى الرئيسية.
+      جديد كلياً: .market-card لشاشة الأسواق.
+      .balance-loading أُبقيت (تُستخدم أيضاً بمودال التأريخ).
+      كل الأنيميشن الجديدة GPU-friendly (transform/opacity فقط)، بمدد
+      قصيرة (180-320ms) وeasing متسق مع --ease-out/--ease-bounce
+      الموجودين أصلاً بـbase.css — لا مكتبات خارجية.
+
+   ✅ جولة ثانية (2026-08) — رأس/تذييل موحّدان بالثلاث شاشات (راجع
+      index.html للشرح الكامل):
+      - .appbar-menu-btn → .appbar-icon-btn (مشترك بين ☰ و🔒 الآن)
+      - .appbar-title (عنوان شاشة ديناميكي) → .appbar-brand (اسم ثابت)
+      - جديد: .addr-popover (نافذة صغيرة عند نقر عنوان الحساب بالرأس)
+      - .chart-screen (overlay منفصل كامل الشاشة) حُذفت بالكامل —
+        الرسم البياني الآن .app-screen عادية (نفس home/markets)
+      - .drawer-close-btn وdrawer-account-card حُذفتا (لا حاجة لهما،
+        راجع index.html)؛ .drawer بلا transition (فوري)؛ جديد
+        .drawer-theme-toggle (شعاران ثابتان أسفل الدرج)
+      - .nav-address/.nav-address-wrap/.nav-copy-btn حُذفت (كانت حصراً
+        لبطاقة العنوان المحذوفة من الدرج؛ popover الرأس يعيد استخدام
+        .ag-addr-box/.ag-addr-txt/.ag-copy-btn الموجودة أصلاً)
+
+   ✅ جولة ثالثة (2026-08) — إعادة تصميم بطاقات شاشة الأسواق: حذف
+      .market-card-sub (سطر الرمز/الرافعة تحت الاسم — الرافعة انتقلت
+      لنافذة معلومات الأصل الجديدة)، اسم/صورة/سعر أكبر بوضوح، صف اسم
+      جديد (.market-card-name-row) يضم زر "؟" (.market-info-btn) لكل
+      بطاقة، وقواعد جديدة لنافذة معلومات الأصل (.asset-info-*).
+
+   ✅ جولة رابعة (2026-08) — الدرج الجانبي (.drawer-overlay/.drawer)
+      حُذف بالكامل واستُبدل بـ.dock: عمود أيقونات دائم الظهور يمين
+      الشاشة، يتمدّد فقط لعرض العناوين عند فتح ☰. نفس الأزرار بالضبط
+      بحالتَي الطي/التمدد (لا عنصر مكرَّر)، فكل زر يعمل بنقرة مباشرة
+      على أيقونته بصرف النظر عن حالة التمدد. .drawer-theme-toggle
+      (زرَّان ☀️/🌙 منفصلان) حُذف أيضاً — استُبدل بزر واحد ضمن قائمة
+      .dock-item نفسها (.dock-item#dockTheme)، أيقونته وعنوانه يعكسان
+      المظهر الحالي فعلياً (راجع app.js:_syncThemeToggleUI).
+
+   ✅ جولة خامسة (2026-09) — FIX جذري لخطأ موضع بصري: النسخة الأولى
+      من .dock كانت position:fixed عائمة بمنتصف الشاشة (top:50% +
+      transform:translateY(-50%))، وتصادمت مع قاعدة أداء عامة لاحقة
+      بهذا الملف (transform:translateZ(0) على نفس الخاصية transform)
+      فألغت التوسيط صمتاً — ظهر الدوك منزاحاً للأسفل بدل المنتصف. الحل
+      ليس ترقيع القيمة بل إزالة فئة الخطأ بالكامل: .dock الآن عنصر flex
+      حقيقي (لا position:fixed، لا transform للموضع إطلاقاً) داخل
+      .content-row الجديد (صف أفقي يضم #dock + .screens-viewport، يملأ
+      كل الارتفاع المتبقي بين الرأس والتذييل عبر flex:1 عادي) — "عمود
+      كامل" فعلياً بارتفاع منطقة المحتوى، مُشتق من التخطيط نفسه فيعمل
+      بنفس الدقة بأي حجم/اتجاه شاشة (موبايل/سطح مكتب، عمودي/أفقي) بلا
+      أي حساب بكسلات هش. عرض #dock الخارجي (52px) لا يتغيّر أبداً —
+      التمدد يحدث فقط بـ#dockScroll الداخلي (position:absolute نسبةً
+      لـ#dock، يفيض بصرياً فوق .screens-viewport بلا حجبها/تربيعها)،
+      فلا اهتزاز تخطيط عند كل نقرة ☰. .dock-backdrop حُذف بالكامل —
+      لم يعد ضرورياً بما أن التمدد لم يعد يغطّي كامل الشاشة (راجع
+      app.js:_initDock لمنطق الإغلاق بالنقر خارج الدوك البديل الآن).
+
+   ✅ جولة سادسة (منصة "فتح صفقة جديدة") — شاشة الرئيسية تبسّطت لبطاقة
+      رصيد + بطاقة صفقات فقط، فحُذف من هذا الملف كل ما كان حصرياً
+      لعناصرها المحذوفة من index.html: قسم ASSET TABS بالكامل
+      (.tabs/.tab/.tab-left/.tab-img/.tab-right/.tab-price)، قسم
+      PRICE CARD بالكامل (.price-card → .price-timer)، وقسم TRADE PANEL
+      بالكامل (.trade-panel/.qty-* , .trade-buttons/.btn-trade/.btn-buy/
+      .btn-sell/.btn-label/.btn-price) — مع تنظيف إشاراتها من قسم
+      PERFORMANCE HINTS ومن نقاط توقّف الديسكتوب. أُضيف بدلاً منها
+      لا شيء — الشريط الوحيد (.om-bar) وكامل شاشة التداول يعيشان
+      بـcss/order.css (ملف تنسيق حقيقي، لا حقن من JS)، ويُبنيان من
+      js/order/bar.js وjs/order/ui.js. راجع رأس css/order.css.
+════════════════════════════════════════════════════════════════ */
+
+@layer components {
+
+/* ════════════════════════════════════
+   SCREENS (login legacy container — still used by #loginScreen)
+════════════════════════════════════ */
+.screen {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  z-index: var(--z-screen);
+  background: var(--bg-app);
+  overflow: hidden;
+  max-width: 100vw;
+}
+.screen.hidden { display: none !important; }
+
+/* ════════════════════════════════════
+   LOGIN (inert today — kept intact, zero risk)
+════════════════════════════════════ */
+#loginScreen {
+  align-items: center; justify-content: center;
+  padding: var(--space-5); overflow-y: auto;
+  background: radial-gradient(ellipse 80% 55% at 50% -5%, var(--ac-dim) 0%, transparent 70%);
+}
+.login-brand { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-6); flex-shrink: 0; }
+.login-icon {
+  width: 48px; height: 48px; border-radius: var(--r-md);
+  background: linear-gradient(140deg, var(--logo-grad-1), var(--logo-grad-2));
+  display: flex; align-items: center; justify-content: center; font-size: var(--fs-4xl);
+  box-shadow: 0 0 16px var(--logo-glow), 0 4px 16px rgba(0,0,0,.5); flex-shrink: 0;
+}
+.login-title { font-size: var(--fs-5xl); font-weight: var(--fw-bold); }
+
+.login-card {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  padding: var(--space-6) var(--space-5);
+  width: 100%; max-width: 420px;
+  box-shadow: var(--shadow), var(--glow-bdr);
+}
+.login-header {
+  font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  color: var(--text-secondary);
+  letter-spacing: 2px; text-transform: uppercase;
+  padding-bottom: var(--space-3); margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.field-label {
+  display: block; font-size: var(--fs-xs); font-weight: var(--fw-bold);
+  color: var(--text-secondary);
+  letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: var(--space-2);
+}
+.key-wrapper { position: relative; margin-bottom: var(--space-1); }
+.key-input {
+  width: 100%; font-family: var(--font-mono);
+  font-size: var(--fs-base); padding: var(--space-3) 44px var(--space-3) var(--space-3);
+  direction: ltr;
+}
+.key-toggle {
+  position: absolute; left: var(--space-3); top: 50%;
+  transform: translateY(-50%); font-size: var(--fs-2xl);
+  color: var(--text-muted); padding: var(--space-1);
+  background: none; border: none;
+}
+.login-btn {
+  width: 100%; margin-top: var(--space-4); padding: var(--space-4);
+  border-radius: var(--r-pill); font-size: var(--fs-lg); font-weight: var(--fw-bold);
+  background: var(--ac-soft);
+  color: var(--text-primary); border: 1.5px solid var(--ac);
+  box-shadow: 0 4px 18px rgba(0,0,0,.15);
+  transition: filter var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard);
+}
+.login-btn:hover { filter: brightness(1.08); }
+.login-note {
+  margin-top: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--r-md);
+  background: var(--up-dim);
+  border: 1px solid color-mix(in srgb, var(--up) 30%, transparent);
+  font-size: var(--fs-sm); color: var(--text-secondary);
+  line-height: var(--lh-loose); text-align: center;
+}
+.login-note strong { color: var(--up); }
+.create-wallet-btn {
+  width: 100%; margin-top: var(--space-2); padding: var(--space-3);
+  border-radius: var(--r-pill); font-size: var(--fs-base); font-weight: var(--fw-bold);
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-elev); color: var(--text-secondary);
+  transition: all var(--dur-base) var(--ease-standard);
+}
+.create-wallet-btn:hover { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
+
+.find-wallet-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 5px; padding: 7px var(--space-4);
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-elev); color: var(--ac);
+  font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  text-decoration: none; cursor: pointer;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+.find-wallet-btn:hover  { border-color: var(--ac); background: var(--ac-dim); }
+.find-wallet-btn:active { transform: scale(.95); }
+
+/* ════════════════════════════════════
+   ✅ APP SHELL — الحاوية الجذرية الجديدة (بديل .screen على #appScreen)
+════════════════════════════════════ */
+.app-shell {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  z-index: var(--z-screen);
+  background: var(--bg-app);
+  overflow: hidden;
+  max-width: 100vw;
+  height: 100dvh;
+}
+.app-shell.hidden { display: none !important; }
+
+/* ════════════════════════════════════
+   ✅ APPBAR — ثابت أعلى الشاشة: [☰ هامبرغر][🔒 قفل] | ماركت ليك | عنوان/اتصال
+════════════════════════════════════ */
+.appbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  padding-top: max(var(--space-2), env(safe-area-inset-top));
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0; position: relative; z-index: 10;
+}
+.appbar-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.appbar-right { position: relative; }
+
+.appbar-icon-btn {
+  width: 36px; height: 36px; border-radius: var(--r-sm);
+  background: var(--bg-elev); border: 1.5px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--fs-lg); flex-shrink: 0;
+  transition: border-color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.appbar-icon-btn:hover  { border-color: var(--ac); background: var(--ac-dim); }
+.appbar-icon-btn:active { transform: scale(.88); }
+.hamburger-icon { display: flex; flex-direction: column; gap: 4px; width: 17px; flex-shrink: 0; }
+.hamburger-icon span { display: block; height: 2px; border-radius: 2px; background: var(--text-primary); }
+
+.appbar-brand {
+  flex: 1; min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.appbar-brand-ar {
+  font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary);
+  line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  letter-spacing: .2px;
+}
+.appbar-brand-en {
+  font-size: 9px; font-weight: var(--fw-bold); color: var(--text-muted);
+  letter-spacing: .8px; text-transform: uppercase; line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* ════════════════════════════════════
+   ✅ ADDRESS POPOVER — عند نقر زر الحساب المتصل بالـappbar
+   (ضيف غير متصل: btnConnect يفتح modalLogin مباشرة، بلا popover)
+════════════════════════════════════ */
+.addr-popover {
+  position: absolute; top: calc(100% + 8px); left: 0;
+  min-width: 220px; max-width: min(80vw, 260px);
+  background: var(--bg-card); border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-md); box-shadow: var(--shadow), var(--glow-bdr);
+  padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2);
+  z-index: 20;
+}
+.addr-popover.hidden { display: none; }
+.addr-popover:not(.hidden) { animation: popIn 160ms var(--ease-out); }
+.addr-popover .ag-addr-box { margin-top: 0; }
+.addr-popover-disconnect {
+  border: 1.5px solid var(--dn); background: var(--dn-dim); color: var(--dn);
+  border-radius: var(--r-sm); padding: 9px 0; font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  text-align: center; transition: all var(--dur-base) var(--ease-standard);
+}
+.addr-popover-disconnect:hover { background: var(--dn); color: #fff; }
+.addr-popover-disconnect:active { transform: scale(.96); }
+
+/* ════════════════════════════════════
+   SCREENS VIEWPORT — الرئيسية / الأسواق / الرسم البياني
+════════════════════════════════════ */
+.screens-viewport { flex: 1; min-width: 0; min-height: 0; position: relative; overflow: hidden; z-index: 1; }
+
+.app-screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.app-screen.hidden { display: none; }
+
+@keyframes screenEnter {
+  from { opacity: 0; transform: translateY(10px) scale(.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.app-screen.screen-anim { animation: screenEnter 240ms cubic-bezier(.22,1,.36,1); }
+
+.screen-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--space-3) 8px calc(var(--space-6) + 4px);
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+
+/* ════════════════════════════════════
+   ✅ TABBAR سفلي — 3 أزرار فقط (رسم | رئيسية | أسواق)
+   ترتيب DOM [رسم، رئيسية، أسواق] + dir="rtl" الافتراضي على <html>
+   → يمين=رسم، وسط=رئيسية، يسار=أسواق، بلا أي row-reverse.
+   ثابت الآن على الشاشات الثلاث كلها (بما فيها الرسم البياني).
+════════════════════════════════════ */
+.tabbar {
+  display: flex; align-items: stretch;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  padding-bottom: max(4px, env(safe-area-inset-bottom));
+  flex-shrink: 0;
+  box-shadow: 0 -4px 16px rgba(0,0,0,.18);
+  position: relative; z-index: 10;
+}
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; padding: 5px 4px 4px;
+  background: none; border: none; color: var(--text-muted);
+  transition: color 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-btn-icon-wrap {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 20px; border-radius: var(--r-pill);
+  transition: background 220ms ease, transform 220ms cubic-bezier(.34,1.56,.64,1);
+}
+.tab-btn-icon { font-size: 15px; line-height: 1; }
+.tab-btn-lbl  { font-size: 9px; font-weight: var(--fw-bold); transition: color 180ms ease; }
+.tab-btn.active { color: var(--ac); }
+.tab-btn.active .tab-btn-icon-wrap { background: var(--ac-dim); transform: translateY(-1px); }
+.tab-btn:active .tab-btn-icon-wrap { transform: scale(.86); }
+
+/* ════════════════════════════════════
+   ✅ CONTENT ROW — صف flex أفقي يضم #dock + .screens-viewport معاً،
+   يملأ كل الارتفاع المتبقي بين الرأس (appbar/datetime-bar/months-panel)
+   والتذييل (tabbar) عبر flex:1 العادي — لا أي position:fixed ولا حساب
+   بكسلات. هذا وحده هو ما يجعل #dock "عموداً كاملاً" فعلياً بأي حجم/
+   اتجاه شاشة: ارتفاعه مُشتق من التخطيط نفسه، لا من قيمة مفترَضة.
+════════════════════════════════════ */
+.content-row {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: row;
+  overflow: hidden;
+}
+
+/* ════════════════════════════════════
+   ✅ DOCK — عمود أيقونات دائم الظهور، يحل محل .drawer-overlay/.drawer
+   القديم بالكامل، وأيضاً بديل نسخة سابقة كانت position:fixed عائمة
+   بمنتصف الشاشة (top:50%+transform:translateY(-50%)) — تلك تصادمت مع
+   قاعدة أداء عامة لاحقة بهذا الملف (transform:translateZ(0) على نفس
+   الخاصية transform)، فألغت التوسيط ٍصمتاً وظهر الدوك منزاحاً للأسفل.
+
+   ⚠️ FIX جذري — القرار المعماري الجديد يزيل فئة الخطأ هذه بالكامل بدل
+   ترقيعها: #dock لم يعد يستخدم position:fixed ولا transform للموضع
+   إطلاقاً. هو الآن عنصر flex حقيقي داخل .content-row (أول عنصر بترتيب
+   DOM ← يمين الشاشة بحكم RTL، نفس جهة زر ☰ بالـappbar تماماً كالسابق):
+
+     • #dock (الصندوق الخارجي): عرضه 52px ثابت لا يتغيّر أبداً مهما
+       حدث — هذا ما يضمن "الأيقونات ثابتة، تعمل وتظهر دائماً" بلا أي
+       قفزة/إعادة تخطيط لبقية الشاشة عند التمدد. ارتفاعه يملأ ارتفاع
+       .content-row تلقائياً (align-items:stretch الافتراضي بصف flex)
+       — أي بأي حجم شاشة أو اتجاه (عمودي/أفقي، موبايل/سطح مكتب) بلا
+       أي كود إضافي.
+     • #dockScroll (الصندوق الداخلي، نفس الأزرار): position:absolute
+       نسبةً لـ#dock نفسه — بحالته الافتراضية يملأ نفس الـ52px بالضبط
+       (أيقونات فقط). عند .expanded يتمدّد عرضه فقط (52px ← ~220px)
+       ويفيض بصرياً فوق .screens-viewport كطبقة عائمة خفيفة (ظل + حواف
+       مستديرة)، بلا حجب/تربيع أي محتوى وبلا خلفية معتمة كاملة الشاشة —
+       .screens-viewport لا تُعاد قياساتها إطلاقاً (#dock نفسه لا يتغيّر
+       حجمه)، فلا اهتزاز تخطيط عند كل نقرة ☰.
+
+   كل .dock-item له onclick واحد يعمل بصرف النظر تماماً عن .expanded —
+   "الأزرار تعمل سواء فُتحت اللوحة أو لا" لأن الزر نفسه (لا نسخة أخرى
+   منه) هو ما يُنقر عليه بالحالتين، بكل الشاشات وكل الاتجاهات.
+════════════════════════════════════ */
+.dock {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  overflow: visible;
+  z-index: 2;
+}
+
+.dock-scroll {
+  position: absolute; top: 0; bottom: 0; right: 0;
+  width: 52px;
+  display: flex; flex-direction: column;
+  background: var(--bg-card);
+  border-left: 1.5px solid var(--border-strong);
+  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+  padding: var(--space-2) 0;
+  gap: 1px;
+  transition: width 220ms var(--ease-out), border-radius 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+}
+.dock.expanded .dock-scroll {
+  width: min(66vw, 220px);
+  border-radius: var(--r-lg) 0 0 var(--r-lg);
+  box-shadow: var(--shadow), var(--glow-bdr);
+}
+
+.dock-item {
+  display: flex; align-items: center;
+  width: 100%; padding: 10px 13px;
+  background: none; border: none; text-decoration: none;
+  color: var(--text-primary); cursor: pointer;
+  white-space: nowrap; overflow: hidden; flex-shrink: 0;
+  transition: background var(--dur-fast) var(--ease-standard);
+  -webkit-tap-highlight-color: transparent;
+}
+.dock-item:hover  { background: var(--bg-elev); }
+.dock-item:active { background: var(--ac-dim); }
+
+.dock-icon {
+  font-size: var(--fs-xl); width: 26px; flex-shrink: 0;
+  text-align: center; line-height: 1;
+}
+.dock-lbl {
+  font-size: var(--fs-base); font-weight: var(--fw-semibold);
+  max-width: 0; opacity: 0; margin-inline-start: 0;
+  overflow: hidden; text-overflow: ellipsis;
+  transition: max-width 220ms var(--ease-out), opacity 160ms ease, margin-inline-start 220ms var(--ease-out);
+}
+.dock.expanded .dock-lbl { max-width: 170px; opacity: 1; margin-inline-start: 10px; }
+
+.dock-divider { height: 1px; background: var(--border); margin: 6px 10px; flex-shrink: 0; }
+
+/* ════════════════════════════════════
+   ✅ BALANCE CARD — بطاقة دائمة أعلى الرئيسية (بديل modalBalance)
+════════════════════════════════════ */
+.balance-card {
+  background: linear-gradient(155deg, var(--bg-card), var(--bg-elev));
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  box-shadow: var(--shadow), var(--glow-bdr);
+  display: flex; flex-direction: column; gap: var(--space-4);
+  position: relative; overflow: hidden; flex-shrink: 0;
+}
+.balance-card::before {
+  content: ''; position: absolute; top: -50%; right: -15%;
+  width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(circle, var(--ac-dim), transparent 70%);
+  pointer-events: none;
+}
+.bc-primary { display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; position: relative; }
+.bc-primary-label { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-secondary); letter-spacing: 1.2px; text-transform: uppercase; }
+.bc-primary-value {
+  font-family: var(--font-mono); font-size: clamp(27px, 8.5vw, 34px);
+  font-weight: var(--fw-black); color: var(--text-primary); line-height: 1.1;
+  transition: color 200ms ease;
+}
+.bc-primary-pnl {
+  font-family: var(--font-mono); font-size: var(--fs-md); font-weight: var(--fw-bold);
+  padding: 3px 13px; border-radius: var(--r-pill); margin-top: 2px;
+  color: var(--text-muted); background: var(--bg-input);
+  transition: color 200ms ease, background 200ms ease;
+}
+.bc-primary-pnl.pos { color: var(--up); background: var(--up-dim); }
+.bc-primary-pnl.neg { color: var(--dn); background: var(--dn-dim); }
+
+.bc-secondary {
+  display: flex; align-items: center;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: var(--space-3);
+  position: relative;
+}
+.bc-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.bc-stat-label { font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: .4px; }
+.bc-stat-value { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary); }
+.bc-stat-divider { width: 1px; align-self: stretch; background: var(--border-strong); margin: 0 var(--space-2); }
+
+/* ════════════════════════════════════
+   ✅ MARKETS SCREEN — بطاقات أنيقة لكل سوق
+   ✅ جولة ثالثة (2026-08) — .market-card-sub حُذفت (كانت الرمز
+      اللاتيني + الرافعة تحت الاسم). الرافعة انتقلت لنافذة معلومات
+      الأصل (.asset-info-*) — تُقرأ حيّاً من ASSETS[sym].lev بـapp.js،
+      لا رقم مكرَّر بالـCSS/HTML. الاسم/الصورة/السعر أكبر بوضوح الآن.
+════════════════════════════════════ */
+.markets-list { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.market-card {
+  display: flex; align-items: center; gap: var(--space-4);
+  background: var(--bg-card); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); padding: var(--space-3) var(--space-4);
+  text-align: right; cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, transform 120ms ease;
+  animation: mcIn 320ms cubic-bezier(.22,1,.36,1) backwards;
+  -webkit-tap-highlight-color: transparent;
+}
+.market-card:nth-child(1) { animation-delay: 0ms;   }
+.market-card:nth-child(2) { animation-delay: 40ms;  }
+.market-card:nth-child(3) { animation-delay: 80ms;  }
+.market-card:nth-child(4) { animation-delay: 120ms; }
+.market-card:nth-child(5) { animation-delay: 160ms; }
+@keyframes mcIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+.market-card:active { transform: scale(.97); }
+.market-card.active { border-color: var(--ac); box-shadow: var(--glow-ac); background: var(--bg-input); }
+
+.market-card-img-wrap {
+  width: 60px; height: 60px; border-radius: var(--r-md); flex-shrink: 0;
+  background: var(--bg-input); display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.market-card-img { width: 72%; height: 72%; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
+
+.market-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.market-card-name-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.market-card-name {
+  flex: 1; min-width: 0;
+  font-size: var(--fs-3xl); font-weight: var(--fw-bold); color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.market-info-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; border-radius: 50%; flex-shrink: 0;
+  background: var(--bg-input); border: 1.5px solid var(--border-strong);
+  color: var(--text-muted); font-size: 11px; font-weight: var(--fw-bold); line-height: 1;
+  cursor: pointer; transition: all var(--dur-base) var(--ease-standard);
+}
+.market-info-btn:hover  { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
+.market-info-btn:active { transform: scale(.85); }
+
+.market-card-price { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px; flex-shrink: 0; }
+.market-card-value {
+  font-family: var(--font-mono); font-weight: var(--fw-black); color: var(--text-primary);
+  font-size: clamp(20px, 5.5vw, 25px); white-space: nowrap; line-height: 1;
+}
+.market-card-chg   { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: var(--fw-bold); padding: 2px 9px; border-radius: var(--r-pill); white-space: nowrap; }
+.market-card-chg.up { color: var(--up); background: var(--up-dim); }
+.market-card-chg.dn { color: var(--dn); background: var(--dn-dim); }
+.market-card-chg.n  { color: var(--text-muted); background: var(--bg-input); }
+
+/* ── نافذة معلومات الأصل (؟) — صورة ← رافعة ← شرح مختصر ── */
+.asset-info-body { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-2) 0 var(--space-4); }
+.asset-info-img-wrap {
+  width: 96px; height: 96px; border-radius: var(--r-lg); flex-shrink: 0;
+  background: var(--bg-input); border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center; padding: var(--space-3);
+}
+.asset-info-img-wrap img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 10px rgba(0,0,0,.5)); }
+.asset-info-lev {
+  font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: var(--fw-bold);
+  color: var(--ac); background: var(--ac-dim); border: 1.5px solid var(--ac);
+  padding: 6px 18px; border-radius: var(--r-pill); white-space: nowrap;
+}
+.asset-info-desc { font-size: var(--fs-md); color: var(--text-secondary); line-height: var(--lh-loose); text-align: center; padding: 0 4px; }
+
+/* ════════════════════════════════════
+   NAV CONNECT — زر "اتصال" مدمج (حالة + اتصال + قطع اتصال بزر واحد)،
+   يعيش الآن بالـappbar. نفس منطق الألوان بالضبط (أخضر=متصل، أصفر
+   نابض=يحاول، أحمر=منقطع). عند الاتصال، النقر يفتح .addr-popover
+   بدل مودال منفصل مباشرة (راجع أعلاه) — الضغط على "إلغاء الاتصال"
+   بداخله هو ما يفتح modalLogout.
+════════════════════════════════════ */
+.nav-connect-btn {
+  display: flex; align-items: center; justify-content: center;
+  gap: 5px; height: 27px; padding: 0 10px; max-width: 118px;
+  border-radius: var(--r-pill); border: none; outline: none;
+  cursor: pointer; flex-shrink: 0;
+  position: relative; overflow: hidden;
+  transition: transform var(--dur-base) var(--ease-standard);
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-connect-btn:active { transform: scale(.9); }
+.nav-connect-btn .cb-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,.95); flex-shrink: 0;
+  box-shadow: 0 0 4px rgba(255,255,255,.8);
+}
+.nav-connect-btn .cb-lbl {
+  font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.4); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 82px;
+}
+
+.nav-connect-btn.ws-connected {
+  background: linear-gradient(145deg, var(--up-2), color-mix(in srgb, var(--up-2) 75%, black));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--up) 30%, transparent), 0 0 12px color-mix(in srgb, var(--up) 55%, transparent);
+}
+.nav-connect-btn.ws-connected .cb-dot { background: #fff; box-shadow: 0 0 6px #fff; animation: dotPulse 2s ease-in-out infinite; }
+@keyframes dotPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.75)} }
+
+.nav-connect-btn.ws-connecting {
+  background: linear-gradient(145deg, var(--warn), var(--warn-2));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 30%, transparent), 0 0 10px color-mix(in srgb, var(--warn) 55%, transparent);
+  animation: connectPulse 1.4s ease-in-out infinite;
+}
+.nav-connect-btn.ws-connecting .cb-lbl { color: #0f172a; text-shadow: none; }
+.nav-connect-btn.ws-connecting .cb-dot { background: rgba(15,23,42,.7); box-shadow: none; }
+@keyframes connectPulse {
+  0%,100%{ box-shadow:0 0 0 2px color-mix(in srgb, var(--warn) 30%, transparent), 0 0 10px color-mix(in srgb, var(--warn) 55%, transparent); }
+  50%{ box-shadow:0 0 0 4px color-mix(in srgb, var(--warn) 15%, transparent), 0 0 18px color-mix(in srgb, var(--warn) 80%, transparent); }
+}
+
+.nav-connect-btn.ws-disconnected {
+  background: linear-gradient(145deg, var(--dn-2), color-mix(in srgb, var(--dn-2) 75%, black));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dn) 30%, transparent), 0 0 10px color-mix(in srgb, var(--dn) 55%, transparent);
+}
+.nav-connect-btn.ws-disconnected .cb-dot { background: #fff; box-shadow: 0 0 4px rgba(255,255,255,.7); }
+
+/* ════════════════════════════════════
+   DATETIME BAR
+════════════════════════════════════ */
+.datetime-bar {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; padding: 5px var(--space-3);
+  background: var(--bg-elev); border-bottom: 1px solid var(--border);
+  cursor: pointer; flex-shrink: 0; transition: background var(--dur-base) var(--ease-standard); user-select: none;
+}
+.datetime-bar:hover  { background: var(--bg-input); }
+.datetime-bar:active { opacity: .8; }
+.dt-clock { font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text-primary); letter-spacing: .3px; direction: rtl; }
+.dt-hint  { font-size: var(--fs-base); opacity: .55; }
+
+.months-panel {
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  padding: var(--space-3) var(--space-3) 6px; flex-shrink: 0;
+  animation: slideDown var(--dur-base) var(--ease-out); overflow: hidden;
+}
+@keyframes slideDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+.months-panel.hidden { display: none; }
+.months-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; }
+@media (min-width: 480px) { .months-grid { grid-template-columns: repeat(6,1fr); } }
+.month-item {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--r-xs);
+  padding: 6px 4px; text-align: center;
+}
+.m-num  { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--ac); line-height: 1; }
+.m-name { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--text-primary); line-height: 1.2; }
+.m-en   { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-muted); font-weight: var(--fw-bold); }
+
+/* ════════════════════════════════════
+   POSITIONS
+════════════════════════════════════ */
+.positions-card {
+  background: var(--bg-card); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); overflow: hidden;
+  flex-shrink: 0; box-shadow: var(--glow-bdr);
+}
+.positions-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px var(--space-3); border-bottom: 1px solid var(--border);
+  flex-wrap: nowrap; min-height: 38px; overflow: hidden;
+}
+.positions-title { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-secondary); letter-spacing: 1.5px; text-transform: uppercase; white-space: nowrap; }
+.positions-count { background: var(--ac-deep); color: #fff; border-radius: var(--r-pill); padding: 2px 7px; font-size: var(--fs-xs); font-weight: var(--fw-bold); flex-shrink: 0; box-shadow: var(--glow-ac); }
+.positions-pnl { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: var(--fw-black); margin-right: auto; white-space: nowrap; }
+.positions-pnl.pos { color: var(--up); text-shadow: var(--tglow-up); }
+.positions-pnl.neg { color: var(--dn); text-shadow: var(--tglow-dn); }
+.btn-close-all {
+  background: var(--dn-dim); border: 1.5px solid var(--dn);
+  color: var(--dn); border-radius: var(--r-sm);
+  padding: 4px var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  white-space: nowrap; flex-shrink: 0;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+.btn-close-all:hover { background: var(--dn); color: #fff; box-shadow: var(--glow-dn); }
+.btn-close-all.hidden { display: none; }
+.positions-empty { padding: var(--space-5); text-align: center; color: var(--text-secondary); font-size: var(--fs-base); font-weight: var(--fw-bold); }
+
+.position-item { border-bottom: 1px solid var(--border); padding: var(--space-3); display: flex; flex-direction: column; gap: 7px; }
+.pos-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 7px; }
+.pos-name {
+  font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text-primary);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  transition: color var(--dur-base) var(--ease-standard);
+}
+.pos-name:hover { color: var(--ac); }
+.pos-name-hint { font-size: var(--fs-sm); opacity: .55; }
+.pos-dir  { font-size: var(--fs-sm); font-weight: var(--fw-bold); margin-top: 2px; }
+.pos-dir.long  { color: var(--up); } .pos-dir.short { color: var(--dn); }
+.pos-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.pos-pnl  { font-family: var(--font-mono); font-size: var(--fs-2xl); font-weight: var(--fw-black); line-height: 1; }
+.pos-pnl.pos { color: var(--up); text-shadow: var(--tglow-up); }
+.pos-pnl.neg { color: var(--dn); text-shadow: var(--tglow-dn); }
+.pos-size { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-secondary); font-weight: var(--fw-bold); }
+
+.pos-data-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px;
+  background: var(--bg-elev); border-radius: var(--r-sm);
+  padding: 7px; border: 1px solid var(--border);
+}
+.pos-data-item { display: flex; flex-direction: column; gap: 2px; }
+.pos-data-label { font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--text-muted); text-transform: uppercase; letter-spacing: .7px; }
+.pos-data-value { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text-primary); }
+.pos-funding-val { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: var(--fw-bold); }
+.pos-funding-val.pos { color: var(--up); } .pos-funding-val.neg { color: var(--dn); }
+
+.pos-tpsl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.tpsl-btn {
+  border-radius: var(--r-sm); padding: 7px 4px;
+  font-size: var(--fs-sm); font-weight: var(--fw-bold); text-align: center;
+  cursor: pointer; border: 1.5px solid; transition: all var(--dur-base) var(--ease-standard); line-height: 1.3;
+}
+.tpsl-btn span.sub { font-size: var(--fs-2xs); display: block; margin-bottom: 2px; font-weight: var(--fw-bold); }
+.tpsl-btn span.val { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: var(--fw-bold); display: block; }
+.tpsl-btn.tp-set   { background: var(--tp-dim); border-color: var(--tp); color: var(--tp); }
+.tpsl-btn.tp-unset { background: var(--bg-input); border-color: var(--border-strong); color: var(--text-secondary); }
+.tpsl-btn.sl-set   { background: var(--sl-dim); border-color: var(--sl); color: var(--sl); }
+.tpsl-btn.sl-unset { background: var(--bg-input); border-color: var(--border-strong); color: var(--text-secondary); }
+.tpsl-btn:active { transform: scale(.95); }
+
+.pos-actions-row { display: grid; grid-template-columns: 1fr; }
+.btn-pos-close {
+  border: 1.5px solid var(--dn); background: var(--dn-dim);
+  color: var(--dn); border-radius: var(--r-sm);
+  padding: 9px 0; font-size: var(--fs-base); font-weight: var(--fw-bold);
+  text-align: center; transition: all var(--dur-base) var(--ease-standard);
+}
+.btn-pos-close:hover { background: var(--dn); color: #fff; box-shadow: var(--glow-dn); }
+
+/* ════════════════════════════════════
+   MODALS
+════════════════════════════════════ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.88);
+  z-index: var(--z-modal); display: none;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  padding: 0;
+}
+.modal-overlay.open { display: flex; animation: fadeIn var(--dur-base) var(--ease-standard); }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+.modal {
+  background: var(--bg-card); border-radius: 0;
+  width: 100%; height: 100dvh;
+  max-width: 100%; max-height: 100dvh;
+  padding: var(--space-5) var(--space-4) var(--space-7); border: none; box-shadow: none;
+  animation: popIn var(--dur-slow) var(--ease-bounce);
+  overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column;
+}
+@keyframes popIn { from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)} }
+.modal-handle { display: none; }
+
+.modal-title { font-size: var(--fs-3xl); font-weight: var(--fw-bold); margin-bottom: 7px; text-align: center; color: var(--text-primary); flex-shrink: 0; }
+.modal-subtitle { font-size: var(--fs-md); color: var(--text-secondary); margin-bottom: var(--space-4); line-height: var(--lh-base); text-align: center; font-weight: var(--fw-bold); flex-shrink: 0; }
+
+.confirm-details {
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: var(--space-3); margin-bottom: var(--space-3);
+  flex: 1; display: flex; flex-direction: column; gap: 0;
+}
+.confirm-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.confirm-row:last-child { border: none; }
+.confirm-key { font-size: var(--fs-lg); color: var(--text-secondary); font-weight: var(--fw-bold); }
+.confirm-val { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary); }
+.confirm-val.buy   { color: var(--up); text-shadow: var(--tglow-up); }
+.confirm-val.sell  { color: var(--dn); text-shadow: var(--tglow-dn); }
+.confirm-val.warn  { color: var(--warn); }
+.confirm-val.tp    { color: var(--tp); }
+.confirm-val.sl    { color: var(--sl); }
+.confirm-val.muted { color: var(--text-secondary); }
+.confirm-val.fee   { color: var(--warn); font-size: var(--fs-md); }
+
+.confirm-hint {
+  font-size: var(--fs-sm); color: var(--text-muted); font-weight: var(--fw-regular);
+  line-height: var(--lh-base); padding: 0 2px var(--space-2);
+  margin-top: -4px;
+}
+
+.form-group { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); flex-shrink: 0; }
+.form-group label { font-size: var(--fs-base); font-weight: var(--fw-semibold); color: var(--text-secondary); letter-spacing: 1px; text-transform: uppercase; }
+.form-input {
+  width: 100%; font-family: var(--font-mono);
+  font-size: var(--fs-3xl); font-weight: var(--fw-bold); padding: var(--space-4) var(--space-4);
+  direction: ltr; border-radius: var(--r-md);
+}
+.field-hint {
+  display: block; font-size: var(--fs-2xs); font-weight: var(--fw-bold);
+  color: var(--text-muted); line-height: var(--lh-base); margin-top: -2px;
+}
+.form-note {
+  font-size: var(--fs-md); color: var(--text-secondary); line-height: var(--lh-loose);
+  padding: 11px var(--space-3); border-radius: var(--r-sm);
+  background: var(--ac-dim);
+  border: 1px solid color-mix(in srgb, var(--ac) 22%, transparent);
+  margin-bottom: var(--space-3); font-weight: var(--fw-regular); flex-shrink: 0;
+}
+
+.deposit-addr-note {
+  background: var(--bg-input); border: 1.5px solid var(--warn);
+  border-radius: var(--r-sm); padding: var(--space-3);
+  margin-bottom: var(--space-3); flex-shrink: 0;
+}
+.deposit-addr-lbl {
+  display: block; font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  color: var(--warn); line-height: var(--lh-base); margin-bottom: 7px;
+}
+.ag-addr-box {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px; padding: 9px 11px; margin-top: 8px;
+}
+.ag-addr-txt {
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-primary);
+  direction: ltr; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ag-copy-btn {
+  flex-shrink: 0; background: var(--ac-dim); border: 1.5px solid var(--ac);
+  color: var(--ac); border-radius: 8px; width: 30px; height: 30px; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.calc-preview {
+  font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: var(--fw-bold);
+  color: var(--ac); padding: var(--space-3) 14px; border-radius: var(--r-sm);
+  background: var(--ac-dim);
+  border: 1.5px solid color-mix(in srgb, var(--ac) 30%, transparent);
+  min-height: 48px; display: flex; align-items: center;
+}
+.delete-row { margin-top: var(--space-3); flex-shrink: 0; }
+.delete-row.hidden { display: none; }
+.btn-delete-tpsl {
+  border: 1.5px solid var(--dn); color: var(--dn);
+  background: var(--dn-dim); border-radius: var(--r-md);
+  padding: var(--space-4) var(--space-5); font-size: var(--fs-lg); font-weight: var(--fw-bold); width: 100%; text-align: center;
+}
+.modal-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: auto; padding-top: var(--space-4); flex-shrink: 0; }
+.modal-buttons-center { grid-template-columns: 1fr; }
+.btn-modal { padding: var(--space-4); border-radius: var(--r-pill); font-size: var(--fs-xl); font-weight: var(--fw-bold); transition: all var(--dur-base) var(--ease-standard); }
+.btn-cancel { border: 1.5px solid var(--border-strong); background: var(--bg-input); color: var(--text-secondary); }
+.btn-cancel:hover { border-color: var(--text-secondary); }
+.btn-confirm { border: none; color: #fff; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.btn-confirm:active { filter: brightness(.88); transform: scale(.98); }
+.btn-confirm:disabled { opacity: .5; pointer-events: none; }
+.btn-success { background: linear-gradient(135deg, var(--up-2), color-mix(in srgb, var(--up-2) 78%, black)); box-shadow: var(--glow-up), 0 4px 18px rgba(0,0,0,.3); }
+.btn-danger  { background: linear-gradient(135deg, var(--dn-2), color-mix(in srgb, var(--dn-2) 78%, black)); box-shadow: var(--glow-dn), 0 4px 18px rgba(0,0,0,.3); }
+.overlay-fs { align-items: stretch !important; justify-content: stretch !important; padding: 0 !important; }
+.modal-fs   { width: 100% !important; height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; border: none !important; }
+
+/* History */
+.history-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.history-item { border-bottom: 1px solid var(--border); padding: var(--space-3) 14px; display: flex; flex-direction: column; gap: var(--space-2); }
+.history-item:last-child { border-bottom: none; }
+.hist-top { display: flex; justify-content: space-between; align-items: center; gap: 7px; }
+.hist-asset { font-weight: var(--fw-bold); font-size: var(--fs-xl); display: flex; align-items: center; gap: 5px; color: var(--text-primary); }
+.hist-type { font-size: var(--fs-sm); font-weight: var(--fw-bold); padding: 3px 10px; border-radius: var(--r-pill); }
+.hist-type.buy  { background: var(--up-dim); color: var(--up); }
+.hist-type.sell { background: var(--dn-dim); color: var(--dn); }
+.hist-pnl { font-family: var(--font-mono); font-size: var(--fs-2xl); font-weight: var(--fw-black); }
+.hist-pnl.pos  { color: var(--up); } .hist-pnl.neg { color: var(--dn); } .hist-pnl.zero { color: var(--text-secondary); }
+.hist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; background: var(--bg-input); border-radius: var(--r-md); padding: 9px 11px; border: 1px solid var(--border); }
+.hist-cell { display: flex; flex-direction: column; gap: 2px; }
+.hist-lbl { font-size: var(--fs-2xs); color: var(--text-muted); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: .7px; }
+.hist-val { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text-primary); }
+
+/* Loading text — shared by history list AND (formerly) balance modal */
+.balance-loading { text-align: center; padding: 22px; color: var(--text-secondary); font-size: var(--fs-md); font-weight: var(--fw-bold); }
+
+/* Logout */
+.logout-content { text-align: center; padding: 10px 0 8px; }
+.logout-icon { font-size: 42px; margin-bottom: var(--space-3); }
+.logout-text { font-size: var(--fs-md); color: var(--text-secondary); line-height: var(--lh-loose); margin-bottom: var(--space-3); font-weight: var(--fw-bold); }
+
+/* Withdraw */
+.withdraw-fee-warn {
+  background: color-mix(in srgb, var(--dn) 14%, var(--bg-input));
+  border: 1.5px solid var(--dn); border-radius: var(--r-md);
+  color: var(--dn); font-size: var(--fs-md); font-weight: var(--fw-bold);
+  padding: var(--space-3) 14px; margin-bottom: var(--space-4); line-height: var(--lh-loose);
+  text-align: center; flex-shrink: 0;
+}
+.withdraw-fee-warn strong { font-weight: var(--fw-bold); font-size: var(--fs-xl); }
+.withdraw-preview { background: var(--bg-input); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: var(--space-3); margin-bottom: var(--space-3); display: flex; flex-direction: column; flex-shrink: 0; }
+.withdraw-preview.hidden { display: none; }
+.wp-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.wp-row:last-of-type { border: none; }
+.wp-val { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: var(--fw-bold); }
+.wp-val.red   { color: var(--dn); } .wp-val.green { color: var(--up); }
+
+/* TP/SL Breakdown */
+.tpsl-breakdown { display: flex; flex-direction: column; gap: 0; font-size: var(--fs-base); font-weight: var(--fw-bold); }
+.tb-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+.tb-row:last-child { border: none; }
+.tb-net span:first-child { color: var(--text-primary); font-weight: var(--fw-bold); }
+.tb-mono { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: var(--fw-bold); }
+.tb-mono.pos  { color: var(--up); } .tb-mono.neg { color: var(--dn); } .tb-mono.warn { color: var(--warn); }
+
+/* ════════════════════════════════════
+   CORNER STATUS — مؤشر خلفية صغير، زاوية يمين
+════════════════════════════════════ */
+#cornerStatus {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: 10px;
+  z-index: var(--z-toast);
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  padding: 6px 12px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#cornerStatus.show { opacity: 1; transform: translateY(0); }
+
+/* ════════════════════════════════════
+   TOAST
+════════════════════════════════════ */
+#toast {
+  position: fixed; bottom: calc(78px + env(safe-area-inset-bottom)); left: 50%;
+  transform: translateX(-50%) translateY(14px);
+  background: var(--bg-card); border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-pill); padding: 8px var(--space-5);
+  font-size: var(--fs-base); font-weight: var(--fw-bold); z-index: var(--z-toast);
+  opacity: 0; transition: all var(--dur-base) var(--ease-out);
+  pointer-events: none; white-space: nowrap; max-width: 92vw;
+  text-align: center; box-shadow: var(--shadow);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.ok   { border-color: var(--up); color: var(--up); background: color-mix(in srgb,var(--up) 8%,var(--bg-card)); box-shadow: var(--glow-up); }
+#toast.err  { border-color: var(--dn); color: var(--dn); background: color-mix(in srgb,var(--dn) 8%,var(--bg-card)); box-shadow: var(--glow-dn); }
+#toast.info { border-color: var(--ac); color: var(--ac); box-shadow: var(--glow-ac); }
+#toast.warn {
+  border-color: var(--warn); color: var(--warn);
+  background: color-mix(in srgb,var(--warn) 10%,var(--bg-card));
+  box-shadow: 0 0 16px var(--warn-dim);
+  white-space: normal; max-width: min(92vw, 380px); line-height: var(--lh-base);
+}
+
+/* ════════════════════════════════════
+   LOADER — بطاقة صغيرة بزاوية الشاشة، زر "✕" يُخفيها فوراً بدون إلغاء العملية
+════════════════════════════════════ */
+#loader {
+  position: fixed;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  left: 12px;
+  z-index: var(--z-loader);
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  padding: 9px 10px 9px 14px;
+  box-shadow: var(--shadow), var(--glow-bdr);
+  max-width: min(80vw, 300px);
+}
+#loader.active { display: flex; animation: fadeIn var(--dur-fast) var(--ease-standard); }
+.spinner {
+  width: 16px; height: 16px; flex-shrink: 0;
+  border: 2.5px solid var(--border-strong);
+  border-top-color: var(--ac);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader-text {
+  font-size: var(--fs-sm); color: var(--text-secondary); font-weight: var(--fw-bold);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.loader-close {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--bg-input); border: 1px solid var(--border);
+  color: var(--text-muted); font-size: 12px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+.loader-close:hover  { color: var(--dn); border-color: var(--dn); background: var(--dn-dim); }
+.loader-close:active { transform: scale(.85); }
+
+/* ════════════════════════════════════
+   PIN LOCK
+════════════════════════════════════ */
+.lock-screen { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: var(--space-5); color: #fff; }
+.lock-header { text-align: center; margin-bottom: var(--space-8); }
+.lock-icon   { font-size: 44px; margin-bottom: var(--space-2); }
+.lock-title  { font-size: var(--fs-3xl); font-weight: var(--fw-bold); margin-bottom: 4px; }
+.lock-subtitle { font-size: var(--fs-base); opacity: .7; }
+.pin-dots { display: flex; gap: 18px; margin-bottom: var(--space-9); }
+.dot { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.5); border-radius: 50%; transition: all var(--dur-base) var(--ease-standard); }
+.dot.filled { background: var(--up); border-color: var(--up); transform: scale(1.2); box-shadow: 0 0 14px var(--up), 0 0 28px color-mix(in srgb, var(--up) 40%, transparent); }
+.pin-dots.shake { animation: shake .4s; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 50%{transform:translateX(10px)} 75%{transform:translateX(-10px)} }
+.numpad { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; width: 100%; max-width: 270px; margin-bottom: var(--space-8); }
+.num-btn { width: 68px; height: 68px; border-radius: 50%; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.14); font-size: var(--fs-3xl); font-weight: var(--fw-bold); display: flex; align-items: center; justify-content: center; color: #fff; transition: background var(--dur-base) var(--ease-standard); }
+.num-btn:active { background: rgba(255,255,255,.30); }
+.num-empty { background: transparent !important; border: none !important; pointer-events: none; }
+.num-del   { background: transparent !important; border: none !important; font-size: var(--fs-2xl); }
+.lock-footer { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); width: 100%; }
+.lock-logout-btn { color: var(--dn); font-size: var(--fs-base); text-decoration: underline; font-weight: var(--fw-semibold); }
+.lock-cancel-btn { color: rgba(255,255,255,.6); font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.lock-cancel-btn.hidden { display: none; }
+
+/* ════════════════════════════════════
+   PERFORMANCE HINTS
+════════════════════════════════════ */
+.position-item, .positions-card, .nav-connect-btn, .modal,
+.balance-card, .market-card, .dock-scroll, .app-screen {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+.pos-pnl { contain: layout style paint; }
+
+/* ════════════════════════════════════
+   DESKTOP BREAKPOINTS — تركيز التصميم على الموبايل؛ هنا فقط نمنع
+   تمدد المحتوى لعرض غير معقول على شاشات كبيرة (appbar/tabbar يبقيان
+   كامل العرض — نمط شائع بتطبيقات الويب التقدمية).
+════════════════════════════════════ */
+@media (min-width: 640px) {
+  .modal { max-width: 480px; max-height: 90dvh; border-radius: var(--r-xl); margin: auto; height: auto; }
+  .modal-overlay { padding: var(--space-5); }
+  .overlay-fs .modal { max-width: 100%; max-height: 100dvh; border-radius: 0; margin: 0; height: 100dvh; }
+  .dock.expanded .dock-scroll { width: 260px; }
+  .nav-connect-btn { height: 30px; max-width: 140px; }
+  #loader { left: 20px; bottom: max(24px, env(safe-area-inset-bottom)); }
+
+  .screen-scroll, .markets-list { max-width: 520px; margin: 0 auto; width: 100%; }
+  .appbar-brand-ar { font-size: var(--fs-2xl); }
+}
+@media (min-width: 900px) {
+  .nav-connect-btn .cb-lbl { max-width: 100px; }
+}
+
+} /* @layer components */

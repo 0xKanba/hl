@@ -1,0 +1,229 @@
+/* ═══════════════════════════════════════════════════════════════
+   oc.css — واجهة أسواق التوقعات (فوق base/themes/components المنسوخة)
+
+   يستعمل نفس متغيرات الثيم الأصلية (--bg, --card, --text, --green…)
+   فلا يكسر تبديل المظهر الداكن/الفاتح إطلاقاً.
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --oc-yes: var(--green, #16c784);
+  --oc-no:  var(--red, #ea3943);
+  --oc-gap: 12px;
+}
+
+/* ════ الهيكل ════ */
+.oc-wrap { max-width: 980px; margin: 0 auto; padding: 8px 12px 96px; }
+
+.oc-appbar {
+  position: sticky; top: 0; z-index: 90;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; background: var(--bg, #0b0e11);
+  border-bottom: 1px solid var(--border, rgba(255,255,255,.08));
+}
+.oc-brand { font-weight: 800; font-size: 16px; margin-inline-end: auto; }
+.oc-brand small { display: block; font-weight: 500; font-size: 11px; opacity: .6; }
+.oc-ico-btn {
+  background: var(--card, #151a21); color: var(--text, #eaeef3);
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+  border-radius: 12px; width: 38px; height: 38px; font-size: 16px; cursor: pointer;
+}
+.oc-ico-btn:active { transform: scale(.94); }
+
+/* ════ شريط الرصيد ════ */
+.oc-bal { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 12px 0; }
+.oc-bal > div {
+  background: var(--card, #151a21); border: 1px solid var(--border, rgba(255,255,255,.07));
+  border-radius: 14px; padding: 10px; text-align: center;
+}
+.oc-bal span { display: block; font-size: 11px; opacity: .62; margin-bottom: 4px; }
+.oc-bal b { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+/* ════ البحث والتصنيفات ════ */
+.oc-tools { display: flex; gap: 8px; margin-bottom: 10px; }
+.oc-input, .oc-select {
+  background: var(--card, #151a21); color: var(--text, #eaeef3);
+  border: 1px solid var(--border, rgba(255,255,255,.1));
+  border-radius: 12px; padding: 11px 13px; font: inherit; font-size: 14px;
+}
+.oc-input { flex: 1; }
+.oc-cats { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+.oc-cats::-webkit-scrollbar { display: none; }
+.oc-cat {
+  flex: 0 0 auto; background: var(--card, #151a21); color: var(--text, #eaeef3);
+  border: 1px solid var(--border, rgba(255,255,255,.1)); border-radius: 999px;
+  padding: 8px 14px; font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.oc-cat.active { background: var(--accent, #2f81f7); border-color: transparent; color: #fff; font-weight: 700; }
+.oc-cat-i { margin-inline-end: 4px; }
+
+.oc-count { font-size: 12px; opacity: .6; margin: 4px 2px 8px; }
+
+/* ════ بطاقات الأسواق ════ */
+.oc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr)); gap: var(--oc-gap); }
+.oc-card {
+  background: var(--card, #151a21); border: 1px solid var(--border, rgba(255,255,255,.07));
+  border-radius: 18px; padding: 14px; cursor: pointer; transition: transform .12s, border-color .12s;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.oc-card:hover { transform: translateY(-2px); border-color: var(--accent, #2f81f7); }
+.oc-card-head { display: flex; align-items: center; gap: 6px; }
+.oc-chip {
+  font-size: 11px; padding: 4px 9px; border-radius: 999px;
+  background: rgba(127,127,127,.14); opacity: .9;
+}
+.oc-chip.time { color: var(--accent, #2f81f7); }
+.oc-chip.time.over { color: var(--oc-no); }
+.oc-fav { margin-inline-start: auto; background: none; border: 0; color: #666; font-size: 17px; cursor: pointer; }
+.oc-fav.on { color: #f0b90b; }
+.oc-card-title { font-size: 15px; font-weight: 700; line-height: 1.45; margin: 0; }
+.oc-card-sub { font-size: 12px; opacity: .58; margin: 0; }
+.oc-card-foot { font-size: 11px; opacity: .45; margin-top: auto; }
+
+.oc-card-yn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.oc-yn {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border-radius: 12px; font-size: 13px;
+}
+.oc-yn.yes { background: color-mix(in srgb, var(--oc-yes) 15%, transparent); color: var(--oc-yes); }
+.oc-yn.no  { background: color-mix(in srgb, var(--oc-no) 15%, transparent);  color: var(--oc-no); }
+.oc-yn b { font-size: 15px; font-variant-numeric: tabular-nums; }
+
+.oc-card-rows { display: flex; flex-direction: column; gap: 7px; }
+.oc-card-row { display: grid; grid-template-columns: 1fr 70px 44px; align-items: center; gap: 8px; font-size: 12.5px; }
+.oc-cr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oc-cr-bar { background: rgba(127,127,127,.18); height: 6px; border-radius: 4px; overflow: hidden; }
+.oc-cr-bar i { display: block; height: 100%; background: var(--accent, #2f81f7); }
+.oc-cr-px { text-align: end; font-variant-numeric: tabular-nums; font-weight: 700; }
+.oc-card-more { font-size: 11px; opacity: .5; }
+
+.oc-skel { height: 140px; border-radius: 18px; background: linear-gradient(90deg, rgba(127,127,127,.08), rgba(127,127,127,.18), rgba(127,127,127,.08)); background-size: 200% 100%; animation: ocSk 1.2s infinite; }
+@keyframes ocSk { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.oc-empty { grid-column: 1/-1; text-align: center; padding: 28px 12px; opacity: .6; font-size: 13.5px; }
+.oc-btn-mini { display: block; margin: 12px auto 0; background: var(--accent, #2f81f7); color: #fff; border: 0; border-radius: 10px; padding: 9px 16px; cursor: pointer; }
+.oc-btn-wide { width: 100%; margin-top: 14px; background: var(--card, #151a21); color: var(--text, #eaeef3); border: 1px solid var(--border, rgba(255,255,255,.1)); border-radius: 12px; padding: 12px; cursor: pointer; }
+
+/* ════ شاشة السوق ════ */
+.oc-mkt-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.oc-mkt-head h2 { font-size: 17px; margin: 0 0 4px; line-height: 1.45; }
+.oc-mkt-meta { font-size: 11.5px; opacity: .55; display: flex; gap: 10px; flex-wrap: wrap; }
+.oc-h4 { font-size: 13px; opacity: .65; margin: 18px 0 8px; }
+
+.oc-ochips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 6px; }
+.oc-ochip {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  background: var(--card, #151a21); border: 1px solid var(--border, rgba(255,255,255,.1));
+  border-radius: 12px; padding: 9px 13px; color: var(--text, #eaeef3); cursor: pointer; font-size: 12.5px;
+}
+.oc-ochip.active { border-color: var(--accent, #2f81f7); box-shadow: 0 0 0 1px var(--accent, #2f81f7) inset; }
+.oc-ochip b { font-size: 14px; }
+
+.oc-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.oc-side {
+  display: flex; flex-direction: column; gap: 3px; align-items: center;
+  padding: 14px 10px; border-radius: 16px; cursor: pointer;
+  border: 1.5px solid transparent; background: var(--card, #151a21); color: var(--text, #eaeef3);
+}
+.oc-side.yes { background: color-mix(in srgb, var(--oc-yes) 10%, var(--card, #151a21)); }
+.oc-side.no  { background: color-mix(in srgb, var(--oc-no) 10%, var(--card, #151a21)); }
+.oc-side.yes.active { border-color: var(--oc-yes); }
+.oc-side.no.active  { border-color: var(--oc-no); }
+.oc-side-name { font-weight: 700; font-size: 14px; }
+.oc-side-px { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.oc-side.yes .oc-side-px { color: var(--oc-yes); }
+.oc-side.no  .oc-side-px { color: var(--oc-no); }
+.oc-side-sub, .oc-side-held { font-size: 10.5px; opacity: .6; }
+
+/* ════ دفتر الأوامر ════ */
+.oc-two { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--oc-gap); }
+@media (max-width: 720px) { .oc-two { grid-template-columns: 1fr; } }
+.oc-panel { background: var(--card, #151a21); border: 1px solid var(--border, rgba(255,255,255,.07)); border-radius: 16px; padding: 12px; }
+.oc-panel-t { font-size: 12px; opacity: .6; margin-bottom: 8px; display: flex; justify-content: space-between; }
+
+.oc-book-row, .oc-trade-row {
+  position: relative; display: grid; align-items: center; font-size: 12px;
+  padding: 5px 8px; border-radius: 7px; font-variant-numeric: tabular-nums;
+}
+.oc-book-row { grid-template-columns: 1fr 1fr 1fr; }
+.oc-bk-bar { position: absolute; inset-inline-start: 0; top: 0; bottom: 0; border-radius: 7px; opacity: .13; }
+.oc-book-row.ask .oc-bk-bar { background: var(--oc-no); }
+.oc-book-row.bid .oc-bk-bar { background: var(--oc-yes); }
+.oc-book-row.ask .oc-bk-px { color: var(--oc-no); }
+.oc-book-row.bid .oc-bk-px { color: var(--oc-yes); }
+.oc-bk-sz, .oc-bk-usd { text-align: center; opacity: .8; }
+.oc-bk-usd { text-align: end; opacity: .55; }
+.oc-book-mid { display: flex; justify-content: space-between; padding: 7px 8px; margin: 4px 0; font-size: 12.5px; border-block: 1px dashed var(--border, rgba(255,255,255,.12)); }
+.oc-bm-mid { font-weight: 800; }
+.oc-bm-sp { opacity: .5; }
+
+.oc-trade-row { grid-template-columns: 1fr 1fr 1fr; }
+.oc-trade-row.buy  .oc-tr-px { color: var(--oc-yes); }
+.oc-trade-row.sell .oc-tr-px { color: var(--oc-no); }
+.oc-tr-sz { text-align: center; opacity: .8; }
+.oc-tr-t { text-align: end; opacity: .45; font-size: 11px; }
+
+/* ════ التذكرة ════ */
+.oc-ticket { margin-top: var(--oc-gap); }
+.oc-seg { display: grid; grid-auto-flow: column; gap: 6px; background: rgba(127,127,127,.12); border-radius: 12px; padding: 4px; margin-bottom: 10px; }
+.oc-seg button { background: none; border: 0; color: var(--text, #eaeef3); padding: 9px; border-radius: 9px; cursor: pointer; font: inherit; font-size: 13px; }
+.oc-seg button.active { background: var(--card, #151a21); font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.oc-seg button[data-dir="buy"].active  { color: var(--oc-yes); }
+.oc-seg button[data-dir="sell"].active { color: var(--oc-no); }
+
+.oc-field { margin-bottom: 10px; }
+.oc-field label { display: flex; justify-content: space-between; font-size: 11.5px; opacity: .65; margin-bottom: 5px; }
+.oc-field .oc-input { width: 100%; box-sizing: border-box; }
+.oc-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+.oc-quick button { background: rgba(127,127,127,.12); border: 0; color: var(--text, #eaeef3); border-radius: 9px; padding: 8px; font-size: 12px; cursor: pointer; }
+
+.oc-sum { background: rgba(127,127,127,.08); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.oc-sum-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; }
+.oc-sum-row.win b  { color: var(--oc-yes); }
+.oc-sum-row.loss b { color: var(--oc-no); }
+.oc-sum-hint { font-size: 12px; opacity: .55; text-align: center; }
+
+.oc-submit { width: 100%; border: 0; border-radius: 14px; padding: 15px; font: inherit; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; }
+.oc-submit.buy  { background: var(--oc-yes); }
+.oc-submit.sell { background: var(--oc-no); }
+.oc-submit.blocked { background: rgba(127,127,127,.3); color: var(--text, #eaeef3); font-weight: 600; font-size: 13px; }
+
+/* ════ المحفظة ════ */
+.oc-pf-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.oc-pf-card { background: var(--card, #151a21); border: 1px solid var(--border, rgba(255,255,255,.07)); border-radius: 14px; padding: 12px; }
+.oc-pf-card span { display: block; font-size: 11px; opacity: .6; margin-bottom: 4px; }
+.oc-pf-card b { font-size: 16px; }
+.oc-pos, .oc-ord, .oc-fill-row { background: var(--card, #151a21); border: 1px solid var(--border, rgba(255,255,255,.07)); border-radius: 14px; padding: 11px 13px; margin-bottom: 8px; cursor: pointer; }
+.oc-pos-top, .oc-ord-top, .oc-fill-main { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.oc-pos-sub, .oc-ord-sub, .oc-fill-sub { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; opacity: .6; margin-top: 5px; flex-wrap: wrap; }
+.oc-ord-dir.buy, .oc-fill-dir.buy  { color: var(--oc-yes); }
+.oc-ord-dir.sell, .oc-fill-dir.sell { color: var(--oc-no); }
+.oc-cancel { background: color-mix(in srgb, var(--oc-no) 18%, transparent); color: var(--oc-no); border: 0; border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 12px; }
+.oc-pos-name, .oc-ord-name, .oc-fill-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ════ الشريط السفلي ════ */
+.oc-tabbar {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 95;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  background: var(--bg, #0b0e11); border-top: 1px solid var(--border, rgba(255,255,255,.08));
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+}
+.oc-tab { background: none; border: 0; color: var(--text, #eaeef3); opacity: .5; font: inherit; font-size: 11px; padding: 7px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; align-items: center; }
+.oc-tab i { font-size: 17px; font-style: normal; }
+.oc-tab.active { opacity: 1; color: var(--accent, #2f81f7); font-weight: 700; }
+
+/* ════ الدرج ════ */
+#ocDock {
+  position: fixed; inset: 0; z-index: 400; display: none;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(3px);
+}
+#ocDock.open { display: block; }
+#ocDock .oc-dock-panel {
+  position: absolute; inset-inline-end: 0; top: 0; bottom: 0; width: min(310px, 86vw);
+  background: var(--card, #151a21); border-inline-start: 1px solid var(--border, rgba(255,255,255,.1));
+  padding: 18px 14px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto;
+}
+.oc-dock-item { display: flex; align-items: center; gap: 10px; background: rgba(127,127,127,.09); border: 0; color: var(--text, #eaeef3); border-radius: 12px; padding: 13px 14px; font: inherit; font-size: 14px; cursor: pointer; text-align: start; }
+.oc-dock-item:active { transform: scale(.98); }
+.oc-dock-t { font-size: 12px; opacity: .5; margin: 10px 4px 2px; }
+
+.hidden { display: none !important; }
+.oc-cats{overflow-x:auto;flex-wrap:nowrap}
