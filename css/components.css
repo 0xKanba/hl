@@ -1,88 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════
    components.css — ماركت ليك (Market Leak) · Component Library
-   Every rule here consumes tokens from base.css / themes.css.
-   No color literals, no [data-theme] blocks — theme-agnostic by design.
+   كل قاعدة هنا تستهلك متغيّرات base.css / themes.css — لا ألوان حرفية،
+   لا كتل [data-theme] — محايد للمظهر بالتصميم.
 
-   ✅ إعادة هيكلة UI/UX (2026-08) — بنية تطبيق أصلي بالكامل:
-      .nav (top bar) → .appbar (☰ + عنوان + اتصال)
-      .footer (رسم/خيارات) → .tabbar سفلي 3 أزرار (رسم|رئيسية|أسواق)
-      .opts-overlay (قائمة منبثقة وسط الشاشة) → .drawer ينزلق من اليمين
-      .main (عمودين) → .screens-viewport بشاشتين (رئيسية/أسواق) +
-      أنيميشن دخول لكل شاشة (fade+lift خفيف، لا سحب أفقي — يطابق نمط
-      تبديل التابات بالتطبيقات الأصلية أكثر من الدفع الأفقي المحجوز
-      عادة للتنقل الهرمي/التفصيلي).
-      .balance-grid/.balance-item/.balance-value (كانت داخل modalBalance
-      المحذوفة) → .balance-card بطاقة دائمة أعلى الرئيسية.
-      جديد كلياً: .market-card لشاشة الأسواق.
-      .balance-loading أُبقيت (تُستخدم أيضاً بمودال التأريخ).
-      كل الأنيميشن الجديدة GPU-friendly (transform/opacity فقط)، بمدد
-      قصيرة (180-320ms) وeasing متسق مع --ease-out/--ease-bounce
-      الموجودين أصلاً بـbase.css — لا مكتبات خارجية.
+   تاريخ الهيكلة (مختصر):
+   • بنية تطبيق أصلي: .appbar (☰ + علامة + اتصال) · .tabbar سفلي 3 أزرار
+     (رسم|رئيسية|أسواق) · .screens-viewport بثلاث شاشات (الرسم شاشة
+     ثالثة عادية) · .balance-card دائمة أعلى الرئيسية · .market-card
+     لشاشة الأسواق مع نافذة معلومات الأصل (؟) · .addr-popover لعنوان الحساب.
+   • .dock عنصر flex حقيقي داخل .content-row (لا position:fixed ولا
+     transform للموضع إطلاقاً — فئة الخطأ القديمة أُزيلت بالكامل): الصندوق
+     الخارجي 52px ثابت، والداخلي #dockScroll يتمدّد طافياً عند .expanded.
+   • شاشة الرئيسية = شريط "فتح صفقة جديدة" (.om-bar بـcss/order.css) +
+     بطاقة الرصيد + الصفقات المفتوحة فقط. حُذفت بالكامل مجموعات تابات
+     الأصول/بطاقة السعر/لوحة شراء-بيع القديمة وبانر الضيف.
 
-   ✅ جولة ثانية (2026-08) — رأس/تذييل موحّدان بالثلاث شاشات (راجع
-      index.html للشرح الكامل):
-      - .appbar-menu-btn → .appbar-icon-btn (مشترك بين ☰ و🔒 الآن)
-      - .appbar-title (عنوان شاشة ديناميكي) → .appbar-brand (اسم ثابت)
-      - جديد: .addr-popover (نافذة صغيرة عند نقر عنوان الحساب بالرأس)
-      - .chart-screen (overlay منفصل كامل الشاشة) حُذفت بالكامل —
-        الرسم البياني الآن .app-screen عادية (نفس home/markets)
-      - .drawer-close-btn وdrawer-account-card حُذفتا (لا حاجة لهما،
-        راجع index.html)؛ .drawer بلا transition (فوري)؛ جديد
-        .drawer-theme-toggle (شعاران ثابتان أسفل الدرج)
-      - .nav-address/.nav-address-wrap/.nav-copy-btn حُذفت (كانت حصراً
-        لبطاقة العنوان المحذوفة من الدرج؛ popover الرأس يعيد استخدام
-        .ag-addr-box/.ag-addr-txt/.ag-copy-btn الموجودة أصلاً)
-
-   ✅ جولة ثالثة (2026-08) — إعادة تصميم بطاقات شاشة الأسواق: حذف
-      .market-card-sub (سطر الرمز/الرافعة تحت الاسم — الرافعة انتقلت
-      لنافذة معلومات الأصل الجديدة)، اسم/صورة/سعر أكبر بوضوح، صف اسم
-      جديد (.market-card-name-row) يضم زر "؟" (.market-info-btn) لكل
-      بطاقة، وقواعد جديدة لنافذة معلومات الأصل (.asset-info-*).
-
-   ✅ جولة رابعة (2026-08) — الدرج الجانبي (.drawer-overlay/.drawer)
-      حُذف بالكامل واستُبدل بـ.dock: عمود أيقونات دائم الظهور يمين
-      الشاشة، يتمدّد فقط لعرض العناوين عند فتح ☰. نفس الأزرار بالضبط
-      بحالتَي الطي/التمدد (لا عنصر مكرَّر)، فكل زر يعمل بنقرة مباشرة
-      على أيقونته بصرف النظر عن حالة التمدد. .drawer-theme-toggle
-      (زرَّان ☀️/🌙 منفصلان) حُذف أيضاً — استُبدل بزر واحد ضمن قائمة
-      .dock-item نفسها (.dock-item#dockTheme)، أيقونته وعنوانه يعكسان
-      المظهر الحالي فعلياً (راجع app.js:_syncThemeToggleUI).
-
-   ✅ جولة خامسة (2026-09) — FIX جذري لخطأ موضع بصري: النسخة الأولى
-      من .dock كانت position:fixed عائمة بمنتصف الشاشة (top:50% +
-      transform:translateY(-50%))، وتصادمت مع قاعدة أداء عامة لاحقة
-      بهذا الملف (transform:translateZ(0) على نفس الخاصية transform)
-      فألغت التوسيط صمتاً — ظهر الدوك منزاحاً للأسفل بدل المنتصف. الحل
-      ليس ترقيع القيمة بل إزالة فئة الخطأ بالكامل: .dock الآن عنصر flex
-      حقيقي (لا position:fixed، لا transform للموضع إطلاقاً) داخل
-      .content-row الجديد (صف أفقي يضم #dock + .screens-viewport، يملأ
-      كل الارتفاع المتبقي بين الرأس والتذييل عبر flex:1 عادي) — "عمود
-      كامل" فعلياً بارتفاع منطقة المحتوى، مُشتق من التخطيط نفسه فيعمل
-      بنفس الدقة بأي حجم/اتجاه شاشة (موبايل/سطح مكتب، عمودي/أفقي) بلا
-      أي حساب بكسلات هش. عرض #dock الخارجي (52px) لا يتغيّر أبداً —
-      التمدد يحدث فقط بـ#dockScroll الداخلي (position:absolute نسبةً
-      لـ#dock، يفيض بصرياً فوق .screens-viewport بلا حجبها/تربيعها)،
-      فلا اهتزاز تخطيط عند كل نقرة ☰. .dock-backdrop حُذف بالكامل —
-      لم يعد ضرورياً بما أن التمدد لم يعد يغطّي كامل الشاشة (راجع
-      app.js:_initDock لمنطق الإغلاق بالنقر خارج الدوك البديل الآن).
-
-   ✅ جولة سادسة (منصة "فتح صفقة جديدة") — شاشة الرئيسية تبسّطت لبطاقة
-      رصيد + بطاقة صفقات فقط، فحُذف من هذا الملف كل ما كان حصرياً
-      لعناصرها المحذوفة من index.html: قسم ASSET TABS بالكامل
-      (.tabs/.tab/.tab-left/.tab-img/.tab-right/.tab-price)، قسم
-      PRICE CARD بالكامل (.price-card → .price-timer)، وقسم TRADE PANEL
-      بالكامل (.trade-panel/.qty-* , .trade-buttons/.btn-trade/.btn-buy/
-      .btn-sell/.btn-label/.btn-price) — مع تنظيف إشاراتها من قسم
-      PERFORMANCE HINTS ومن نقاط توقّف الديسكتوب. أُضيف بدلاً منها
-      لا شيء — الشريط الوحيد (.om-bar) وكامل شاشة التداول يعيشان
-      بـcss/order.css (ملف تنسيق حقيقي، لا حقن من JS)، ويُبنيان من
-      js/order/bar.js وjs/order/ui.js. راجع رأس css/order.css.
+   ✅ الجولة السابعة — هيكلان منفصلان حقاً (راجع القسم قبل الأخير):
+     < 900px موبايل: كثافة مضغوطة أنيقة (حشو/تباعد أصغر، الأرقام المهمة
+        لم تُمسّ)، تابّبار سفلي، دوك رفّ عائم، شاشة واحدة بالمرّة.
+     ≥ 900px سطح مكتب: دوك = شريط جانبي دائم يحجز مساحة حقيقية، التابّبار
+        و☰ يختفيان، عمود محتوى أوسع (1180px)، شبكات متجاوبة للأسواق
+        والصفقات، بطاقة الرصيد بعرض أقصى ذاتي.
 ════════════════════════════════════════════════════════════════ */
 
 @layer components {
 
 /* ════════════════════════════════════
-   SCREENS (login legacy container — still used by #loginScreen)
+   SCREENS (حاوية قديمة — ما زالت تُستخدم بـ#loginScreen)
 ════════════════════════════════════ */
 .screen {
   position: fixed; inset: 0;
@@ -95,7 +39,7 @@
 .screen.hidden { display: none !important; }
 
 /* ════════════════════════════════════
-   LOGIN (inert today — kept intact, zero risk)
+   LOGIN
 ════════════════════════════════════ */
 #loginScreen {
   align-items: center; justify-content: center;
@@ -183,7 +127,7 @@
 .find-wallet-btn:active { transform: scale(.95); }
 
 /* ════════════════════════════════════
-   ✅ APP SHELL — الحاوية الجذرية الجديدة (بديل .screen على #appScreen)
+   APP SHELL
 ════════════════════════════════════ */
 .app-shell {
   position: fixed; inset: 0;
@@ -197,13 +141,15 @@
 .app-shell.hidden { display: none !important; }
 
 /* ════════════════════════════════════
-   ✅ APPBAR — ثابت أعلى الشاشة: [☰ هامبرغر][🔒 قفل] | ماركت ليك | عنوان/اتصال
+   APPBAR — [☰][🔒] | ماركت ليك | عنوان/اتصال
+   حشو مُصغَّر افتراضياً (موبايل مضغوط أنيق)، يتّسع عند 900px+. ☰ يختفي
+   عند 900px+ فقط — الدوك هناك شريط دائم فيفقد الزر وظيفته.
 ════════════════════════════════════ */
 .appbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  padding-top: max(var(--space-2), env(safe-area-inset-top));
+  padding: 6px var(--space-3);
+  padding-top: max(6px, env(safe-area-inset-top));
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
@@ -213,7 +159,7 @@
 .appbar-right { position: relative; }
 
 .appbar-icon-btn {
-  width: 36px; height: 36px; border-radius: var(--r-sm);
+  width: 33px; height: 33px; border-radius: var(--r-sm);
   background: var(--bg-elev); border: 1.5px solid var(--border-strong);
   display: flex; align-items: center; justify-content: center;
   font-size: var(--fs-lg); flex-shrink: 0;
@@ -240,8 +186,7 @@
 }
 
 /* ════════════════════════════════════
-   ✅ ADDRESS POPOVER — عند نقر زر الحساب المتصل بالـappbar
-   (ضيف غير متصل: btnConnect يفتح modalLogin مباشرة، بلا popover)
+   ADDRESS POPOVER — عند نقر زر الحساب المتصل (ضيف: modalLogin مباشرة)
 ════════════════════════════════════ */
 .addr-popover {
   position: absolute; top: calc(100% + 8px); left: 0;
@@ -283,15 +228,15 @@
 .screen-scroll {
   flex: 1; min-height: 0; overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: var(--space-3) 8px calc(var(--space-6) + 4px);
-  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-2) 8px calc(var(--space-5) + 4px);
+  display: flex; flex-direction: column; gap: var(--space-2);
 }
 
 /* ════════════════════════════════════
-   ✅ TABBAR سفلي — 3 أزرار فقط (رسم | رئيسية | أسواق)
-   ترتيب DOM [رسم، رئيسية، أسواق] + dir="rtl" الافتراضي على <html>
-   → يمين=رسم، وسط=رئيسية، يسار=أسواق، بلا أي row-reverse.
-   ثابت الآن على الشاشات الثلاث كلها (بما فيها الرسم البياني).
+   TABBAR سفلي — 3 أزرار (رسم | رئيسية | أسواق). ترتيب DOM + dir="rtl"
+   → يمين=رسم، وسط=رئيسية، يسار=أسواق. **حصراً لموبايل**: عند 900px+
+   يختفي كلياً (الدوك شريط جانبي دائم يضم نفس الوجهات — شريطان للتنقل
+   لنفس الوجهات تكرار لا يخدم شيئاً على سطح المكتب).
 ════════════════════════════════════ */
 .tabbar {
   display: flex; align-items: stretch;
@@ -321,11 +266,8 @@
 .tab-btn:active .tab-btn-icon-wrap { transform: scale(.86); }
 
 /* ════════════════════════════════════
-   ✅ CONTENT ROW — صف flex أفقي يضم #dock + .screens-viewport معاً،
-   يملأ كل الارتفاع المتبقي بين الرأس (appbar/datetime-bar/months-panel)
-   والتذييل (tabbar) عبر flex:1 العادي — لا أي position:fixed ولا حساب
-   بكسلات. هذا وحده هو ما يجعل #dock "عموداً كاملاً" فعلياً بأي حجم/
-   اتجاه شاشة: ارتفاعه مُشتق من التخطيط نفسه، لا من قيمة مفترَضة.
+   CONTENT ROW — صف flex يضم #dock + .screens-viewport، يملأ الارتفاع
+   المتبقي بين الرأس والتذييل عبر flex:1 (لا حساب بكسلات هش).
 ════════════════════════════════════ */
 .content-row {
   flex: 1; min-height: 0;
@@ -334,34 +276,15 @@
 }
 
 /* ════════════════════════════════════
-   ✅ DOCK — عمود أيقونات دائم الظهور، يحل محل .drawer-overlay/.drawer
-   القديم بالكامل، وأيضاً بديل نسخة سابقة كانت position:fixed عائمة
-   بمنتصف الشاشة (top:50%+transform:translateY(-50%)) — تلك تصادمت مع
-   قاعدة أداء عامة لاحقة بهذا الملف (transform:translateZ(0) على نفس
-   الخاصية transform)، فألغت التوسيط ٍصمتاً وظهر الدوك منزاحاً للأسفل.
-
-   ⚠️ FIX جذري — القرار المعماري الجديد يزيل فئة الخطأ هذه بالكامل بدل
-   ترقيعها: #dock لم يعد يستخدم position:fixed ولا transform للموضع
-   إطلاقاً. هو الآن عنصر flex حقيقي داخل .content-row (أول عنصر بترتيب
-   DOM ← يمين الشاشة بحكم RTL، نفس جهة زر ☰ بالـappbar تماماً كالسابق):
-
-     • #dock (الصندوق الخارجي): عرضه 52px ثابت لا يتغيّر أبداً مهما
-       حدث — هذا ما يضمن "الأيقونات ثابتة، تعمل وتظهر دائماً" بلا أي
-       قفزة/إعادة تخطيط لبقية الشاشة عند التمدد. ارتفاعه يملأ ارتفاع
-       .content-row تلقائياً (align-items:stretch الافتراضي بصف flex)
-       — أي بأي حجم شاشة أو اتجاه (عمودي/أفقي، موبايل/سطح مكتب) بلا
-       أي كود إضافي.
-     • #dockScroll (الصندوق الداخلي، نفس الأزرار): position:absolute
-       نسبةً لـ#dock نفسه — بحالته الافتراضية يملأ نفس الـ52px بالضبط
-       (أيقونات فقط). عند .expanded يتمدّد عرضه فقط (52px ← ~220px)
-       ويفيض بصرياً فوق .screens-viewport كطبقة عائمة خفيفة (ظل + حواف
-       مستديرة)، بلا حجب/تربيع أي محتوى وبلا خلفية معتمة كاملة الشاشة —
-       .screens-viewport لا تُعاد قياساتها إطلاقاً (#dock نفسه لا يتغيّر
-       حجمه)، فلا اهتزاز تخطيط عند كل نقرة ☰.
-
-   كل .dock-item له onclick واحد يعمل بصرف النظر تماماً عن .expanded —
-   "الأزرار تعمل سواء فُتحت اللوحة أو لا" لأن الزر نفسه (لا نسخة أخرى
-   منه) هو ما يُنقر عليه بالحالتين، بكل الشاشات وكل الاتجاهات.
+   DOCK — عمود أيقونات دائم الظهور (أول عنصر بالـDOM ← يمين الشاشة بحكم RTL)
+     • #dock الخارجي: عرضه 52px ثابت (لا قفزة تخطيط عند التمدد).
+     • #dockScroll الداخلي: position:absolute نسبةً لـ#dock؛ عند .expanded
+       يتمدّد عرضه فقط ويفيض طافياً فوق .screens-viewport بلا حجب.
+   كل .dock-item له onclick واحد يعمل بصرف النظر عن .expanded.
+   هذا القسم (الأساس + التمدد الطافي) بلا تغيير للموبايل — النمط الصحيح
+   هناك: التنقل الأساسي بالتابّبار (منطقة الإبهام) والدوك لإجراءات ثانوية.
+   .dock-item.active يُدار من app.js:_syncNavActive — ضروري لسطح المكتب
+   (الدوك هو التنقل الوحيد المرئي هناك).
 ════════════════════════════════════ */
 .dock {
   position: relative;
@@ -390,15 +313,21 @@
 
 .dock-item {
   display: flex; align-items: center;
-  width: 100%; padding: 10px 13px;
+  width: 100%; padding: 9px 13px;
   background: none; border: none; text-decoration: none;
   color: var(--text-primary); cursor: pointer;
   white-space: nowrap; overflow: hidden; flex-shrink: 0;
+  position: relative;
   transition: background var(--dur-fast) var(--ease-standard);
   -webkit-tap-highlight-color: transparent;
 }
 .dock-item:hover  { background: var(--bg-elev); }
 .dock-item:active { background: var(--ac-dim); }
+.dock-item.active { background: var(--ac-dim); color: var(--ac); }
+.dock-item.active::before {
+  content: ''; position: absolute; top: 6px; bottom: 6px; right: 0;
+  width: 3px; border-radius: 3px 0 0 3px; background: var(--ac);
+}
 
 .dock-icon {
   font-size: var(--fs-xl); width: 26px; flex-shrink: 0;
@@ -415,15 +344,17 @@
 .dock-divider { height: 1px; background: var(--border); margin: 6px 10px; flex-shrink: 0; }
 
 /* ════════════════════════════════════
-   ✅ BALANCE CARD — بطاقة دائمة أعلى الرئيسية (بديل modalBalance)
+   BALANCE CARD — بطاقة دائمة أعلى الرئيسية
+   حشو/تباعد/خط مُصغَّرة لكثافة موبايل أنيقة (الرقم الأساسي يبقى بارزاً —
+   هو أهم رقم بالشاشة). عند 900px+ تكتسب عرضاً أقصى ذاتياً بدل التمدد.
 ════════════════════════════════════ */
 .balance-card {
   background: linear-gradient(155deg, var(--bg-card), var(--bg-elev));
   border: 1.5px solid var(--border-strong);
-  border-radius: var(--r-xl);
-  padding: var(--space-5) var(--space-4) var(--space-4);
+  border-radius: var(--r-lg);
+  padding: var(--space-4) var(--space-4) var(--space-3);
   box-shadow: var(--shadow), var(--glow-bdr);
-  display: flex; flex-direction: column; gap: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3);
   position: relative; overflow: hidden; flex-shrink: 0;
 }
 .balance-card::before {
@@ -432,16 +363,16 @@
   background: radial-gradient(circle, var(--ac-dim), transparent 70%);
   pointer-events: none;
 }
-.bc-primary { display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; position: relative; }
+.bc-primary { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; position: relative; }
 .bc-primary-label { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-secondary); letter-spacing: 1.2px; text-transform: uppercase; }
 .bc-primary-value {
-  font-family: var(--font-mono); font-size: clamp(27px, 8.5vw, 34px);
+  font-family: var(--font-mono); font-size: clamp(23px, 7.5vw, 30px);
   font-weight: var(--fw-black); color: var(--text-primary); line-height: 1.1;
   transition: color 200ms ease;
 }
 .bc-primary-pnl {
   font-family: var(--font-mono); font-size: var(--fs-md); font-weight: var(--fw-bold);
-  padding: 3px 13px; border-radius: var(--r-pill); margin-top: 2px;
+  padding: 2px 12px; border-radius: var(--r-pill); margin-top: 1px;
   color: var(--text-muted); background: var(--bg-input);
   transition: color 200ms ease, background 200ms ease;
 }
@@ -451,27 +382,25 @@
 .bc-secondary {
   display: flex; align-items: center;
   background: var(--bg-input); border: 1px solid var(--border);
-  border-radius: var(--r-md); padding: var(--space-3);
+  border-radius: var(--r-md); padding: 9px var(--space-3);
   position: relative;
 }
-.bc-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.bc-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .bc-stat-label { font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: .4px; }
-.bc-stat-value { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text-primary); }
+.bc-stat-value { font-family: var(--font-mono); font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--text-primary); }
 .bc-stat-divider { width: 1px; align-self: stretch; background: var(--border-strong); margin: 0 var(--space-2); }
 
 /* ════════════════════════════════════
-   ✅ MARKETS SCREEN — بطاقات أنيقة لكل سوق
-   ✅ جولة ثالثة (2026-08) — .market-card-sub حُذفت (كانت الرمز
-      اللاتيني + الرافعة تحت الاسم). الرافعة انتقلت لنافذة معلومات
-      الأصل (.asset-info-*) — تُقرأ حيّاً من ASSETS[sym].lev بـapp.js،
-      لا رقم مكرَّر بالـCSS/HTML. الاسم/الصورة/السعر أكبر بوضوح الآن.
+   MARKETS SCREEN — بطاقة أنيقة لكل سوق (الرافعة بنافذة معلومات الأصل،
+   تُقرأ حيّاً من ASSETS[sym].lev). حشو مُصغَّر للموبايل؛ عند 900px+
+   .markets-list شبكة متجاوبة — كل بطاقة مستقلة البنية أصلاً.
 ════════════════════════════════════ */
-.markets-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.markets-list { display: flex; flex-direction: column; gap: 7px; }
 
 .market-card {
-  display: flex; align-items: center; gap: var(--space-4);
+  display: flex; align-items: center; gap: var(--space-3);
   background: var(--bg-card); border: 1.5px solid var(--border);
-  border-radius: var(--r-lg); padding: var(--space-3) var(--space-4);
+  border-radius: var(--r-lg); padding: 10px var(--space-3);
   text-align: right; cursor: pointer;
   transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, transform 120ms ease;
   animation: mcIn 320ms cubic-bezier(.22,1,.36,1) backwards;
@@ -488,24 +417,24 @@
 .market-card.active { border-color: var(--ac); box-shadow: var(--glow-ac); background: var(--bg-input); }
 
 .market-card-img-wrap {
-  width: 60px; height: 60px; border-radius: var(--r-md); flex-shrink: 0;
+  width: 52px; height: 52px; border-radius: var(--r-md); flex-shrink: 0;
   background: var(--bg-input); display: flex; align-items: center; justify-content: center;
   overflow: hidden;
 }
 .market-card-img { width: 72%; height: 72%; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
 
-.market-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
-.market-card-name-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.market-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.market-card-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .market-card-name {
   flex: 1; min-width: 0;
-  font-size: var(--fs-3xl); font-weight: var(--fw-bold); color: var(--text-primary);
+  font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .market-info-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 19px; height: 19px; border-radius: 50%; flex-shrink: 0;
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
   background: var(--bg-input); border: 1.5px solid var(--border-strong);
-  color: var(--text-muted); font-size: 11px; font-weight: var(--fw-bold); line-height: 1;
+  color: var(--text-muted); font-size: 10px; font-weight: var(--fw-bold); line-height: 1;
   cursor: pointer; transition: all var(--dur-base) var(--ease-standard);
 }
 .market-info-btn:hover  { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
@@ -537,11 +466,9 @@
 .asset-info-desc { font-size: var(--fs-md); color: var(--text-secondary); line-height: var(--lh-loose); text-align: center; padding: 0 4px; }
 
 /* ════════════════════════════════════
-   NAV CONNECT — زر "اتصال" مدمج (حالة + اتصال + قطع اتصال بزر واحد)،
-   يعيش الآن بالـappbar. نفس منطق الألوان بالضبط (أخضر=متصل، أصفر
-   نابض=يحاول، أحمر=منقطع). عند الاتصال، النقر يفتح .addr-popover
-   بدل مودال منفصل مباشرة (راجع أعلاه) — الضغط على "إلغاء الاتصال"
-   بداخله هو ما يفتح modalLogout.
+   NAV CONNECT — زر "اتصال" مدمج (حالة + اتصال + قطع اتصال بزر واحد):
+   أخضر=متصل، أصفر نابض=يحاول، أحمر=منقطع. عند الاتصال النقر يفتح
+   .addr-popover؛ "إلغاء الاتصال" بداخله يفتح modalLogout.
 ════════════════════════════════════ */
 .nav-connect-btn {
   display: flex; align-items: center; justify-content: center;
@@ -622,7 +549,9 @@
 .m-en   { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-muted); font-weight: var(--fw-bold); }
 
 /* ════════════════════════════════════
-   POSITIONS
+   POSITIONS — حشو مُصغَّر للموبايل (الأرقام المهمة PnL/اسم الصفقة لم
+   تُمسّ). عند 900px+: #positionsList شبكة، و.position-item بطاقة مستقلة
+   بحدودها (بديل خط الفاصل السفلي)؛ .positions-card تبقى إطار القسم.
 ════════════════════════════════════ */
 .positions-card {
   background: var(--bg-card); border: 1.5px solid var(--border);
@@ -631,8 +560,8 @@
 }
 .positions-header {
   display: flex; align-items: center; gap: 6px;
-  padding: 9px var(--space-3); border-bottom: 1px solid var(--border);
-  flex-wrap: nowrap; min-height: 38px; overflow: hidden;
+  padding: 7px var(--space-3); border-bottom: 1px solid var(--border);
+  flex-wrap: nowrap; min-height: 34px; overflow: hidden;
 }
 .positions-title { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-secondary); letter-spacing: 1.5px; text-transform: uppercase; white-space: nowrap; }
 .positions-count { background: var(--ac-deep); color: #fff; border-radius: var(--r-pill); padding: 2px 7px; font-size: var(--fs-xs); font-weight: var(--fw-bold); flex-shrink: 0; box-shadow: var(--glow-ac); }
@@ -648,9 +577,9 @@
 }
 .btn-close-all:hover { background: var(--dn); color: #fff; box-shadow: var(--glow-dn); }
 .btn-close-all.hidden { display: none; }
-.positions-empty { padding: var(--space-5); text-align: center; color: var(--text-secondary); font-size: var(--fs-base); font-weight: var(--fw-bold); }
+.positions-empty { padding: var(--space-4); text-align: center; color: var(--text-secondary); font-size: var(--fs-base); font-weight: var(--fw-bold); }
 
-.position-item { border-bottom: 1px solid var(--border); padding: var(--space-3); display: flex; flex-direction: column; gap: 7px; }
+.position-item { border-bottom: 1px solid var(--border); padding: 9px var(--space-3); display: flex; flex-direction: column; gap: 6px; }
 .pos-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 7px; }
 .pos-name {
   font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text-primary);
@@ -670,7 +599,7 @@
 .pos-data-grid {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px;
   background: var(--bg-elev); border-radius: var(--r-sm);
-  padding: 7px; border: 1px solid var(--border);
+  padding: 6px; border: 1px solid var(--border);
 }
 .pos-data-item { display: flex; flex-direction: column; gap: 2px; }
 .pos-data-label { font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--text-muted); text-transform: uppercase; letter-spacing: .7px; }
@@ -680,7 +609,7 @@
 
 .pos-tpsl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .tpsl-btn {
-  border-radius: var(--r-sm); padding: 7px 4px;
+  border-radius: var(--r-sm); padding: 6px 4px;
   font-size: var(--fs-sm); font-weight: var(--fw-bold); text-align: center;
   cursor: pointer; border: 1.5px solid; transition: all var(--dur-base) var(--ease-standard); line-height: 1.3;
 }
@@ -696,7 +625,7 @@
 .btn-pos-close {
   border: 1.5px solid var(--dn); background: var(--dn-dim);
   color: var(--dn); border-radius: var(--r-sm);
-  padding: 9px 0; font-size: var(--fs-base); font-weight: var(--fw-bold);
+  padding: 8px 0; font-size: var(--fs-base); font-weight: var(--fw-bold);
   text-align: center; transition: all var(--dur-base) var(--ease-standard);
 }
 .btn-pos-close:hover { background: var(--dn); color: #fff; box-shadow: var(--glow-dn); }
@@ -839,7 +768,6 @@
 .hist-lbl { font-size: var(--fs-2xs); color: var(--text-muted); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: .7px; }
 .hist-val { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text-primary); }
 
-/* Loading text — shared by history list AND (formerly) balance modal */
 .balance-loading { text-align: center; padding: 22px; color: var(--text-secondary); font-size: var(--fs-md); font-weight: var(--fw-bold); }
 
 /* Logout */
@@ -923,7 +851,7 @@
 }
 
 /* ════════════════════════════════════
-   LOADER — بطاقة صغيرة بزاوية الشاشة، زر "✕" يُخفيها فوراً بدون إلغاء العملية
+   LOADER — بطاقة صغيرة بزاوية الشاشة، "✕" يُخفيها بدون إلغاء العملية
 ════════════════════════════════════ */
 #loader {
   position: fixed;
@@ -998,9 +926,23 @@
 .pos-pnl { contain: layout style paint; }
 
 /* ════════════════════════════════════
-   DESKTOP BREAKPOINTS — تركيز التصميم على الموبايل؛ هنا فقط نمنع
-   تمدد المحتوى لعرض غير معقول على شاشات كبيرة (appbar/tabbar يبقيان
-   كامل العرض — نمط شائع بتطبيقات الويب التقدمية).
+   ✅ هيكلان منفصلان حقاً — لا تكبير لنفس تصميم الموبايل:
+
+   < 900px (موبايل، الافتراضي بكل القواعد أعلاه): تنقّل أساسي بالتابّبار
+   السفلي (منطقة الإبهام)، الدوك رفّ عائم يتمدّد عند الطلب بلا حجز مساحة،
+   كثافة مضغوطة أنيقة لإظهار أكبر قدر من المحتوى المهم بأقل تمرير.
+
+   640px – 899px: لمسات خفيفة فقط (نوافذ محاطة بدل ملء الشاشة، عرض
+   محتوى أوسع قليلاً) — تحسين تدريجي داخل نطاق "الموبايل" لا وضع ثالث.
+
+   ≥ 900px (سطح المكتب — الوحيد الذي يُعاد فيه الهيكل فعلياً):
+     • الدوك = شريط جانبي **دائم** يحجز مساحة تخطيط حقيقية، عناوين
+       ظاهرة دوماً، ☰ والتابّبار يختفيان. .dock-item.active المؤشر
+       الوحيد للشاشة النشطة (التابّبار مختفٍ).
+     • عمود المحتوى 1180px بدل 520px، والأسواق/الصفقات شبكات متجاوبة،
+       بينما بطاقة الرصيد (ملخّص لا يستفيد من التمدد) بعرض أقصى ذاتي.
+     • كل تجاوز يستهدف نفس المحدِّد الذي عرّفه الموبايل (بما فيها
+       .expanded) — لا محدِّدات أضعف قد تخسر بالأسبقية.
 ════════════════════════════════════ */
 @media (min-width: 640px) {
   .modal { max-width: 480px; max-height: 90dvh; border-radius: var(--r-xl); margin: auto; height: auto; }
@@ -1013,7 +955,74 @@
   .screen-scroll, .markets-list { max-width: 520px; margin: 0 auto; width: 100%; }
   .appbar-brand-ar { font-size: var(--fs-2xl); }
 }
+
 @media (min-width: 900px) {
+  /* ── التنقّل: تابّبار سفلي يختفي، ☰ يفقد وظيفته ── */
+  .tabbar  { display: none; }
+  #btnMenu { display: none; }
+
+  /* ── الدوك: من رفّ عائم إلى شريط جانبي دائم يحجز مساحة حقيقية ──
+     .dock فلكس-كولمن و.dock-scroll flex:1 + min-height:0 — يملأ الارتفاع
+     كاملاً ويتمرّر بالنوافذ القصيرة بلا اعتماد على نسب ارتفاع هشّة. */
+  .dock,
+  .dock.expanded {
+    width: 236px;
+    display: flex; flex-direction: column;
+  }
+  .dock-scroll,
+  .dock.expanded .dock-scroll {
+    position: static;
+    width: 100%;
+    flex: 1; min-height: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .dock-lbl,
+  .dock.expanded .dock-lbl {
+    max-width: 170px; opacity: 1; margin-inline-start: 10px;
+  }
+  .dock-item { padding: 11px 16px; }
+  .dock-icon { width: 24px; }
+
+  /* ── appbar: حشو أريح، بلا ☰ ── */
+  .appbar { padding: 10px 22px; }
+  .appbar-brand-ar { font-size: var(--fs-3xl); }
+
+  /* ── عمود المحتوى: اتساع فعلي ── */
+  .screen-scroll {
+    max-width: 1180px; margin: 0 auto; width: 100%;
+    padding: 26px 30px 34px; gap: var(--space-4);
+  }
+
+  /* ── بطاقة الرصيد (+ .om-bar بـorder.css بنفس العرض): عرض أقصى ذاتي
+     ووسط العمود — ملخّص لا يستفيد من التمدد الكامل. ── */
+  .balance-card {
+    max-width: 640px; margin-inline: auto; width: 100%;
+    padding: var(--space-5) var(--space-5) var(--space-4);
+  }
+  .bc-primary-value { font-size: 32px; }
+
+  /* ── الأسواق: شبكة حقيقية ── */
+  .markets-list {
+    max-width: none; width: 100%;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 12px;
+  }
+
+  /* ── الصفقات المفتوحة: شبكة بطاقات مستقلة بدل قائمة بفواصل سفلية ── */
+  #positionsList {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 10px; padding: 12px;
+  }
+  #positionsList .positions-empty { grid-column: 1 / -1; }
+  .position-item {
+    border: 1.5px solid var(--border); border-radius: var(--r-md);
+    background: var(--bg-elev);
+    transition: border-color var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+  }
+  .position-item:hover { border-color: var(--border-strong); }
+  .positions-header { padding: 10px var(--space-4); }
+
   .nav-connect-btn .cb-lbl { max-width: 100px; }
 }
 

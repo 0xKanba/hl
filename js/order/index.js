@@ -1,17 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════
-   js/order/index.js — المنسّق النهائي: فتح/إغلاق الشاشة، كل ربط
-   الأحداث، تدفّق التأكيد والتنفيذ، ومراقب "الأقواس المعلّقة".
+   js/order/index.js — المنسّق: فتح/إغلاق الشاشة، ربط الأحداث، تدفّق
+   التأكيد والتنفيذ، ومراقب "الأقواس المعلّقة".
 
-   ✅ مراقب الأقواس المعلّقة (pending bracket watcher) — لماذا يوجد:
-      أمر الإيقاف (trigger, غير reduce-only) يُرسَل وحده (لا حزمة
-      normalTpsl معه — راجع تعليق logic.js). لو طلب المستخدم TP/SL
-      معه، نُخزِّنهما محلياً (معزول بعنوان المحفظة، مطابقاً State
-      isolation المعتمد بكل المشروع) ونراقب: هل اختفى هذا الـoid تحديداً
-      من State.openOrders؟ لو اختفى وظهر فعلاً بـState.fillsCache (تأكيد
-      أنه *نُفِّذ* لا أُلغي فقط) → نُلحق TP/SL فوراً عبر placeNativeTpsl
-      نفسها المستخدمة أصلاً لأي صفقة قائمة (tpsl.js) — لا مسار موازٍ.
-      المراقبة تستأنف تلقائياً عند أي اتصال محفظة جديد فيه أوامر معلّقة
-      محفوظة من جلسة سابقة (راجع resumePendingWatch + auth.js).
+   ✅ مراقب الأقواس المعلّقة: أمر الإيقاف (trigger، غير reduce-only) يُرسَل
+      وحده؛ لو طُلب معه TP/SL نخزّنهما محلياً (معزول بعنوان المحفظة) ونراقب:
+      اختفى الـoid من State.openOrders؟ وظهر بـState.fillsCache (تأكيد أنه
+      *نُفِّذ* لا أُلغي)؟ → نُلحق TP/SL عبر placeNativeTpsl نفسها (tpsl.js).
+      يستأنف تلقائياً عند اتصال المحفظة (OM.resumePendingWatch من auth.js).
+   ✅ لا حد أدنى لقيمة الأمر ولا فحص هامش محلي — الشرط الوحيد qty > 0،
+      مطابق للنظام القديم؛ أي رفض فعلي من الخادم يمر عبر tradeErr.
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 var OM = window.__om = window.__om || {};
@@ -52,8 +49,6 @@ var OM = window.__om = window.__om || {};
     OM._paint = {};
     OM._bboConn(target);
     OM.bookConn(target);
-    /* بالتوازي، بلا انتظار: نطاق الجلسة لهذا الأصل تحديداً (session.js
-       تستطلع الأصل النشط عالمياً فقط، وقد يكون المختار هنا غيره). */
     if (typeof fetchSessionStats === 'function') { try { fetchSessionStats(target); } catch (e) {} }
     OM._refreshBadgeAndPreview();
 
@@ -77,7 +72,7 @@ var OM = window.__om = window.__om || {};
     return (a.presets && a.presets[0]) || 1;
   };
 
-  /* ══════════ رأس الشاشة (أيقونة/اسم/وحدة) ══════════ */
+  /* ══════════ رأس الشاشة ══════════ */
   OM._renderHeader = function (sym) {
     var a = OM.asset(sym);
     var ic = document.getElementById('omAssetIcon'); if (ic) ic.textContent = a.icon;
@@ -99,10 +94,7 @@ var OM = window.__om = window.__om || {};
     el.className   = 'om-price-chg ' + (chg > 0.005 ? 'up' : chg < -0.005 ? 'dn' : '');
   };
 
-  /* ✅ نطاق الجلسة (افتتاح/أعلى/أدنى منذ 12 صباحاً UTC+3) — يُعاد
-     استخدام State.sessionStats المُعبّأة أصلاً بـsession.js (كانت
-     تُجلب كل 3 دقائق بلا أي مستهلك بعد حذف بطاقة السعر القديمة).
-     معلومة عملية مباشرة هنا: تساعد على اختيار سعر حدّي/إيقاف منطقي. */
+  /* نطاق الجلسة (افتتاح/أعلى/أدنى منذ 12 صباحاً UTC+3) من State.sessionStats */
   OM._updateSession = function (sym) {
     var el = document.getElementById('omSession');
     if (!el || typeof State === 'undefined') return;
@@ -115,8 +107,7 @@ var OM = window.__om = window.__om || {};
       '<span class="sd">·</span><span class="sl">أدنى ' + fmt(st.low, a.pxDp) + '</span>';
   };
 
-  /* ══════════ السعر الحي (BBO مخصّص، بلا تكلفة شبكة إضافية —
-     ws.js يُوحِّد الاشتراكات بنفس المفتاح؛ نفس نمط chart/ui.js:bboConn) ══════════ */
+  /* ══════════ السعر الحي (ws.js يُوحِّد الاشتراكات بنفس المفتاح) ══════════ */
   OM._bboConn = function (sym) {
     OM._bboClose();
     if (typeof HL === 'undefined') return;
@@ -139,9 +130,7 @@ var OM = window.__om = window.__om || {};
     if (el) {
       var prev = parseFloat(el.dataset.p || 0);
       var txt  = '$' + fmt(midDisp, a.pxDp);
-      /* كتابة مشروطة: نص مطابق لما هو معروض = صفر فائدة، وتكلفة تخطيط
-         محتملة بكل نبضة. اللون يتغيّر فقط عند تغيّر فعلي بالاتجاه. */
-      if (OM._paint.px !== txt) {
+      if (OM._paint.px !== txt) {            /* كتابة مشروطة */
         el.textContent = txt;
         el.className   = 'om-price-big' + (midDisp > prev ? ' up' : midDisp < prev ? ' dn' : '');
         el.dataset.p   = midDisp;
@@ -149,13 +138,12 @@ var OM = window.__om = window.__om || {};
       }
     }
     OM._updateChg(sym);
+    OM._updateSession(sym);
     OM._scheduleRefresh();
   };
 
-  /* تجميع كل تحديثات الإطار الواحد بنداء واحد — راجع _rafPending
-     بـstate.js. أي مصدر (نبضة سعر، كتابة بحقل، تبديل جهة/نوع) يمر
-     من هنا، فلا تتسابق مصادر متعددة على إعادة بناء نفس المعاينة
-     عدة مرات قبل أن يرسم المتصفح إطاراً واحداً أصلاً. */
+  /* تجميع كل تحديثات الإطار الواحد بنداء واحد (نبضات BBO + كتابة بالحقول
+     + تبديل جهة/نوع) — تحديث واحد لكل إطار رسم. */
   OM._scheduleRefresh = function () {
     if (OM._rafPending) return;
     OM._rafPending = true;
@@ -177,11 +165,8 @@ var OM = window.__om = window.__om || {};
     var tpEl    = document.getElementById('omTpInput');    if (tpEl)    tpEl.value    = '';
     var slEl    = document.getElementById('omSlInput');    if (slEl)    slEl.value    = '';
     OM._qtyUserEdited = false;
-    if (OM.mode === 'priced') OM._setMode('market'); /* السعر كان بمقياس الأصل القديم — أبسط إعادة ضبط آمنة */
+    if (OM.mode === 'priced') OM._setMode('market'); /* السعر كان بمقياس الأصل القديم */
 
-    /* ✅ تبديل الأصل هنا يُبدّل الأصل النشط بالتطبيق كله (بطاقة الأسواق
-       النشطة، الرسم البياني، وجلب إحصائيات الجلسة لهذا الأصل) — مصدر
-       واحد للحقيقة بدل حالة محلية تنحرف عن بقية الشاشات. */
     if (typeof switchAsset === 'function') { try { switchAsset(sym); } catch (e) {} }
 
     OM._renderHeader(sym);
@@ -236,6 +221,8 @@ var OM = window.__om = window.__om || {};
       : '+ إضافة جني ربح / وقف خسارة (اختياري)';
   };
 
+  /* (الرصيد × الرافعة × النسبة) ÷ السعر — أبعاد متطابقة بوحدة العرض نفسها،
+     نفس نمط qty100 القديم */
   OM._applyQtyPct = function (pct) {
     if (typeof State === 'undefined' || State.isGuest || !State.wallet) return;
     var sym = OM.sym, a = OM.asset(sym);
@@ -248,7 +235,7 @@ var OM = window.__om = window.__om || {};
     OM._refreshBadgeAndPreview();
   };
 
-  /* ══════════ شارة نوع الأمر + المعاينة الحيّة + نص زر الإرسال ══════════ */
+  /* ══════════ شارة النوع + المعاينة + نص زر الإرسال ══════════ */
   OM._refreshBadgeAndPreview = function () {
     var sym = OM.sym;
     var midDisp   = State.prices[sym] && State.prices[sym].mid;
@@ -274,27 +261,18 @@ var OM = window.__om = window.__om || {};
 
     var refDisp = OM.mode === 'market' ? midDisp : priceDisp;
     var prev = OM.buildPreview(sym, OM.side, qtyDisp, refDisp);
-    var avail = (State.balance && State.balance.available) || 0;
-    var blockReason = null;
-    if (prev) {
-      if (prev.usd < OM.MIN_ORDER_USD)  blockReason = '⚠️ أقل من الحد الأدنى $' + OM.MIN_ORDER_USD + ' لقيمة الأمر';
-      else if (prev.margin > avail)     blockReason = '❌ الهامش المطلوب أكبر من رصيدك المتاح ($' + avail.toFixed(2) + ')';
-    }
-
     var pv = document.getElementById('omPreview');
     if (pv) {
       pv.innerHTML = !prev ? '' :
         OM._prevRow('القيمة التقريبية', '≈ $' + prev.usd.toFixed(2)) +
         OM._prevRow('الهامش المطلوب', '≈ $' + prev.margin.toFixed(2), 'warn') +
         OM._prevRow('⚡ التصفية التقريبية', prev.liqText, 'warn') +
-        OM._prevRow('الرسوم (' + prev.feePct + ')', '$' + prev.feeOpen.toFixed(4)) +
-        (blockReason ? '<div class="om-prev-row om-prev-block">' + blockReason + '</div>' : '');
+        OM._prevRow('الرسوم (' + prev.feePct + ')', '$' + prev.feeOpen.toFixed(4));
     }
 
     var submitBtn = document.getElementById('omSubmit');
     if (submitBtn) {
       submitBtn.className = 'om-submit ' + (OM.side ? 'buy' : 'sell');
-      submitBtn.disabled = !!blockReason;
       var label;
       if (OM.mode === 'market') {
         label = OM.side ? '🚀 شراء بالسوق' : '🚀 بيع بالسوق';
@@ -309,7 +287,7 @@ var OM = window.__om = window.__om || {};
     return '<div class="om-prev-row"><span class="om-prev-k">' + k + '</span><span class="om-prev-v' + (cls ? ' ' + cls : '') + '">' + v + '</span></div>';
   };
 
-  /* ══════════ ربط الأحداث — مرة واحدة فقط ══════════ */
+  /* ══════════ ربط الأحداث — مرة واحدة ══════════ */
   OM._wireEvents = function () {
     document.getElementById('omBack').onclick = OM.close;
 
@@ -340,6 +318,7 @@ var OM = window.__om = window.__om || {};
 
     document.getElementById('omTpslToggle').onclick = function () { OM._toggleTpsl(); };
 
+    /* نقر مستوى بالعمق → يملأ حقل السعر وينتقل لوضع "طلب بسعر محدد" */
     document.getElementById('omDepthWrap').addEventListener('click', function (e) {
       var row = e.target.closest('.om-drow');
       if (!row) return;
@@ -381,23 +360,6 @@ var OM = window.__om = window.__om || {};
     var refDisp = OM.mode === 'market' ? midDisp : priceDisp;
     var vErr = OM.validateTpSl(OM.side, refDisp, tpDisp, slDisp);
     if (vErr) return toast('⚠️ ' + vErr, 'err', 5000);
-
-    /* ✅ فحوصات ما قبل التوقيع — نفس شرطَي الرفض الرسميَّين الأكثر
-       شيوعاً بـHyperliquid (error-responses): الحد الأدنى $10، والهامش
-       غير الكافي. نمنعهما هنا برسالة عربية واضحة بدل رفض إنجليزي خام
-       بعد أن يكون المستخدم قد وقّع فعلاً. */
-    var pre = OM.buildPreview(sym, OM.side, qtyDisp, refDisp);
-    if (pre) {
-      if (pre.usd < OM.MIN_ORDER_USD) {
-        return toast('⚠️ الحد الأدنى لقيمة الأمر على Hyperliquid هو $' + OM.MIN_ORDER_USD +
-                     ' — قيمة أمرك الحالية ≈ $' + pre.usd.toFixed(2) + '، ارفع الكمية', 'warn', 7000);
-      }
-      var avail = (State.balance && State.balance.available) || 0;
-      if (pre.margin > avail) {
-        return toast('❌ الهامش المطلوب ≈ $' + pre.margin.toFixed(2) +
-                     ' أكبر من رصيدك المتاح $' + avail.toFixed(2) + ' — قلّل الكمية أو أودع المزيد', 'err', 7000);
-      }
-    }
 
     var built = OM.buildOrders({
       sym: sym, isBuy: OM.side, qtyDisp: qtyDisp, mode: OM.mode,
@@ -484,14 +446,13 @@ var OM = window.__om = window.__om || {};
         if (oid && (p.tpDisp || p.slDisp) && State.wallet) {
           OM.addPending(State.wallet.address, {
             oid: oid, coin: aApi.coin, sym: p.sym, isBuy: p.isBuy,
-            tp: p.tpDisp || null, sl: p.slDisp || null, at: Date.now()
+            tp: p.tpDisp || null, sl: p.slDisp || null, at: Date.now(), seen: false
           });
           OM._startPendingWatch();
         }
       }
 
-      /* أي رِجل TP/SL مُرفَقة (سوق/حدّي) فشلت رغم نجاح الدخول نفسه —
-         تحذير منفصل صادق، لا إخفاء الفشل الجزئي خلف رسالة نجاح كاملة */
+      /* فشل رِجل TP/SL مُرفَقة رغم نجاح الدخول — تحذير منفصل صادق */
       var legIssues = statuses.slice(1).filter(function (s) { return s && s.error; });
       if (legIssues.length) {
         toast('⚠️ فُتحت الصفقة، لكن تعذّر ضبط ' + (legIssues.length > 1 ? 'TP/SL' : (p.tpDisp ? 'جني الربح' : 'وقف الخسارة')) + ' تلقائياً — اضبطه يدوياً من بطاقة الصفقة', 'warn', 7500);
@@ -507,7 +468,7 @@ var OM = window.__om = window.__om || {};
     }
   };
 
-  /* ══════════ مراقب الأقواس المعلّقة (راجع تعليق رأس الملف) ══════════ */
+  /* ══════════ مراقب الأقواس المعلّقة ══════════ */
   OM._startPendingWatch = function () {
     if (OM._pendingTimer) return;
     OM._pendingTimer = setInterval(OM._tickPendingWatch, OM.PENDING_POLL_MS);
@@ -517,12 +478,12 @@ var OM = window.__om = window.__om || {};
     clearInterval(OM._pendingTimer);
     OM._pendingTimer = null;
   };
-  /* ✅ تُستدعى من auth.js فور استقرار اتصال المحفظة — تستأنف المراقبة
-     لو بقيت أوامر معلّقة من جلسة سابقة لم تُفعَّل بعد. */
   OM.resumePendingWatch = function () {
     if (typeof State === 'undefined' || !State.wallet) return;
     if (OM.loadPending(State.wallet.address).length) OM._startPendingWatch();
   };
+
+  OM._filledAt = {}; /* oid → أول لحظة رُصد فيها fill بلا مركز بعد (بالذاكرة فقط) */
 
   OM._tickPendingWatch = async function () {
     if (typeof State === 'undefined' || !State.wallet) { OM._stopPendingWatch(); return; }
@@ -532,16 +493,39 @@ var OM = window.__om = window.__om || {};
 
     for (var i = 0; i < list.length; i++) {
       var entry = list[i];
-      var stillOpen = (State.openOrders || []).some(function (o) { return String(o.oid) === String(entry.oid); });
-      if (stillOpen) continue;
+      var oidStr = String(entry.oid);
 
-      var filled = (State.fillsCache || []).some(function (f) { return String(f.oid) === String(entry.oid); });
-      OM.removePending(addr, entry.oid);
-      if (!filled) continue; /* أُلغي أو رُفض بلا تنفيذ — لا شيء يُلحَق */
+      var stillOpen = (State.openOrders || []).some(function (o) { return String(o.oid) === oidStr; });
+      if (stillOpen) {                       /* ما زال ينتظر التفعيل */
+        if (!entry.seen) OM.markPendingSeen(addr, entry.oid);
+        continue;
+      }
 
+      var filled = (State.fillsCache || []).some(function (f) { return String(f.oid) === oidStr; });
+
+      if (!filled) {
+        /* غير مفتوح وغير منفَّذ: إلغاء حقيقي فقط لو سبق أن شوهد مفتوحاً، أو
+           انقضت مهلة السماح — وإلا فالأرجح أن State.openOrders لم تلحق
+           بالأمر المُوضَع للتوّ. */
+        if (!entry.seen && (Date.now() - (entry.at || 0)) < OM.PENDING_GRACE_MS) continue;
+        OM.removePending(addr, entry.oid);
+        delete OM._filledAt[oidStr];
+        continue;
+      }
+
+      /* نُفِّذ فعلاً — نحتاج المركز نفسه (حجمه) لإلحاق TP/SL. نبضة الـfills
+         قد تسبق نبضة الـpositions، فننتظر ظهوره بدل مسح الإدخال مبكراً. */
       var pos = (State.positions || []).find(function (pp) { return pp.position.coin === entry.coin; });
-      var szi = pos ? pos.position.szi : null;
-      if (szi == null || typeof placeNativeTpsl !== 'function') continue;
+      if (!pos) {
+        var t0 = OM._filledAt[oidStr] || (OM._filledAt[oidStr] = Date.now());
+        if (Date.now() - t0 > OM.PENDING_FILL_WAIT_MS) { OM.removePending(addr, entry.oid); delete OM._filledAt[oidStr]; }
+        continue;
+      }
+
+      OM.removePending(addr, entry.oid);
+      delete OM._filledAt[oidStr];
+      var szi = pos.position.szi;
+      if (typeof placeNativeTpsl !== 'function') continue;
 
       try {
         if (entry.tp) await placeNativeTpsl(entry.sym, szi, 'tp', dispToOz(entry.sym, entry.tp));
@@ -558,5 +542,4 @@ var OM = window.__om = window.__om || {};
 
 })();
 
-/* ══════════ الواجهة العامة ══════════ */
 window.OrderModule = { open: OM.open, close: OM.close };

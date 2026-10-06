@@ -1,92 +1,30 @@
 /* ═══════════════════════════════════════
    app.js — appbar + tabbar سفلي (3 أزرار) + دوك أيقونات جانبي
-   ✅ راوتر شاشات: الرئيسية / الأسواق / الرسم البياني (data-screen)
-      — switchScreen() المسؤول الوحيد عن إظهار/إخفاء أي من الثلاث،
-      بما فيها الرسم البياني الآن (لم يعد overlay منفصلاً — راجع
-      index.html/chart.js). تستدعي ChartModule.open()/close() فقط
-      عند الدخول/الخروج من شاشة الرسم تحديداً، بلا أي منطق إضافي.
-   ✅ جديد — الدرج المنبثق (drawerOverlay/.drawer) استُبدل بالكامل
-      بـ"دوك" (Dock): عمود أيقونات دائم الظهور يمين الشاشة (لا يُحكَم
-      بـ.hidden/.open — عائم عمودياً بمنتصف الشاشة طوال الوقت)، يتمدّد
-      فقط لعرض العناوين عند نقر ☰ (.expanded على #dock). كل زر بداخله
-      (.dock-item) له onclick واحد يعمل بصرف النظر عن حالة التمدد —
-      "أيقونة تُنقر مباشرة دون فتح اللوحة" بالضبط كما طُلب. نفس الـIDs
-      القديمة تماماً لعناصر الإجراءات (optDeposit/optWithdraw/...)،
-      فمنطق الحراسات (تسجيل دخول/وضع رابط وكيل) أدناه لم يتغيّر إطلاقاً
-      — فقط غلاف الإغلاق تغيّر اسمه من _drawerAction إلى _dockAction.
-   ✅ جديد — زر تبديل المظهر أصبح زراً واحداً (#dockTheme) بدل شعارين
-      منفصلين (☀️/🌙) كانا يعيشان أسفل الدرج القديم. الأيقونة والعنوان
-      بداخله يعكسان المظهر الحالي فعلياً ويتبدّلان فور كل تبديل
-      (_syncThemeToggleUI)، والنقر يقلب الحالة مباشرة (_initThemeToggle).
-   ✅ عنوان الحساب المتصل بالـappbar الآن popover صغير (نسخ + إلغاء
-      اتصال يفتح modalLogout) بدل مودال منفصل مباشرة عند نقر الزر.
-   ✅ "الرصيد" حُذف من القائمة نهائياً — بطاقة دائمة أعلى الرئيسية الآن
-      (راجع account.js:_renderBalanceFromState).
-   ✅ FIX (شاشة الأسواق الافتراضية) — "الأسواق" الآن الشاشة الافتراضية
-      عند الإقلاع (_activeScreen أدناه)، لا "الرئيسية". التبديل
-      الابتدائي بين .hidden/.active على screenHome/screenMarkets +
-      tabHome/tabMarkets تم بـindex.html — هذا الملف فقط يطابق نفس
-      الحالة الابتدائية بمتغيّره الداخلي.
-   ✅ FIX — استطلاع بطاقات الأسواق القديم (مؤقّت setInterval كل ثانية
-      بهذا الملف: _refreshMarketCards/_startMarketsRefresh) حُذف
-      بالكامل. كان يقرأ نفس State.prices/prevDayPx التي يقرأها تاب
-      الرئيسية لكن بمؤقّت منفصل — تأخير محسوس حتى ثانية كاملة، ومصدرين
-      مستقلّين يكتبان لعناصر مرتبطة بنفس الحالة (خطر تضارب لاحق). الآن
-      prices.js تكتب مباشرة لعناصر البطاقة (mktPrice* / mktChg*) بنفس
-      لحظة كل WS tick (بلا أي مؤقّت)، وsession.js تفعل المثل من الكاش
-      المحلي فور الإقلاع. تفعيل البطاقة النشطة (.active) انتقل لـ
-      switchAsset() بـassets.js (فوري أيضاً، أي مصدر تبديل).
-   ✅ جديد — نافذة معلومات الأصل: زر "؟" بجانب اسم كل بطاقة بشاشة
-      الأسواق يفتح modalAssetInfo (صورة ← رافعة ← شرح مختصر). الرافعة
-      تُقرأ حيّاً من ASSETS[sym].lev (config.js) — مصدر واحد، لا رقم
-      مكرَّر. الاسم المعروض بالنافذة يُقرأ من نص البطاقة نفسها (مصدر
-      واحد أيضاً)، لا خريطة أسماء منفصلة قد تنحرف عن HTML لاحقاً.
-   ✅ بطاقات الأسواق (شاشة الأسواق) — بدون أي مؤقّت الآن (راجع أعلاه):
-      السعر/النسبة من prices.js وsession.js، البطاقة النشطة من
-      assets.js. app.js لا يلمس prices.js/session.js بمنطقها الداخلي
-      — فقط الدالتان الجاهزتان (_updateMarketCardPrice/Chg) تُستدعيان
-      من هناك، بلا أي تغيير على أسلوب push الحي الأصلي لـWS.
-   ✅ جديد — وضع "رابط الوكيل" (js/agentlink.js): يُفحص أولاً بتسلسل
-      الإقلاع، قبل Privy/EXTWALLET — رابط صالح بالعنوان يعني جلسة
-      تداول جاهزة فوراً بلا أي توقيع. أزرار الإيداع/السحب/الوكلاء
-      بالدوك تُحجب برسالة واضحة بهذا الوضع (لا مفتاح محفظة رئيسية
-      متاح محلياً أصلاً ليُستخدم لأي منها).
-
-   ✅ إصلاح توقيت جوهري (2026-08) — قفل PIN كان يتأخر 600ms على الأقل
-      (وأحياناً لا يظهر إطلاقاً لو تجاوز اتصال المحفظة تلك المهلة، لأن
-      الفحص كان `if (State.wallet)` بعد setTimeout ثابت — سباق حقيقي
-      ضد الشبكة). القفل نفسه لا يعتمد على أي بيانات شبكة أو حتى معرفة
-      "ضيف أم متصل" إطلاقاً — فقط PIN_KEY/LOCKED_KEY المحليان. الآن
-      يُفحص ويُطلَق فوراً كأول سطر بكامل معالج DOMContentLoaded، قبل
-      أي شيء آخر، بلا أي انتظار أو شرط على State.wallet. بالتزامن مع
-      هذا: سكربت <head> جديد بـindex.html (data-boot-lock) يُخفي
-      .app-shell بالكامل قبل أول رسم أصلاً لو كان القفل مفعَّلاً آخر
-      جلسة — فلا وميض لواجهة التداول خلف الشاشة حتى قبل أن يصل تنفيذ
-      JS لهذا السطر. راجع css/base.css وjs/pin.js:unlockApp لبقية
-      الآلية. النسخة المكرَّرة من نفس الفحص بنهاية _onWalletConnected
-      (auth.js) حُذفت أيضاً — مصدر واحد فقط الآن.
-
-   ✅ جديد (منصة "فتح صفقة جديدة") — تابات الأصول الخمسة/بطاقة السعر/
-      لوحة الشراء-البيع القديمة حُذفت بالكامل من شاشة الرئيسية (راجع
-      index.html) — استُبدلت بشريط واحد (.om-bar) يفتح شاشة
-      تداول كاملة جديدة (js/order/*.js، تُبنى ديناميكياً بنفس أسلوب
-      js/c.js وjs/agents.js — overlay ذاتي الحقن، خارج نظام switchScreen
-      تماماً). كل ربط قديم لـbtnBuy/btnSell/qty100/qtyInput/modalConfirm
-      حُذف من هنا (العناصر نفسها لم تعد موجودة بالـDOM). الشريط نفسه
-      يُبنى ويُربَط بالكامل من js/order/bar.js — لا سطر له هنا عمداً
-      (index.html صار مُحمِّلاً فقط؛ أي واجهة جديدة = js + css). بطاقة سوق تفتح
-      الآن شاشة التداول الجديدة مباشرة على أصلها (بدل العودة لرئيسية
-      شبه فارغة الآن)، بلا استدعاء switchScreen — تماماً كيف يعمل فتح
-      التقويم/الوكلاء فوق أي شاشة نشطة حالياً.
+   ✅ راوتر شاشات: الرئيسية / الأسواق / الرسم البياني (data-screen) —
+      switchScreen() المسؤول الوحيد عن إظهار/إخفاء أي من الثلاث، وتستدعي
+      ChartModule.open()/close() فقط عند الدخول/الخروج من شاشة الرسم.
+   ✅ الدوك: عمود أيقونات دائم (موبايل: يتمدّد عند ☰ ويطفو فوق المحتوى،
+      سطح مكتب ≥900px: شريط جانبي دائم بالـCSS — راجع components.css).
+      كل زر (.dock-item) له onclick واحد يعمل بصرف النظر عن التمدد.
+   ✅ زر المظهر واحد (#dockTheme) بأيقونة/عنوان يعكسان المظهر الحالي.
+   ✅ عنوان الحساب بالـappbar popover صغير (نسخ + إلغاء اتصال).
+   ✅ "الأسواق" الشاشة الافتراضية عند الإقلاع (_activeScreen).
+   ✅ نافذة معلومات الأصل (؟) بشاشة الأسواق: الرافعة تُقرأ حيّاً من
+      ASSETS[sym].lev، والاسم من نص البطاقة نفسها (مصدر واحد).
+   ✅ وضع "رابط الوكيل" (js/agentlink.js) يُفحص أولاً بتسلسل الإقلاع؛
+      الإيداع/السحب/الوكلاء تُحجب برسالة واضحة بهذا الوضع.
+   ✅ قفل PIN يُفحص أول سطر بمعالج DOMContentLoaded (بلا setTimeout/شبكة)،
+      مع سكربت <head> بـindex.html (data-boot-lock) يمنع أي وميض.
+   ✅ شريط "فتح صفقة جديدة" وشاشة التداول بالكامل بـjs/order/* (يُبنى
+      الشريط من bar.js — لا سطر له هنا). بطاقة سوق تفتح شاشة التداول
+      مباشرة على أصلها كـoverlay فوق شاشة الأسواق.
+   ✅ جولة سابعة: _syncNavActive تُزامن مؤشر النشاط على التابّبار **و**
+      الدوك معاً — ضروري لسطح المكتب حيث الدوك هو التنقل الوحيد المرئي.
 ═══════════════════════════════════════ */
 'use strict';
 
-/* ✅ إصلاح — وصول آمن للعناصر داخل DOMContentLoaded.
-   سابقاً كانت عشرات الروابط بصيغة $('id').onclick = ... بلا حماية؛
-   أي معرّف مفقود أو معاد تسميته بـindex.html يرمي TypeError في منتصف
-   المعالج، فتُلغى كل الروابط التالية وتسلسل الإقلاع نفسه — التطبيق
-   يظهر لكنه ميت. _el() تُرجع عنصراً وهمياً غير ضار وتُسجّل تحذيراً
-   بدل الانهيار. */
+/* وصول آمن للعناصر داخل DOMContentLoaded: _el() تُرجع عنصراً وهمياً
+   غير ضار وتُسجّل تحذيراً بدل أن يُلغي معرّف مفقود كل الروابط التالية. */
 const _NOOP_EL = {
   onclick: null, oninput: null, value: '', textContent: '', min: '', placeholder: '',
   addEventListener() {}, removeEventListener() {}, select() {}, focus() {}, contains() { return false; },
@@ -137,9 +75,7 @@ function _initMonthsPanel() {
   });
 }
 
-/* ✅ زر واحد الآن (#dockTheme داخل الدوك) بدل شعارين منفصلين —
-   _syncThemeToggleUI() تحدّث أيقونة/عنوان هذا الزر ليعكسا المظهر
-   الحالي فعلياً، _setTheme() تُطبَّق صراحة من _initThemeToggle أدناه. */
+/* ═══ المظهر ═══ */
 function _applyTheme(theme, animate) {
   if (animate) {
     document.documentElement.classList.add('theme-transitioning');
@@ -158,9 +94,7 @@ function _initTheme() {
   });
 }
 
-/* ✅ يحدّث أيقونة/عنوان زر تبديل المظهر الموحّد (#dockTheme) — يعرض
-   حالة المظهر الحالية (لا الحالة التي سيتحوّل إليها)، مطابقاً نفس
-   اصطلاح "الأيقونة تعكس ما هو نشط الآن" المعتمَد ببقية أزرار الدوك. */
+/* يعرض حالة المظهر الحالية (لا الحالة التي سيتحوّل إليها) */
 function _syncThemeToggleUI() {
   const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
   const icon = $('dockThemeIcon');
@@ -201,7 +135,7 @@ function _initAgentCopy() {
   setTxt('agentTtlTxt2', `${days} يوم، ويُطلب توقيع جديد عند الحاجة`);
 }
 
-/* عنوان محفظة المستخدم داخل modalDeposit نفسها — بلا تغيير */
+/* عنوان محفظة المستخدم داخل modalDeposit */
 function _fillDepositAddr() {
   const addr = State.wallet?.address || '—';
   setTxt('depositAddrTxt', addr);
@@ -215,14 +149,7 @@ function _fillDepositAddr() {
 }
 
 /* ═══════════════════════════════════════
-   ✅ راوتر الشاشات — الرئيسية / الأسواق / الرسم البياني
-   الرسم البياني شاشة ثالثة عادية الآن (data-screen="chart") — هذه
-   الدالة وحدها مسؤولة عن إظهار/إخفاء أي من الثلاث (.hidden)؛ فقط
-   تستدعي ChartModule.open()/close() لإدارة محتواها الداخلي (الودجت/
-   اشتراك BBO/الساعة) عند الدخول/الخروج تحديداً — لا علاقة له بإظهار
-   العنصر نفسه، فلا حاجة لمراقب DOM منفصل كما سابقاً.
-   ✅ الافتراضية الآن "markets" (كانت "home") — يطابق الحالة الابتدائية
-      بـindex.html (screenMarkets ظاهرة، tabMarkets نشط ابتدائياً).
+   راوتر الشاشات — الرئيسية / الأسواق / الرسم البياني
 ═══════════════════════════════════════ */
 let _activeScreen = 'markets';
 
@@ -236,13 +163,13 @@ function switchScreen(name) {
   if (_activeScreen === 'chart' && typeof ChartModule !== 'undefined') ChartModule.close();
 
   next.classList.remove('hidden');
-  /* إعادة تشغيل أنيميشن الدخول حتى لو الشاشة كانت مبنية أصلاً */
+  /* إعادة تشغيل أنيميشن الدخول حتى لو الشاشة مبنية أصلاً */
   next.classList.remove('screen-anim');
   void next.offsetWidth; /* إجبار reflow */
   next.classList.add('screen-anim');
 
   _activeScreen = name;
-  _syncTabbarActive();
+  _syncNavActive();
 
   if (name === 'chart' && typeof ChartModule !== 'undefined') {
     ChartModule.open(State.asset);
@@ -252,22 +179,24 @@ function switchScreen(name) {
   }
 }
 
-function _syncTabbarActive() {
+/* تُزامن مؤشر النشاط على التابّبار السفلي (.tab-btn — مصدر الحقيقة بالموبايل)
+   **و**عناصر الدوك الملاحية (.dock-item[data-nav-screen] — ضرورية لسطح
+   المكتب حيث التابّبار مختفٍ والدوك هو الشريط الجانبي الدائم). دالة
+   واحدة، مصدر واحد للحقيقة (_activeScreen). */
+function _syncNavActive() {
   document.querySelectorAll('.tab-btn[data-tab]').forEach(b =>
     b.classList.toggle('active', b.dataset.tab === _activeScreen)
+  );
+  document.querySelectorAll('.dock-item[data-nav-screen]').forEach(b =>
+    b.classList.toggle('active', b.dataset.navScreen === _activeScreen)
   );
 }
 
 /* ═══════════════════════════════════════
-   ✅ DOCK — عمود الأيقونات الجانبي الدائم (بديل الدرج المنبثق القديم).
-   openDock/closeDock يبدّلان فقط .expanded على #dock — الأزرار نفسها
-   (.dock-item) تبقى مرسومة وتعمل طوال الوقت بصرف النظر عن هذه الحالة،
-   فـ_dockAction لا تفعل شيء أكثر من "أغلق (إن كان مفتوحاً، وإلا فلا
-   شيء) ثم نفّذ الإجراء" — تماماً كيف كان _drawerAction يتصرّف مع الدرج
-   القديم، فقط بمصطلحات جديدة. لا خلفية معتمة كاملة الشاشة بعد الآن
-   (#dockBackdrop حُذف — راجع components.css:"جولة خامسة") لأن التمدد
-   لم يعد يغطّي الشاشة كلها؛ بدلاً منه: نقرة خارج #dock (أو خارج زر ☰
-   نفسه) بينما الدوك متمدد تُغلقه — بنفس نمط _initAddrPopover أدناه. */
+   DOCK — openDock/closeDock يبدّلان .expanded فقط (بالموبايل). الأزرار
+   تعمل دائماً بصرف النظر عن التمدد؛ _dockAction = "أغلق ثم نفّذ".
+   نقرة خارج الدوك المتمدد (أو خارج ☰) تُغلقه.
+═══════════════════════════════════════ */
 function openDock() {
   $('dock')?.classList.add('expanded');
 }
@@ -291,9 +220,8 @@ function _initDock() {
 }
 
 /* ═══════════════════════════════════════
-   ✅ عنوان الحساب بالـappbar — popover صغير بدل مودال منفصل مباشرة.
-   الزر نفسه (btnConnect) يُلوَّن/يُسمّى عادةً عبر auth.js:updateConnectBtn؛
-   هنا فقط التبديل + الإغلاق بالنقر خارجه + النسخ/إلغاء الاتصال.
+   عنوان الحساب بالـappbar — popover (btnConnect يُلوَّن/يُسمّى من
+   auth.js:updateConnectBtn؛ هنا التبديل + الإغلاق بالنقر خارجه + نسخ/إلغاء اتصال)
 ═══════════════════════════════════════ */
 function _toggleAddrPopover(forceOpen) {
   const pop = $('addrPopover');
@@ -322,11 +250,7 @@ function _initAddrPopover() {
 }
 
 /* ═══════════════════════════════════════
-   ✅ نافذة معلومات الأصل — "؟" بجانب اسم كل بطاقة بشاشة الأسواق.
-   الوصف فقط مصدره هنا (لا يوجد بمكان آخر بالمشروع)؛ الرافعة تُقرأ
-   حيّاً من ASSETS[sym].lev، والاسم المعروض يُقرأ من نص البطاقة نفسها
-   (btn.dataset.info + العثور على .market-card-name المجاورة) — بلا
-   أي خريطة أسماء JS منفصلة قد تنحرف لاحقاً عن HTML.
+   نافذة معلومات الأصل — "؟" بجانب اسم كل بطاقة بشاشة الأسواق
 ═══════════════════════════════════════ */
 const ASSET_INFO_DESC = {
   CL:     'يشير WTIOIL إلى سعر برميل واحد من خام غرب تكساس الوسيط الخفيف الحلو بالدولار الأمريكي. ويُعدّ خام غرب تكساس الوسيط معياراً عالمياً رئيسياً لأسعار النفط نظراً لجودته العالية (انخفاض الكثافة، وانخفاض نسبة الكبريت).',
@@ -361,17 +285,11 @@ function _initMarketInfoButtons() {
   $('aiClose')?.addEventListener('click', () => closeModal('modalAssetInfo'));
 }
 
-function openOptions() {
-  /* إبقاء الاسم للتوافق لو استُدعيت من أي مكان قديم — الآن تفتح الدوك */
-  openDock();
-}
-function closeOptions() {
-  closeDock();
-}
+function openOptions() { openDock(); }   /* للتوافق مع أي استدعاء قديم */
+function closeOptions() { closeDock(); }
 
-/* ✅ جديد — حارس موحّد لعمليات تحتاج توقيع المحفظة الرئيسية (إيداع/
-   سحب/إدارة وكلاء) وغير متاحة إطلاقاً بوضع "رابط الوكيل" (لا يوجد
-   مفتاح محفظة رئيسية محلياً بهذا الوضع أصلاً — راجع js/agentlink.js). */
+/* حارس موحّد لعمليات تحتاج توقيع المحفظة الرئيسية (إيداع/سحب/وكلاء) —
+   غير متاحة بوضع "رابط الوكيل" (لا مفتاح محفظة رئيسية محلياً). */
 function _blockIfAgentLink() {
   if (!State.wallet?.isAgentLink) return false;
   toast('🔗 وضع رابط الوكيل للتداول فقط — هذا الإجراء يحتاج الدخول بالمحفظة الرئيسية', 'info', 5500);
@@ -380,18 +298,7 @@ function _blockIfAgentLink() {
 
 document.addEventListener('DOMContentLoaded', () => {
 
-  /* ✅ إصلاح توقيت جوهري (2026-08) — أول شيء يحدث بالإقلاع بالكامل،
-     قبل أي تهيئة أخرى أو أي مسار اتصال. القفل لا يعتمد على أي بيانات
-     شبكة ولا حتى على معرفة "ضيف أم متصل" — فقط PIN_KEY/LOCKED_KEY
-     المحليان، متاحان فوراً بلا أي انتظار. لا setTimeout، لا شرط على
-     State.wallet (كان السبب الحقيقي للتأخير القديم 600ms+ ولاحتمال
-     عدم ظهور القفل إطلاقاً لو تجاوز اتصال المحفظة تلك المهلة — سباق
-     حقيقي ضد الشبكة لشيء لا علاقة له بالشبكة إطلاقاً). سكربت <head>
-     بـindex.html (data-boot-lock) يُخفي .app-shell بالكامل (بما فيها
-     #dock — عنصر flex داخلها الآن، يرث الإخفاء تلقائياً بلا أي استثناء
-     خاص مطلوب، راجع base.css) قبل هذا السطر حتى (قبل أول
-     رسم أصلاً) فلا وميض ممكن مهما استغرق تحميل بقية السكربتات أدناه.
-     راجع css/base.css وjs/pin.js:unlockApp لبقية الآلية. */
+  /* قفل PIN: أول شيء بالإقلاع — لا يعتمد على شبكة ولا على "ضيف أم متصل" */
   if (localStorage.getItem(PIN_KEY) && localStorage.getItem(LOCKED_KEY) === 'true') {
     lockApp();
   }
@@ -406,15 +313,16 @@ document.addEventListener('DOMContentLoaded', () => {
   _initAgentCopy();
   _initMarketInfoButtons();
 
+  /* الدوك لا يحمل .active ابتدائياً بالـHTML (التابّبار يحملها جاهزة على
+     الأسواق) — مزامنة واحدة هنا؛ كل تبديل لاحق عبر switchScreen(). */
+  _syncNavActive();
+
   $('connectEmailBtn')?.addEventListener('click', connectEmail);
   $('loginClose')?.addEventListener('click', () => { _stopWalletListWatch(); closeModal('modalLogin'); });
   $('loaderClose')?.addEventListener('click', hideLoader);
 
-  /* بطاقات شاشة الأسواق — الضغط يبدّل الأصل ويفتح شاشة التداول الجديدة
-     مباشرة عليه (بدل العودة لرئيسية شبه فارغة الآن بعد حذف بطاقة
-     السعر/لوحة الشراء والبيع منها — راجع تعليق رأس الملف). overlay
-     فوق شاشة الأسواق نفسها، بلا أي استدعاء switchScreen — تماماً
-     كفتح التقويم/الوكلاء فوق أي شاشة نشطة حالياً. */
+  /* بطاقات الأسواق: تبدّل الأصل وتفتح شاشة التداول الجديدة مباشرة عليه
+     (overlay فوق شاشة الأسواق، بلا switchScreen — كفتح التقويم/الوكلاء). */
   document.querySelectorAll('.market-card[data-asset]').forEach(c =>
     c.onclick = () => {
       switchAsset(c.dataset.asset);
@@ -422,9 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   );
 
-  /* ✅ Tabbar السفلي — 3 أزرار: رسم / رئيسية / أسواق (افتراضي الآن) —
-     الثلاثة الآن تمر عبر switchScreen() نفسها (راجع تعليقها أعلاه) —
-     لا حاجة لأي حالة خاصة بالرسم البياني هنا بعد الآن. */
+  /* Tabbar السفلي — 3 أزرار عبر switchScreen() */
   document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => switchScreen(btn.dataset.tab));
   });
@@ -435,14 +341,10 @@ document.addEventListener('DOMContentLoaded', () => {
     _toggleAddrPopover();
   };
 
-  /* ✅ نفس أزرار التذييل، كأول عناصر بالدوك */
   document.querySelectorAll('.dock-item[data-nav-screen]').forEach(btn => {
     btn.onclick = _dockAction(() => switchScreen(btn.dataset.navScreen));
   });
 
-  /* ✅ محتويات الدوك — نفس الـIDs القديمة تماماً. القفل انتقل لـappbar
-     (لم يعد بداخل الدوك، فلا حاجة لـ_dockAction هنا). المظهر أصبح
-     زراً واحداً موحَّداً داخل الدوك نفسه (راجع _initThemeToggle). */
   _el('btnLock').onclick = () => { if (State.isGuest) return _promptConnect(); lockApp(true); };
   $('btnDocs')?.addEventListener('click', () => closeDock());
 
@@ -548,9 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
     o.classList.remove('open');
   });
 
-  /* ═══════════════════════════════════════
-     Boot sequence
-  ═══════════════════════════════════════ */
+  /* ═══ Boot sequence ═══ */
   try {
     HL.connect();
     initPriceFeeds();
@@ -580,9 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /* ✅ جديد — رابط وكيل (?link=...) له الأولوية المطلقة على أي جلسة
-     محفوظة: جلسة تداول فورية بلا أي توقيع أو انتظار شبكة. راجع
-     js/agentlink.js + auth.js:_onAgentLinkConnected. */
+  /* رابط وكيل (?link=...) له الأولوية المطلقة على أي جلسة محفوظة */
   if (typeof AgentLink !== 'undefined' && AgentLink.tryConsume()) {
     _showAppOptimistically();
     _onAgentLinkConnected().then(_startAuthedTimers).catch(_fallbackToGuest);

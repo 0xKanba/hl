@@ -1,20 +1,11 @@
 /* ═══════════════════════════════════════
    trading.js
-   ✅ جديد (منصة "فتح صفقة جديدة") — askTrade()/execTrade() ونافذة
-      modalConfirm المرتبطة بهما حُذفتا بالكامل: كانتا تُشغَّلان حصراً
-      من زرَّي شراء/بيع القديمين بشاشة الرئيسية (btnBuy/btnSell)،
-      وكلاهما حُذف من index.html — استُبدل التدفّق بالكامل بشاشة
-      "فتح صفقة جديدة" الجديدة (راجع js/order/*.js)، التي تبني تأكيدها
-      الخاص وتستدعي hlExchange مباشرة (تدعم سوق/حدّي/إيقاف + TP/SL
-      اختياريين معاً، بخلاف askTrade القديمة التي كانت سوقاً فقط).
-      _multiPoll/_registerClosedCoin/askClose/execClose/askCloseAll/
-      execCloseAll/_promptConnect بقيت بلا أي تغيير — ما زالت تُستدعى
-      من positions.js (إغلاق صفقة من البطاقة)، وjs/order/index.js
-      وjs/chart/trading.js وjs/tpsl.js (كلها تستدعي _multiPoll بعد أي
-      عملية ناجحة، وtradeErr من api.js لترجمة الأخطاء).
-   ✅ FIX (2026-08) — كانت "التصفية التقريبية" رقماً مجرداً بلا أي شرح
-      داخل تأكيد الصفقة القديم — هذا التوضيح انتقل الآن لملف
-      js/order/ui.js (نفس الفكرة، داخل تأكيد الشاشة الجديدة).
+   ✅ askTrade()/execTrade() ونافذة modalConfirm حُذفتا: كانتا تُشغَّلان
+      حصراً من زرَّي شراء/بيع القديمين بالرئيسية — استُبدل التدفّق بشاشة
+      "فتح صفقة جديدة" (js/order/*.js) التي تبني تأكيدها وتستدعي hlExchange.
+   _multiPoll/_registerClosedCoin/askClose/execClose/askCloseAll/
+   execCloseAll/_promptConnect بلا تغيير — تُستدعى من positions.js
+   وjs/order/index.js وjs/chart/trading.js وjs/tpsl.js.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -45,27 +36,14 @@ function _multiPoll() {
 }
 
 /* ════ Register a coin as optimistically closed ════
- *
- * ✅ FIX for ghost-position bug (Issue 2).
- *
- * When execClose() or execCloseAll() optimistically removes a position from
- * State.positions, it must also register the position's coin here so that
- * pollAccount() can filter it out of rawPos during the guard window.
- *
- * Without this registration, pollAccount() would see rawPos.length > 0 (API
- * hasn't settled the close yet) and re-add the position to State.positions
- * via _applyPositions(), making it reappear as a ghost.
- *
- * The coin is auto-expired from State._closedCoins after 25 seconds — just
- * beyond the 20-second guard window — so normal sync resumes cleanly.
- ════ */
+   يمنع ظهور الصفقة المغلقة تفاؤلياً مجدداً (ghost position) خلال نافذة
+   الحماية 20 ثانية؛ تنتهي صلاحية التسجيل تلقائياً بعد 25 ثانية. */
 function _registerClosedCoin(coin) {
   if (!coin) return;
   if (!State._closedCoins) State._closedCoins = [];
   if (!State._closedCoins.includes(coin)) {
     State._closedCoins.push(coin);
   }
-  /* auto-expire after guard window + safety margin */
   setTimeout(() => {
     State._closedCoins = (State._closedCoins || []).filter(c => c !== coin);
   }, 25000);
@@ -122,12 +100,11 @@ async function execClose() {
     : State.prices[sym]?.mid;
   if (!midOz || midOz <= 0) { toast('سعر غير متاح، انتظر لحظة', 'err'); return; }
 
-  /* ✅ Optimistic: remove from UI instantly */
+  /* Optimistic: إزالة فورية من الواجهة */
   closeModal('modalClose');
   State._lastOptimisticClose = Date.now();
   State._emptyPosCount       = 0;
 
-  /* ✅ FIX: register coin BEFORE splicing so pollAccount can filter it */
   _registerClosedCoin(pos.coin);
 
   State.positions.splice(idx, 1);
@@ -157,8 +134,7 @@ async function execClose() {
   } catch (e) {
     hideCornerStatus();
     toast(tradeErr(e.message), 'err', 6000);
-    /* API failed: re-poll so position is restored from API if still open */
-    _multiPoll();
+    _multiPoll(); /* فشل الإرسال: أعد الجلب لاستعادة الصفقة إن بقيت مفتوحة */
   }
 }
 
@@ -182,12 +158,10 @@ async function execCloseAll() {
   const positions = [...State.positions];
   if (!positions.length) { closeModal('modalCloseAll'); return; }
 
-  /* Optimistic: clear all immediately */
   closeModal('modalCloseAll');
   State._lastOptimisticClose = Date.now();
   State._emptyPosCount       = 0;
 
-  /* ✅ FIX: register ALL coins before clearing */
   positions.forEach(p => _registerClosedCoin(p.position.coin));
 
   State.positions = [];

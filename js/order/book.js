@@ -1,15 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════
    js/order/book.js — عمق السوق (L2 Book) + السبريد.
-   ✅ يطابق حرفياً تنسيق WsBook الرسمي (websocket/subscriptions):
-      { coin, levels:[bidsArr, asksArr], time }، وكل مستوى بمصفوفتي
-      bids/asks هو { px, sz, n } — bids[0]/asks[0] هما أفضل سعر (الأقرب
-      للسبريد) دائماً حسب نفس التوثيق. ws.js يدعم الاشتراك بنوع l2Book
-      أصلاً (_subKey/_identify) — هذا الملف أول مستهلك فعلي له بالمشروع.
-   ✅ تحويل أونصة↔غرام لـXAU يطابق بقية المشروع تماماً (نفس ما تفعله
-      chart/datafeed.js وprices.js لنفس الزوج GOLD/XAU).
-   ✅ كاش لقطة العمق لكل عملة (OM._bookCache) — يجعل فتح الشاشة أو
-      تبديل الأصل يعرض عمقاً فوراً بدل فراغ بانتظار الخادم. الرسم
-      نفسه يتوقف تماماً وقت إغلاق الشاشة (لا عمل DOM بلا مُشاهد).
+   ✅ يطابق تنسيق WsBook الرسمي: { coin, levels:[bids, asks], time }،
+      كل مستوى { px, sz, n }، وbids[0]/asks[0] أفضل سعر (الأقرب للسبريد).
+   ✅ تحويل أونصة↔غرام لـXAU كبقية المشروع.
+   ✅ كاش لقطة عمق لكل عملة (OM._bookCache) — فتح/تبديل الأصل يرسم عمقاً
+      فوراً. الرسم يتوقف كلياً وقت إغلاق الشاشة (الاشتراك يملأ الكاش فقط).
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 var OM = window.__om = window.__om || {};
@@ -21,11 +16,6 @@ var OM = window.__om = window.__om || {};
     if (typeof HL === 'undefined') return;
     var coin = OM.coin(sym);
 
-    /* ✅ رسم فوري من آخر لقطة محفوظة لنفس العملة (إن وُجدت) — فتح/تبديل
-       الأصل يعرض عمقاً حقيقياً باللحظة صفر بدل لوحة باهتة تنتظر الدفعة
-       التالية من الخادم (l2Book تُدفَع بكل بلوك مضى عليه ≥0.5 ثانية
-       حسب التوثيق الرسمي، فالانتظار محسوس فعلاً). اللقطة المحفوظة قد
-       تكون قديمة بأجزاء من الثانية — تُستبدل بأول دفعة حيّة تصل. */
     var cached = OM._bookCache && OM._bookCache[coin];
     if (cached) OM._renderBook(sym, cached);
     else {
@@ -45,7 +35,7 @@ var OM = window.__om = window.__om || {};
 
   OM._renderBook = function (sym, data) {
     if (sym !== OM.sym || !data || !Array.isArray(data.levels)) return;
-    if (!OM.visible) return; /* الشاشة مغلقة — لا رسم؛ الكاش أعلاه كافٍ للفتح التالي */
+    if (!OM.visible) return;
     var bidsRaw = data.levels[0] || [];
     var asksRaw = data.levels[1] || [];
     var a       = OM.asset(sym);
@@ -70,8 +60,7 @@ var OM = window.__om = window.__om || {};
     var bidsEl = document.getElementById('omDepthBids');
     var asksEl = document.getElementById('omDepthAsks');
     if (bidsEl) bidsEl.innerHTML = bids.map(function (l) { return OM._depthRowHtml(l, a, maxSz, szDp, 'bid'); }).join('');
-    /* الأفضل (asks[0]) يُرسَم أقرب للسبريد — بالأسفل ضمن قائمة الطلبات
-       المعروضة من الأعلى للأسفل، فنعكس ترتيب المصفوفة للعرض فقط. */
+    /* الأفضل (asks[0]) أقرب للسبريد — نعكس الترتيب للعرض فقط */
     if (asksEl) asksEl.innerHTML = asks.slice().reverse().map(function (l) { return OM._depthRowHtml(l, a, maxSz, szDp, 'ask'); }).join('');
 
     var wrap = document.getElementById('omDepthWrap');
