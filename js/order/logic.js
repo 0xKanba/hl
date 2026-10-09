@@ -11,6 +11,16 @@
       لأمر الإيقاف: يُرسَل وحده (grouping:'na') ويُلحَق TP/SL بعد التفعيل
       الفعلي (index.js:_tickPendingWatch) — حزم trigger entry غير موثّق.
    ⚠️ الكمية تُحوَّل بـOM.szToOz (قسمة TROY للغرام) — dispToOz للأسعار فقط.
+
+   ✅ FIX (معاينة التصفية) — كانت المعاينة تعرض سعر تصفية *أعلى* من سعر
+      الدخول للشراء (و*أدنى* للبيع) — وهذا مستحيل منطقياً لصفقة مفتوحة
+      بهامش كافٍ. الصيغة نفسها صحيحة (equity(P)=mm·sz·P)، لكنها تنقلب
+      حتماً حين يقلّ رصيد الحساب عن هامش الصيانة للكمية المُدخَلة (أي
+      الصفقة كانت ستُصفّى لحظة فتحها أصلاً، أو سيرفضها الخادم). الآن:
+      calcLiqPrice (positions.js) ترفض أي نتيجة بجهة خاطئة وتُعيد null،
+      وهذه الدالة تعرض «رصيد غير كافٍ» بدل رقم مضلِّل حين لا يغطّي
+      الرصيد الهامش الأولي المطلوب (القيمة ÷ الرافعة).
+   ✅ الرسوم تُعرَض كنسبة مئوية فقط (feePct) — لا مبالغ بالدولار.
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 var OM = window.__om = window.__om || {};
@@ -117,7 +127,8 @@ var OM = window.__om = window.__om || {};
     return out;
   };
 
-  /* معاينة حيّة — تعيد استخدام liqPriceDisplay/crossEquityExcluding/feeRate */
+  /* معاينة حيّة — تعيد استخدام liqPriceDisplay/crossEquityExcluding/feeRate.
+     يُعيد: { usd, margin, feePct, liqText, marginShort } — الرسوم نسبة فقط. */
   OM.buildPreview = function (sym, isBuy, qtyDisp, refPriceDisp) {
     var a = OM.asset(sym);
     if (!qtyDisp || qtyDisp <= 0 || !refPriceDisp) return null;
@@ -125,17 +136,22 @@ var OM = window.__om = window.__om || {};
     var refOz = dispToOz(sym, refPriceDisp);
     var usd    = refOz * qtyOz;
     var margin = usd / a.lev;
-    var fr     = feeRate(sym);
-    var feeOpen  = usd * fr;
-    var sziLiq   = isBuy ? qtyOz : -qtyOz;
+    var equity = crossEquityExcluding(0);
+    var sziLiq = isBuy ? qtyOz : -qtyOz;
+
+    /* الرصيد لا يغطي الهامش الأولي → لا معنى لسعر تصفية (الصفقة مرفوضة
+       أو مُصفّاة فوراً) — نُظهر السبب بدل رقم بجهة معكوسة */
+    var marginShort = !!a.cross && equity < margin;
+
     var liq = (typeof liqPriceDisplay === 'function')
-      ? liqPriceDisplay(sym, refOz, sziLiq, crossEquityExcluding(0))
+      ? liqPriceDisplay(sym, refOz, sziLiq, equity)
       : { text: '—' };
+
     return {
       usd: usd, margin: margin,
-      feeOpen: feeOpen, feeTotal: feeOpen * 2,
       feePct: feeRatePct(sym),
-      liqText: liq.text
+      liqText: marginShort ? 'رصيد غير كافٍ' : liq.text,
+      marginShort: marginShort
     };
   };
 

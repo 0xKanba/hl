@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   agents.js — إدارة محافظ الوكلاء (Hyperliquid Agent/API Wallets) — v6
+   agents.js — إدارة محافظ الوكلاء (Hyperliquid Agent/API Wallets) — v6.2
 
    ⚠️ العطل المُبلَّغ عنه (مُتكرر من v4): حذف وكيل من داخل المشروع لا
    ينعكس فعلياً — يبقى ظاهراً بـ app.hyperliquid.xyz/API. v5 أضافت
@@ -62,6 +62,23 @@
    سابقاً، فتبديل محفظة خلال نافذة الدقيقتين كان يُظهر خانة محفظة
    مختلفة تماماً كـ"فارغة" خطأً لو تشابه اسم الخانة).
 
+   ✅ v6.2 — إصلاحات واجهة (UI/UX):
+   (أ) زر "فهمت" وبطاقات التأكيد كانت تظهر "بأعلى" المحتوى لو المستخدم
+       نزل بالتمرير: الطبقات (#agConfirm/#agReveal) كانت position:
+       absolute;inset:0 *داخل* .ag-card وهو نفسه الحاوية القابلة للتمرير
+       — والعناصر المطلقة داخل حاوية تمرير تتحرك مع محتواها، فتُرسَم
+       على أول شاشة من المحتوى لا على الجزء المرئي. الآن .ag-card ثابتة
+       (overflow:hidden، عمود flex) والتمرير حصراً على .ag-body الداخلي،
+       فالطبقات تغطي دائماً الجزء المرئي بالضبط أينما كان التمرير.
+       طبقات التأكيد نفسها قابلة للتمرير لو ارتفاع المحتوى أكبر من شاشة
+       صغيرة (margin:auto بدل align-items:center — لا قصّ للأعلى).
+   (ب) كشف المفتاح (_showReveal) لا يُفتح إلا لو نافذة الوكلاء مفتوحة
+       فعلاً. كان تفعيل تلقائي (أول اتصال/أول صفقة) يفتح الطبقة داخل
+       نافذة مخفية، فتظهر لاحقاً فجأة بلا سياق عند فتح "الوكلاء". في
+       الحالة التلقائية يظهر توست بدلاً منها يدلّ على مكان المفتاح.
+   (ج) التوست/المؤشر فوق نافذة الوكلاء الآن (z-index بـbase.css) —
+       كانت تحذيرات هذه الصفحة تظهر خلفها بالطبقة الرئيسية.
+
    المرجع الرسمي المُستخدم للتحقّق (فُحص مباشرة قبل هذا التعديل):
    - https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint
    - https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets
@@ -96,6 +113,7 @@
   function _key(addr) { return AGENT_KEY_PREFIX + addr.toLowerCase(); }
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   function _lrKey(addr, name) { return addr.toLowerCase() + '::' + (name || UNNAMED_KEY); }
+  function _modalOpen() { return !!document.getElementById('agModal')?.classList.contains('open'); }
 
   function _esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
@@ -262,7 +280,9 @@
       if (!confirmed) console.warn('[agents.js] لم يظهر', slotName, 'عبر extraAgents خلال المهلة رغم قبول التوقيع (status:ok) — الوكيل مفعَّل فعلياً، القراءة فقط متأخرة.');
 
       _refreshUI();
-      _showReveal(rec);
+      /* ✅ v6.2 — كشف المفتاح فقط لو النافذة مفتوحة (راجع تعليق الرأس) */
+      if (_modalOpen()) _showReveal(rec);
+      else toast(`✅ فُعِّلت محفظة التداول (${slotName}) — تجد مفتاحها بقسم "الوكلاء" بالقائمة`, 'ok', 6000);
       return agent;
     } finally { hideLoader(); }
   }
@@ -392,20 +412,23 @@
   direction:rtl;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
 #agModal.open{display:flex;animation:agFade .18s ease;}
 @keyframes agFade{from{opacity:0}to{opacity:1}}
+/* v6.2 — البطاقة ثابتة (لا تتمرّر) والتمرير على .ag-body فقط، فتبقى طبقات
+   .ag-confirm المطلقة مثبّتة على الجزء المرئي مهما نزل المستخدم */
 .ag-card{background:var(--bg-app,#0f172a);border:1px solid rgba(255,255,255,.1);border-radius:20px;
-  width:min(94vw,440px);max-height:88vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.6);
+  width:min(94vw,440px);max-height:88vh;max-height:88dvh;display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 24px 70px rgba(0,0,0,.6);
   animation:agPop .2s cubic-bezier(.34,1.56,.64,1);position:relative;}
 @keyframes agPop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
-.ag-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;
-  border-bottom:1px solid rgba(255,255,255,.08);background:var(--bg-card,#1e293b);
-  position:sticky;top:0;z-index:2;border-radius:20px 20px 0 0;}
+.ag-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,.08);background:var(--bg-card,#1e293b);}
 .ag-title{font-size:16px;font-weight:900;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:7px;}
 .ag-hdr-btns{display:flex;align-items:center;gap:6px;}
 .ag-close{width:30px;height:30px;border-radius:50%;border:1.5px solid rgba(255,255,255,.14);
   background:rgba(255,255,255,.06);color:var(--text-primary,#f1f5f9);font-size:15px;
   display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s;}
 .ag-close:active{transform:scale(.88);}
-.ag-body{padding:16px 18px 22px;transition:opacity .15s;}
+.ag-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:16px 18px 22px;transition:opacity .15s;}
 .ag-body.ag-busy{opacity:.55;pointer-events:none;}
 .ag-sec-title{font-size:11px;font-weight:800;color:#94a3b8;letter-spacing:.6px;
   text-transform:uppercase;margin:16px 0 8px;}
@@ -451,20 +474,23 @@
 .ag-note b{color:#8b5cf6;}
 .ag-empty{text-align:center;padding:26px 10px;color:#94a3b8;font-size:13px;font-weight:700;}
 .ag-empty .ag-btn{margin-top:14px;max-width:230px;margin-inline:auto;}
+/* طبقات التأكيد/كشف المفتاح: مطلقة داخل .ag-card الثابتة (لا المتمرّرة)،
+   وتتمرّر هي نفسها لو المحتوى أطول من الشاشة — margin:auto للبطاقة
+   الداخلية (لا align-items:center) كي لا يُقصّ أعلاها أبداً */
 .ag-confirm{position:absolute;inset:0;background:rgba(0,0,0,.6);display:none;
-  align-items:center;justify-content:center;padding:20px;border-radius:20px;z-index:3;}
+  padding:20px;border-radius:20px;z-index:3;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
 .ag-confirm.open{display:flex;}
 .ag-confirm-card{background:var(--bg-card,#1e293b);border:1px solid rgba(255,255,255,.12);
-  border-radius:16px;padding:18px;width:100%;max-width:320px;text-align:center;}
+  border-radius:16px;padding:18px;width:100%;max-width:320px;text-align:center;margin:auto;flex-shrink:0;}
 .ag-confirm-txt{font-size:13px;color:var(--text-primary,#f1f5f9);line-height:1.7;
   margin-bottom:14px;font-weight:700;}
 .ag-confirm-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .ag-approve-ov{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.75);display:none;
   align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;
-  direction:rtl;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+  direction:rtl;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);overflow-y:auto;}
 .ag-approve-ov.open{display:flex;animation:agFade .18s ease;}
 .ag-approve-card{background:var(--bg-card,#1e293b);border:1px solid rgba(255,255,255,.12);
-  border-radius:18px;padding:20px;width:100%;max-width:340px;
+  border-radius:18px;padding:20px;width:100%;max-width:340px;margin:auto;
   animation:agPop .2s cubic-bezier(.34,1.56,.64,1);}
 .ag-approve-txt{font-size:12.5px;line-height:1.7;color:#94a3b8;text-align:center;}
 </style>`);
@@ -638,11 +664,15 @@
 
     _rowRegistry = new Map(); // ✅ يُعاد بناؤه بالكامل كل رسم — لا مراجع قديمة معلَّقة
     const { slotRows, otherRows, networkFailed } = await _buildRows(addr);
-    if (!document.getElementById('agModal')?.classList.contains('open')) return; // أُغلقت أثناء الجلب
+    if (!_modalOpen()) return; // أُغلقت أثناء الجلب
 
     const otherHtml = otherRows.length
       ? `<div class="ag-sec-title">وكلاء أخرى مرتبطة بحسابك</div>${otherRows.map(_agentCardHtml).join('')}`
       : '';
+
+    /* v6.2 — نحفظ موضع التمرير قبل إعادة البناء (مؤقّت الـ30s كان يقفز
+       بالمستخدم لأعلى القائمة أثناء قراءته) */
+    const prevScroll = body.scrollTop;
 
     body.innerHTML = `
       <div class="ag-sec-title">الوكلاء</div>
@@ -653,6 +683,7 @@
         🛡 كل وكيل يوقّع الصفقات فقط — لا يقدر إطلاقاً على سحب أو تحويل أموالك. Hyperliquid يسمح بحد أقصى 3 وكلاء مُسمّين لكل حساب — لهذا 3 خانات ثابتة فقط. حذف أي وكيل من هنا يُبطله فعلياً عند Hyperliquid (توقيع واحد) بصرف النظر عن مكان إنشائه، ويختفي نهائياً من app.hyperliquid.xyz/API خلال دقيقتين تقريباً (يُستبدل مؤقتاً بمفتاح مُهمَل غير قابل للاستخدام إطلاقاً — هذا وحده، لا "عدم حذف"، ما قد تراه هناك لبضع دقائق).
       </div>`;
 
+    if (body.dataset.rendered) body.scrollTop = prevScroll;
     body.dataset.rendered = '1';
     _wireActions();
   }
@@ -720,6 +751,7 @@
     setTxt('agRevealTitle', `🔑 ${rec.agentName || 'بلا اسم'}`);
     setTxt('agRevealPk', rec.pk);
     box.classList.add('open');
+    box.scrollTop = 0; // طبقة قابلة للتمرير — نبدأ دائماً من أعلاها (v6.2)
     const byId = id => document.getElementById(id);
     if (byId('agRevealCopyPk'))   byId('agRevealCopyPk').onclick   = () => _copy(rec.pk);
     if (byId('agRevealCopyLink')) byId('agRevealCopyLink').onclick = () => link ? _copy(link) : toast('تعذّر توليد الرابط', 'err');
@@ -736,18 +768,19 @@
     if (!box) { console.error('[agents.js] #agConfirm غير موجود'); return; }
     setTxt('agConfirmTxt', msg);
     box.classList.add('open');
+    box.scrollTop = 0;
     const noBtn = document.getElementById('agConfirmNo'), yesBtn = document.getElementById('agConfirmYes');
     if (noBtn)  noBtn.onclick  = () => { box.classList.remove('open'); if (onNo) onNo(); };
     if (yesBtn) yesBtn.onclick = () => { box.classList.remove('open'); onYes(); };
   }
 
-  function _refreshUI() { if (document.getElementById('agModal')?.classList.contains('open')) _render(); }
+  function _refreshUI() { if (_modalOpen()) _render(); }
 
   function _open() {
     if (State.isGuest || !State.wallet) { toast('سجّل الدخول أولاً', 'err'); return; }
     document.getElementById('agModal')?.classList.add('open');
     const body = document.getElementById('agBody');
-    if (body) body.dataset.rendered = '';
+    if (body) { body.dataset.rendered = ''; body.scrollTop = 0; }
     _render();
     clearInterval(_tickTimer);
     _tickTimer = setInterval(_render, 30000);

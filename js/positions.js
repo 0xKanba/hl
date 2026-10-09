@@ -5,13 +5,17 @@
    ✅ calcLiqPrice (Cross) — تقدير محلي، يُستخدم فقط لمعاينة صفقة لم
       تُفتح بعد (لا بيانات API عنها بعد) — راجع liqPriceFromPosition
       أدناه للصفقات المفتوحة فعلاً.
-   ✅ جديد — liqPriceFromPosition: لأي صفقة مفتوحة فعلياً، assetPositions[].
+   ✅ liqPriceFromPosition: لأي صفقة مفتوحة فعلياً، assetPositions[].
       position.liquidationPx موثّق رسمياً ضمن رد clearinghouseState (وبنفس
       الحقل بالضبط داخل WsAllDexsClearinghouseState الحي) — محسوب من خادم
       Hyperliquid نفسه بكامل تفاصيل الحساب (portfolio margin/unified
       account/هوامش دقيقة)، فهو دائماً أدق من أي حساب محلي تقريبي. هذه
       الدالة تقرأه مباشرة وتلجأ لـcalcLiqPrice فقط لو غاب الحقل نادراً.
       openPosDetail بالأسفل الآن يستخدمها بدل الحساب المحلي المباشر.
+   ✅ FIX (تصفية معكوسة) — calcLiqPrice الآن ترفض أي نتيجة بجهة خاطئة
+      (تصفية شراء ≥ سعر الدخول، أو تصفية بيع ≤ سعر الدخول) وتُعيد null
+      (فيُعرض "—")؛ كانت تُخرج أرقاماً معكوسة حين لا يغطي الرصيد هامش
+      الصيانة للكمية (راجع js/order/logic.js:buildPreview).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -101,10 +105,14 @@ function mergeFillData(rawPos, fills) {
        Long:  P = (entry − W/sz) / (1 − mmFrac)
        Short: P = (entry + W/sz) / (1 + mmFrac)
 
+   ⚠️ شرط صحة: لو W/sz < entry×mmFrac (الرصيد أقل من هامش الصيانة)،
+   ينقلب الناتج للجهة الخاطئة من سعر الدخول (تصفية الشراء فوقه، والبيع
+   تحته) — صفقة كهذه مُصفّاة فوراً أصلاً، فنعيد null بدل رقم مضلِّل.
+
    ⚠️ يُستخدم فقط حين لا توجد صفقة مفتوحة فعلياً بعد (معاينة قبل التنفيذ
-   بـtrading.js:askTrade وchart.js:_showCf) — لأي صفقة موجودة فعلاً بالحساب،
-   استخدم liqPriceFromPosition أدناه بدل هذه مباشرة (يقرأ رقم الخادم
-   الحقيقي، لا التقريب).
+   بـjs/order/logic.js:buildPreview وchart/trading.js:showCf) — لأي صفقة
+   موجودة فعلاً بالحساب، استخدم liqPriceFromPosition أدناه بدل هذه
+   مباشرة (يقرأ رقم الخادم الحقيقي، لا التقريب).
 ════════════════════════════════════════════════ */
 function calcLiqPrice(entryPxOz, sziOz, equityExclOwnPnl, isCross, maxLev) {
   if (!entryPxOz || !sziOz || !maxLev) return null;
@@ -124,6 +132,9 @@ function calcLiqPrice(entryPxOz, sziOz, equityExclOwnPnl, isCross, maxLev) {
   }
   if (!(liq > 0)) return null;
   if (side === -1 && liq > entryPxOz * 8) return null;
+  /* ✅ جهة التصفية: شراء → تحت الدخول دائماً · بيع → فوق الدخول دائماً */
+  if (side > 0 && liq >= entryPxOz) return null;
+  if (side < 0 && liq <= entryPxOz) return null;
   return liq;
 }
 
@@ -137,7 +148,7 @@ function liqPriceDisplay(sym, entryPxOz, sziOz, equityExclOwnPnl) {
 }
 
 /* ════════════════════════════════════════════════
-   ✅ جديد — سعر التصفية لصفقة مفتوحة فعلياً: يقرأ position.liquidationPx
+   سعر التصفية لصفقة مفتوحة فعلياً: يقرأ position.liquidationPx
    القادم مباشرة من الخادم (clearinghouseState وWsAllDexsClearinghouseState
    الحي، نفس الحقل بالضبط بعد mergeFillData أعلاه — لا يُفقد بالدمج).
    يلجأ لـcalcLiqPrice فقط لو الحقل غائب/صفر نادراً (استجابة جزئية مثلاً).

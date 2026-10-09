@@ -21,6 +21,14 @@
      ≥ 900px سطح مكتب: دوك = شريط جانبي دائم يحجز مساحة حقيقية، التابّبار
         و☰ يختفيان، عمود محتوى أوسع (1180px)، شبكات متجاوبة للأسواق
         والصفقات، بطاقة الرصيد بعرض أقصى ذاتي.
+
+   ✅ الجولة الثامنة (UI):
+     • بطاقات الأسواق: لا بنفسجي عند hover ولا عند الاختيار (.active)
+       — حدّ/خلفية محايدة فقط (زر "؟" أيضاً). البنفسجي يبقى هوية بقية
+       الواجهة (تابّبار/دوك/أزرار)، لا بطاقات الأصول.
+     • سطح مكتب: بطاقة الأصل صارت بطاقة عمودية أنيقة (صورة + اسم كامل
+       بسطر/سطرين، ثم سعر كبير + نسبة التغيّر بصف مستقل) بدل مستطيل أفقي
+       كان يقتطع اسم الأصل بنقاط (…) رغم وفرة المساحة.
 ════════════════════════════════════════════════════════════════ */
 
 @layer components {
@@ -393,7 +401,10 @@
 /* ════════════════════════════════════
    MARKETS SCREEN — بطاقة أنيقة لكل سوق (الرافعة بنافذة معلومات الأصل،
    تُقرأ حيّاً من ASSETS[sym].lev). حشو مُصغَّر للموبايل؛ عند 900px+
-   .markets-list شبكة متجاوبة — كل بطاقة مستقلة البنية أصلاً.
+   .markets-list شبكة متجاوبة وكل بطاقة عمودية (راجع قسم سطح المكتب).
+
+   ✅ لا بنفسجي هنا: .active (الأصل المختار) وhover زر "؟" بحدّ/خلفية
+   محايدة من الرمادي — البنفسجي يبقى للتنقّل والأزرار الأساسية فقط.
 ════════════════════════════════════ */
 .markets-list { display: flex; flex-direction: column; gap: 7px; }
 
@@ -414,7 +425,7 @@
 @keyframes mcIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 
 .market-card:active { transform: scale(.97); }
-.market-card.active { border-color: var(--ac); box-shadow: var(--glow-ac); background: var(--bg-input); }
+.market-card.active { border-color: var(--border-strong); background: var(--bg-input); }
 
 .market-card-img-wrap {
   width: 52px; height: 52px; border-radius: var(--r-md); flex-shrink: 0;
@@ -437,7 +448,7 @@
   color: var(--text-muted); font-size: 10px; font-weight: var(--fw-bold); line-height: 1;
   cursor: pointer; transition: all var(--dur-base) var(--ease-standard);
 }
-.market-info-btn:hover  { border-color: var(--ac); color: var(--ac); background: var(--ac-dim); }
+.market-info-btn:hover  { border-color: var(--text-secondary); color: var(--text-primary); background: var(--bg-elev); }
 .market-info-btn:active { transform: scale(.85); }
 
 .market-card-price { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px; flex-shrink: 0; }
@@ -827,7 +838,7 @@
 #cornerStatus.show { opacity: 1; transform: translateY(0); }
 
 /* ════════════════════════════════════
-   TOAST
+   TOAST — z-index = --z-toast (base.css): فوق كل النوافذ دائماً
 ════════════════════════════════════ */
 #toast {
   position: fixed; bottom: calc(78px + env(safe-area-inset-bottom)); left: 50%;
@@ -1002,12 +1013,41 @@
   }
   .bc-primary-value { font-size: 32px; }
 
-  /* ── الأسواق: شبكة حقيقية ── */
+  /* ── الأسواق: شبكة بطاقات عمودية أنيقة ──
+     البطاقة الأفقية القديمة (صورة + اسم + سعر بصف واحد) كانت تترك للاسم
+     بضعة بكسلات فقط فيُقتطع بنقاط رغم وفرة المساحة. الآن: صف علوي
+     [صورة | اسم كامل + "؟"] وصف سفلي مستقل [سعر كبير | نسبة التغيّر]،
+     بنفس عناصر HTML تماماً (grid-template-areas — بلا لمس index.html). */
   .markets-list {
     max-width: none; width: 100%;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-    gap: 12px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 14px;
   }
+  .market-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "img info" "price price";
+    align-items: center; column-gap: 14px; row-gap: 14px;
+    padding: 18px 18px 16px;
+    border-radius: var(--r-xl);
+  }
+  .market-card-img-wrap { grid-area: img; width: 64px; height: 64px; border-radius: var(--r-lg); }
+  .market-card-info     { grid-area: info; }
+  .market-card-name-row { align-items: flex-start; gap: 8px; }
+  .market-card-name {
+    font-size: var(--fs-2xl); line-height: 1.35;
+    white-space: normal; overflow: visible; text-overflow: clip;
+  }
+  .market-info-btn { margin-top: 3px; }
+  .market-card-price {
+    grid-area: price;
+    flex-direction: row; align-items: center; justify-content: space-between;
+    padding-top: 14px; border-top: 1px solid var(--border);
+  }
+  .market-card-value { font-size: 26px; }
+  .market-card-chg   { font-size: var(--fs-sm); padding: 3px 11px; }
+  .market-card:hover { border-color: var(--border-strong); background: var(--bg-elev); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+  .market-card.active:hover { background: var(--bg-input); }
 
   /* ── الصفقات المفتوحة: شبكة بطاقات مستقلة بدل قائمة بفواصل سفلية ── */
   #positionsList {

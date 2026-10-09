@@ -6,6 +6,7 @@
    _multiPoll/_registerClosedCoin/askClose/execClose/askCloseAll/
    execCloseAll/_promptConnect بلا تغيير — تُستدعى من positions.js
    وjs/order/index.js وjs/chart/trading.js وjs/tpsl.js.
+   ✅ رسوم الإغلاق بنافذة askClose تُعرَض كنسبة مئوية فقط (feeRatePct).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -64,9 +65,6 @@ window.askClose = function (i) {
   const dp       = isGram ? 2 : a.szDp;
   const entryDisp = isGram ? parseFloat(pos.entryPx || 0) / TROY : parseFloat(pos.entryPx || 0);
   const isLong   = sziOz > 0;
-  const closeFee = curPx
-    ? (Math.abs(sziOz) * (isGram ? curPx * TROY : curPx) * feeRate(sym)).toFixed(4)
-    : '—';
 
   setTxt('closeTitle', `${a.icon} إغلاق — ${a.name}`);
   $('closeDetails').innerHTML = `
@@ -75,7 +73,7 @@ window.askClose = function (i) {
     <div class="confirm-row"><span class="confirm-key">سعر الدخول</span><span class="confirm-val">$${fmt(entryDisp,a.pxDp)}</span></div>
     <div class="confirm-row"><span class="confirm-key">السعر الحالي</span><span class="confirm-val">${curPx?'$'+fmt(curPx,a.pxDp):'—'}</span></div>
     <div class="confirm-row"><span class="confirm-key">الربح / الخسارة</span><span class="confirm-val ${pnl>=0?'buy':'sell'}">${pnl>=0?'+':''}$${fmt(pnl,2)}</span></div>
-    <div class="confirm-row"><span class="confirm-key">رسوم الإغلاق</span><span class="confirm-val fee">$${closeFee} (${feeRatePct(sym)})</span></div>`;
+    <div class="confirm-row"><span class="confirm-key">رسوم الإغلاق</span><span class="confirm-val fee">${feeRatePct(sym)}</span></div>`;
 
   State.pendingClose = i;
   openModal('modalClose');

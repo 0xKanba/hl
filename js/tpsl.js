@@ -7,6 +7,8 @@
       ReferenceError يُلقَط بـcatch ويعرض توست خطأ ❌ متناقض تماماً —
       مشكلة نشطة بالإنتاج. صُححت لـ_multiPoll الحقيقية (trading.js،
       مُحمَّلة قبل هذا الملف بترتيب index.html).
+   ✅ الرسوم بنوافذ TP/SL تُعرَض كنسبة مئوية فقط (feeRatePct) — لا مبالغ
+      بالدولار. سطر "صافي" ما زال يخصم الرسوم داخلياً.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -57,7 +59,7 @@ function _buildTpDetails(tpPxOz, ep, szi, a, coin) {
   return `<div class="confirm-row"><span class="confirm-key">🎯 سعر التفعيل</span><span class="confirm-val tp">$${fmt(tpDisp, a.pxDp)}</span></div>
     <div class="tpsl-breakdown">
       <div class="tb-row"><span>💰 ربح متوقع</span><span class="tb-mono pos">${gross >= 0 ? '+' : ''}$${Math.abs(gross).toFixed(2)}</span></div>
-      <div class="tb-row"><span>💸 رسوم (${feeRatePct(coin)})</span><span class="tb-mono warn">−$${fee.toFixed(4)}</span></div>
+      <div class="tb-row"><span>💸 الرسوم</span><span class="tb-mono warn">${feeRatePct(coin)}</span></div>
       <div class="tb-row tb-net"><span>🏁 صافي</span><span class="tb-mono ${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : ''}$${Math.abs(net).toFixed(2)}</span></div>
     </div>`;
 }
@@ -78,7 +80,7 @@ function recalcTpPreview() {
   el.innerHTML = `<div class="tpsl-breakdown">
     <div class="tb-row"><span>✅ سعر التفعيل</span><span class="tb-mono">$${fmt(pxDisp, a.pxDp)}</span></div>
     <div class="tb-row"><span>💰 ربح متوقع</span><span class="tb-mono pos">+$${val.toFixed(2)}</span></div>
-    <div class="tb-row"><span>💸 رسوم (${feeRatePct(tp.sym)})</span><span class="tb-mono warn">−$${fee.toFixed(4)}</span></div>
+    <div class="tb-row"><span>💸 الرسوم</span><span class="tb-mono warn">${feeRatePct(tp.sym)}</span></div>
     <div class="tb-row tb-net"><span>🏁 صافي</span><span class="tb-mono ${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : ''}$${net.toFixed(2)}</span></div>
   </div>`;
 }
@@ -165,7 +167,7 @@ function _buildSlDetails(slPxOz, ep, szi, a, coin) {
   return `<div class="confirm-row"><span class="confirm-key">⛔ سعر الوقف</span><span class="confirm-val sl">$${fmt(slDisp, a.pxDp)}</span></div>
     <div class="tpsl-breakdown">
       <div class="tb-row"><span>📉 خسارة متوقعة</span><span class="tb-mono neg">${gross >= 0 ? '+' : ''}$${Math.abs(gross).toFixed(2)}</span></div>
-      <div class="tb-row"><span>💸 رسوم</span><span class="tb-mono warn">−$${fee.toFixed(4)}</span></div>
+      <div class="tb-row"><span>💸 الرسوم</span><span class="tb-mono warn">${feeRatePct(coin)}</span></div>
       <div class="tb-row tb-net"><span>🏁 صافي</span><span class="tb-mono ${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : ''}$${Math.abs(net).toFixed(2)}</span></div>
     </div>`;
 }
@@ -186,7 +188,7 @@ function recalcSlPreview() {
   el.innerHTML = `<div class="tpsl-breakdown">
     <div class="tb-row"><span>⛔ سعر الوقف</span><span class="tb-mono">$${fmt(pxDisp, a.pxDp)}</span></div>
     <div class="tb-row"><span>📉 خسارة</span><span class="tb-mono neg">−$${val.toFixed(2)}</span></div>
-    <div class="tb-row"><span>💸 رسوم (${feeRatePct(sl.sym)})</span><span class="tb-mono warn">−$${fee.toFixed(4)}</span></div>
+    <div class="tb-row"><span>💸 الرسوم</span><span class="tb-mono warn">${feeRatePct(sl.sym)}</span></div>
     <div class="tb-row tb-net"><span>🏁 صافي الخسارة</span><span class="tb-mono neg">${net.toFixed(2)}</span></div>
   </div>`;
 }

@@ -9,6 +9,8 @@
       يستأنف تلقائياً عند اتصال المحفظة (OM.resumePendingWatch من auth.js).
    ✅ لا حد أدنى لقيمة الأمر ولا فحص هامش محلي — الشرط الوحيد qty > 0،
       مطابق للنظام القديم؛ أي رفض فعلي من الخادم يمر عبر tradeErr.
+   ✅ الرسوم بالمعاينة وورقة التأكيد تُعرَض كنسبة مئوية فقط (0.009% للأصول
+      العامة · 0.09% للذهب) — لا مبالغ بالدولار.
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 var OM = window.__om = window.__om || {};
@@ -267,7 +269,7 @@ var OM = window.__om = window.__om || {};
         OM._prevRow('القيمة التقريبية', '≈ $' + prev.usd.toFixed(2)) +
         OM._prevRow('الهامش المطلوب', '≈ $' + prev.margin.toFixed(2), 'warn') +
         OM._prevRow('⚡ التصفية التقريبية', prev.liqText, 'warn') +
-        OM._prevRow('الرسوم (' + prev.feePct + ')', '$' + prev.feeOpen.toFixed(4));
+        OM._prevRow('الرسوم', prev.feePct);
     }
 
     var submitBtn = document.getElementById('omSubmit');
@@ -390,7 +392,7 @@ var OM = window.__om = window.__om || {};
       rows += OM._cfRow('القيمة التقريبية', '≈ $' + prev.usd.toFixed(2));
       rows += OM._cfRow('الهامش المطلوب', '≈ $' + prev.margin.toFixed(2));
       rows += OM._cfRow('⚡ التصفية التقريبية', prev.liqText);
-      rows += OM._cfRow('الرسوم', '$' + prev.feeOpen.toFixed(4) + ' (' + prev.feePct + ')');
+      rows += OM._cfRow('الرسوم', prev.feePct);
     }
     if (p.tpDisp) rows += OM._cfRow('🎯 جني الربح', '$' + fmt(p.tpDisp, a.pxDp));
     if (p.slDisp) rows += OM._cfRow('🛡 وقف الخسارة', '$' + fmt(p.slDisp, a.pxDp));
