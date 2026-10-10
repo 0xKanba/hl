@@ -105,7 +105,6 @@
 ├── index.html
 ├── manifest.json
 ├── md.html
-├── s.zip
 ├── seo.json
 └── sw.js
 ```
