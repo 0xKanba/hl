@@ -10,9 +10,9 @@
    تلقائياً مجدداً بأول push فعلي، هذا فقط ضمان لأول تحميل مباشر بعد
    نسخ هذي الملفات. */
 
-const CACHE_APP   = 'hltrade-app-202610092306-e7bdacb';
-const CACHE_IMGS  = 'hltrade-img-202610092306-e7bdacb';
-const CACHE_FONTS = 'hltrade-fnt-202610092306-e7bdacb';
+const CACHE_APP   = 'hltrade-app-202610141029-c9455b2';
+const CACHE_IMGS  = 'hltrade-img-202610141029-c9455b2';
+const CACHE_FONTS = 'hltrade-fnt-202610141029-c9455b2';
 
 const APP_SHELL = [
   '/',
