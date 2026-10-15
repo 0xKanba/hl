@@ -7,8 +7,14 @@
       اختفى الـoid من State.openOrders؟ وظهر بـState.fillsCache (تأكيد أنه
       *نُفِّذ* لا أُلغي)؟ → نُلحق TP/SL عبر placeNativeTpsl نفسها (tpsl.js).
       يستأنف تلقائياً عند اتصال المحفظة (OM.resumePendingWatch من auth.js).
-   ✅ لا حد أدنى لقيمة الأمر ولا فحص هامش محلي — الشرط الوحيد qty > 0،
-      مطابق للنظام القديم؛ أي رفض فعلي من الخادم يمر عبر tradeErr.
+   ✅ لا حد أدنى مانع لقيمة الأمر (كـmaster) — الشرط الوحيد qty > 0؛ الحاكم
+      هو Hyperliquid (أقل قيمة $10 لأوامر الفتح) ويمر أي رفض عبر tradeErr
+      برسالة عربية واضحة. المعاينة وورقة التأكيد تُظهران تنبيهاً فقط.
+   ✅ الجولة التاسعة — تنفيذ الأمر ونتيجته منقولان من master (execTrade):
+        updateLeverage ← order ← قراءة statuses[0] ← (filled | resting | لم يُنفَّذ)
+        بصيغة التوست نفسها (الكمية/السعر المتوسط بوحدة العرض)، ثم
+        autoSetReferrer() و_multiPoll(). حقل الكمية يعود لأصغر preset
+        (presets[0]) لو تُرك فارغاً/صفراً (كـapp.js القديم:_initQtyInput).
    ✅ الرسوم بالمعاينة وورقة التأكيد تُعرَض كنسبة مئوية فقط (0.009% للأصول
       العامة · 0.09% للذهب) — لا مبالغ بالدولار.
 ═══════════════════════════════════════════════════════════════ */
@@ -69,6 +75,7 @@ var OM = window.__om = window.__om || {};
     OM._hideConfirm();
   };
 
+  /* أصغر preset = الحجم الأدنى الافتراضي لكل أصل (كـmaster) */
   OM._qtyDefault = function (sym) {
     var a = OM.asset(sym);
     return (a.presets && a.presets[0]) || 1;
@@ -269,7 +276,8 @@ var OM = window.__om = window.__om || {};
         OM._prevRow('القيمة التقريبية', '≈ $' + prev.usd.toFixed(2)) +
         OM._prevRow('الهامش المطلوب', '≈ $' + prev.margin.toFixed(2), 'warn') +
         OM._prevRow('⚡ التصفية التقريبية', prev.liqText, 'warn') +
-        OM._prevRow('الرسوم', prev.feePct);
+        OM._prevRow('الرسوم', prev.feePct) +
+        (prev.belowMin ? OM._prevRow('⚠️ الحد الأدنى', 'أقل من $' + OM.MIN_NOTIONAL + ' — قد يرفضه Hyperliquid', 'warn') : '');
     }
 
     var submitBtn = document.getElementById('omSubmit');
@@ -310,7 +318,17 @@ var OM = window.__om = window.__om || {};
     document.getElementById('omTypeLimit').onclick  = function () { OM._setMode('priced'); };
 
     document.getElementById('omPriceInput').addEventListener('input', OM._scheduleRefresh);
-    document.getElementById('omQtyInput').addEventListener('input', function () { OM._qtyUserEdited = true; OM._scheduleRefresh(); });
+    var qtyInput = document.getElementById('omQtyInput');
+    qtyInput.addEventListener('input', function () { OM._qtyUserEdited = true; OM._scheduleRefresh(); });
+    /* كـmaster (_initQtyInput): ترك الحقل فارغاً/صفراً يُعيده لأصغر حجم افتراضي */
+    qtyInput.addEventListener('blur', function () {
+      var v = parseFloat(this.value);
+      if (!this.value || !(v > 0)) {
+        this.value = OM._qtyDefault(OM.sym);
+        OM._qtyUserEdited = false;
+        OM._scheduleRefresh();
+      }
+    });
     document.getElementById('omTpInput').addEventListener('input', OM._scheduleRefresh);
     document.getElementById('omSlInput').addEventListener('input', OM._scheduleRefresh);
 
@@ -393,6 +411,7 @@ var OM = window.__om = window.__om || {};
       rows += OM._cfRow('الهامش المطلوب', '≈ $' + prev.margin.toFixed(2));
       rows += OM._cfRow('⚡ التصفية التقريبية', prev.liqText);
       rows += OM._cfRow('الرسوم', prev.feePct);
+      if (prev.belowMin) rows += OM._cfRow('⚠️ الحد الأدنى', 'أقل من $' + OM.MIN_NOTIONAL + ' — قد يُرفض');
     }
     if (p.tpDisp) rows += OM._cfRow('🎯 جني الربح', '$' + fmt(p.tpDisp, a.pxDp));
     if (p.slDisp) rows += OM._cfRow('🛡 وقف الخسارة', '$' + fmt(p.slDisp, a.pxDp));
@@ -416,11 +435,12 @@ var OM = window.__om = window.__om || {};
     document.getElementById('omConfirmOv')?.classList.remove('open');
   };
 
-  /* ══════════ التنفيذ الفعلي ══════════ */
+  /* ══════════ التنفيذ الفعلي — تدفّق master (execTrade) ══════════ */
   OM._execute = async function () {
     var p = OM._pendingSubmit; if (!p) { OM._hideConfirm(); return; }
     var a    = OM.asset(p.sym);
-    var aApi = OM.isGram(p.sym) ? ASSETS['GOLD'] : ASSETS[p.sym];
+    var aApi = ASSETS[p.sym] || OM.asset(p.sym);          /* كـmaster: ASSETS[sym] مباشرة */
+    var aCoin = OM.isGram(p.sym) ? ASSETS['GOLD'] : ASSETS[p.sym];
 
     var btn = document.getElementById('omConfirmExec');
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="om-sp"></span>'; }
@@ -438,8 +458,17 @@ var OM = window.__om = window.__om || {};
       OM.close();
 
       if (p.kind === 'market') {
-        toast('✅ نُفِّذ — ' + a.icon + ' ' + (p.isBuy ? 'شراء' : 'بيع') + ' ' + p.qtyDisp + ' ' + a.unit, 'ok', 5000);
-        if (typeof playFillSound === 'function') playFillSound();
+        if (entryStatus.filled) {
+          var f = entryStatus.filled;
+          var dispSz = a.gram ? (+f.totalSz * TROY).toFixed(2) : f.totalSz;
+          var dispPx = (parseFloat(f.avgPx) / (a.gram ? TROY : 1)).toFixed(a.pxDp);
+          toast('✅ مُنفَّذ — ' + a.icon + ' ' + dispSz + ' ' + a.unit + ' @ $' + dispPx, 'ok', 5000);
+          if (typeof playFillSound === 'function') playFillSound();
+        } else if (entryStatus.resting) {
+          toast('⏳ أمر معلق — ' + a.icon + ' ' + p.qtyDisp + ' ' + a.unit, 'info', 4000);
+        } else {
+          toast('⚠️ لم يُنفَّذ — حاول مجدداً', 'err', 4000);
+        }
       } else if (p.kind === 'limit') {
         toast('📥 وُضع الأمر الحدّي بنجاح — ' + a.icon + ' ' + a.name, 'ok', 5000);
       } else {
@@ -447,7 +476,7 @@ var OM = window.__om = window.__om || {};
         var oid = entryStatus.resting && entryStatus.resting.oid;
         if (oid && (p.tpDisp || p.slDisp) && State.wallet) {
           OM.addPending(State.wallet.address, {
-            oid: oid, coin: aApi.coin, sym: p.sym, isBuy: p.isBuy,
+            oid: oid, coin: aCoin.coin, sym: p.sym, isBuy: p.isBuy,
             tp: p.tpDisp || null, sl: p.slDisp || null, at: Date.now(), seen: false
           });
           OM._startPendingWatch();
@@ -460,6 +489,7 @@ var OM = window.__om = window.__om || {};
         toast('⚠️ فُتحت الصفقة، لكن تعذّر ضبط ' + (legIssues.length > 1 ? 'TP/SL' : (p.tpDisp ? 'جني الربح' : 'وقف الخسارة')) + ' تلقائياً — اضبطه يدوياً من بطاقة الصفقة', 'warn', 7500);
       }
 
+      if (typeof autoSetReferrer === 'function') autoSetReferrer();   /* كـmaster */
       _multiPoll();
     } catch (e) {
       toast(tradeErr(e.message), 'err', 6000);
