@@ -1,24 +1,13 @@
 /* ═══════════════════════════════════════════════════════════════
    js/chart/state.js — الحالة الداخلية المشتركة لوحدة الرسم البياني
-   ✅ جديد — chart.js انقسم لعدة ملفات هنا (js/chart/*.js) بطلب مباشر
-      لتسهيل الترتيب/الصيانة بدل ملف واحد ضخم. لا حزمة/bundler بهذا
-      المشروع (سكربتات كلاسيكية بترتيب محدد بـindex.html)، فكل ملفات
-      js/chart/*.js تشارك حالة واحدة عبر الكائن الداخلي CM (Chart
-      Module) — window.__cm. هذا الملف (يُحمَّل أولاً) يُنشئه، وبقية
-      الملفات (datafeed.js → ui.js → trading.js → index.js) تتوسّع
-      فيه بالترتيب. آخرها (index.js) يجمع الواجهة العامة النهائية
-      window.ChartModule — بلا أي تغيير على app.js (ما زال يستدعي فقط
-      ChartModule.open()/close()/switchInterval()/switchAssetChart()/
-      refreshLines() كما كان بالضبط).
-   ⚠️ ملاحظة تقنية مهمة: `CM` هنا مُعرَّف بـ`var` عمداً وليس `const` —
-      كل ملف بمجلد js/chart/ يكرّر نفس السطر (`var CM = window.__cm =
-      window.__cm || {};`) لأن `let`/`const` بمستوى السكربت الأعلى
-      يتشارك نطاقاً معجمياً واحداً عبر كل وسوم <script> الكلاسيكية
-      بالصفحة (بعكس `var`) — إعادة تعريف نفس اسم `const` بملفين
-      منفصلين يرمي SyntaxError فوراً ويكسر الصفحة بالكامل. `var` وحده
-      يسمح بإعادة التعريف الآمنة عبر الملفات. كل شيء آخر بكل ملف يعيش
-      داخل IIFE خاصة به (بلا أي تسريب لأسماء عامة تتعارض مع بقية
-      المشروع)، ويُلحَق بـCM فقط عند الحاجة الفعلية للمشاركة بين الملفات.
+   (نفس البنية: كائن CM مشترك عبر js/chart/*.js، و`var` عمداً لا `const`).
+
+   ✅ الجولة الجديدة:
+      • LAYOUT_KEY → layout_v2: النسخة v1 كانت تحمل خصائص قديمة (شبكة +
+        خط سعر) تُعيدها TradingView عند الاستعادة فوق إعداداتنا النظيفة.
+      • TPL_KEY: قوالب مسمّاة محلية (localStorage) — راجع ui.js.
+      • TOOLS_KEY / INSTANT_KEY: وضع الأدوات المتقدمة · التنفيذ الفوري.
+      • lsSet تُرجع true/false (كان يبتلع فشل الحصة بصمت).
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 var CM = window.__cm = window.__cm || {};
@@ -30,7 +19,10 @@ var CM = window.__cm = window.__cm || {};
   CM.TROY       = 31.1035;
   CM.MIN_TIME   = 1577836800000;          // 2020-01-01 00:00 UTC
   CM.LS_PREFIX  = 'hl_tv_';
-  CM.LAYOUT_KEY = 'layout_v1';
+  CM.LAYOUT_KEY = 'layout_v2';
+  CM.TPL_KEY    = 'tpl_v1';
+  CM.TOOLS_KEY  = 'tools_on';
+  CM.INSTANT_KEY = 'instant_on';
 
   CM.TV_RESOLUTIONS = ['1','3','5','15','30','60','120','240','1D','1W'];
 
@@ -39,8 +31,6 @@ var CM = window.__cm = window.__cm || {};
     '60':'1h','120':'2h','240':'4h','1D':'1d','1W':'1d'
   };
 
-  /* ✅ نفس قائمة الأصول القديمة (كانت _tvNav) — الآن مصدر بيانات
-     القائمة المنسدلة (أسعارها) بدل صف أزرار ثابت (راجع ui.js). */
   CM.NAV_ASSETS = [
     { sym:'CL',     ar:'النفط',     icon:'🛢'  },
     { sym:'GOLD',   ar:'الذهب',     icon:'🟡'  },
@@ -49,26 +39,38 @@ var CM = window.__cm = window.__cm || {};
     { sym:'NQ',     ar:'ناسداك',    icon:'📊'  },
   ];
 
-  /* ══════════ MODULE STATE (مشترك بين كل ملفات js/chart/) ══════════ */
+  /* ══════════ MODULE STATE ══════════ */
   CM.widget       = null;
   CM.datafeed     = null;
   CM.visible      = false;
   CM.sym          = 'CL';
   CM.interval     = '60';
   CM.clockTimer   = null;
+  CM.clockTick    = 0;
   CM.saveTimer    = null;
   CM.prices       = {};
   CM.bboUnsub     = null;
   CM.bboSym       = '';
   CM.lines        = [];
+  CM.linesSig     = '';
+  CM.entryLine    = null;
+  CM.entryTxt     = '';
   CM.linesReady   = false;
   CM.linesPending = false;
   CM.assetDropOpen  = false;
   CM.floatTradeOpen = false;
+  CM.menuOpen       = false;
+  CM.trading        = false;
 
   /* ══════════ HELPERS ══════════ */
   CM.lsGet = function (k) { try { return JSON.parse(localStorage.getItem(CM.LS_PREFIX + k)); } catch (e) { return null; } };
-  CM.lsSet = function (k, v) { try { localStorage.setItem(CM.LS_PREFIX + k, JSON.stringify(v)); } catch (e) {} };
+  CM.lsSet = function (k, v) {
+    try { localStorage.setItem(CM.LS_PREFIX + k, JSON.stringify(v)); return true; }
+    catch (e) { return false; }
+  };
+
+  CM.toolsOn = !!CM.lsGet(CM.TOOLS_KEY);
+  CM.instant = !!CM.lsGet(CM.INSTANT_KEY);
 
   CM.asset = function (s) {
     return (typeof ASSETS !== 'undefined' && ASSETS[s]) ||
@@ -86,10 +88,22 @@ var CM = window.__cm = window.__cm || {};
   CM.toOz   = function (s, v) { return CM.isGram(s) ? v * CM.TROY : v; };
   CM.dark   = function () { return (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark'; };
 
-  /* ══════════ UTC TIME NORMALIZATION ══════════
-     Every timestamp is snapped to the exact interval boundary via
-     floor (never rounds up/forward — verified case by case). No
-     drift, no timezone shifts, no manual compensation. */
+  CM.esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  CM.say = function (msg, type, dur) { if (typeof toast === 'function') toast(msg, type || 'info', dur); };
+
+  /* TradingView قد تُرجع 'D'/'W' بدل '1D'/'1W' بحسب الإصدار */
+  CM.normIv = function (r) {
+    r = String(r || '');
+    if (r === 'D') return '1D';
+    if (r === 'W') return '1W';
+    return r;
+  };
+
+  /* ══════════ UTC TIME NORMALIZATION ══════════ */
   CM.normTime = function (ms, res) {
     var d = new Date(ms);
     switch (res) {
@@ -124,8 +138,8 @@ var CM = window.__cm = window.__cm || {};
       case '1D':
         return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
       case '1W': {
-        var dow = d.getUTCDay();                  // 0=Sun … 6=Sat
-        var back = dow === 0 ? 6 : dow - 1;        // days since Monday
+        var dow = d.getUTCDay();
+        var back = dow === 0 ? 6 : dow - 1;
         return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - back);
       }
       default:
