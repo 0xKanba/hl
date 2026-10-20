@@ -1,97 +1,42 @@
 /* ═══════════════════════════════════════
    auth.js — دخول وخروج + وضع الزائر
-   ✅ منطق الوكلاء (إنشاء/تدوير/حذف) انتقل بالكامل لـ agents.js —
-      هذا الملف يستدعي Agents.ensure()/Agents.revoke() فقط.
-   ✅ إصلاحات تزامن الاتصال/قطع الاتصال:
-      - العلمان PRIVY_FLAG_KEY وEXTWALLET_FLAG_KEY يُبقيان متنافيين دائماً.
-      - EXTWALLET_FLAG_KEY يخزّن rdns المحفظة الآن أيضاً.
-      - حارس زمني قصير بعد doLogout يتجاهل أي حدث privy:update متأخر.
-      - privy:update يعالج authenticated:false أيضاً.
-      - أزرار المحافظ الخارجية بمودال تسجيل الدخول تُعطَّل أثناء محاولة
-        الاتصال لمنع نداءين متزامنين لنفس eth_requestAccounts.
-      - الوكيل المحفوظ محلياً لا يُحذف بعد تسجيل الخروج العادي.
-   ✅ حُذف "استرداد المحفظة" — "تصدير المحفظة" يكفي وحده كنسخة احتياطية.
+   ✅ منطق الوكلاء (إنشاء/تدوير/حذف) بالكامل في agents.js؛ هذا الملف يستدعي
+      Agents.ensure()/Agents.revoke() فقط. وضع "رابط الوكيل" في agentlink.js.
 
-   ✅ FIX جوهري — ترتيب تفويض الوكيل عند الاتصال:
-      كانت Agents.ensure() تُستدعى فوراً بعد أي اتصال محفظة، قبل أي فحص
-      لحالة التمويل. Hyperliquid يرفض approveAgent على حساب لم يُودَع
-      فيه شيء إطلاقاً — فمستخدم جديد تماماً كان يُطالَب بتوقيع تفويض
-      وكيل محكوم عليه بالفشل فوراً بعد أول اتصال. الحل: initAccountFeeds()
-      تُستدعى أولاً (تُعبّئ balance/positions/fillsCache من لقطة حقيقية)،
-      ثم نتحقق: هل يوجد وكيل محلي صالح أصلاً (Agents.getInfo) أو هل
-      الحساب يبدو مموَّلاً فعلياً (رصيد/مركز/fill سابق)؟ فقط عندها نطلب
-      Agents.ensure(). حساب جديد غير مموَّل يحصل بدلاً من ذلك على توجيه
-      هادئ بالإيداع أولاً، والتفويض يحدث تلقائياً لاحقاً بأول صفقة
-      حقيقية عبر المسار الكسول الموجود أصلاً بـhlExchange (api.js).
+   ── تاريخ الإصلاحات (مختصر) ──
+   • العلمان PRIVY_FLAG_KEY وEXTWALLET_FLAG_KEY متنافيان دائماً؛ الثاني يخزّن
+     rdns المحفظة. حارس زمني (_logoutAt) بعد doLogout يتجاهل أي privy:update
+     متأخر. أزرار المحافظ الخارجية تُعطَّل أثناء محاولة الاتصال (_extConnecting).
+     الوكيل المحفوظ محلياً لا يُحذف بتسجيل الخروج العادي.
+   • ترتيب تفويض الوكيل: initAccountFeeds() أولاً ثم Agents.ensure() فقط لحساب
+     يبدو مموَّلاً أو لديه وكيل محلي صالح (Hyperliquid يرفض approveAgent على حساب
+     غير مموَّل). الحساب الجديد يُوجَّه للإيداع، والتفويض يتم كسولاً بأول صفقة.
+   • تسلسل toasts أول اتصال: "مرحباً" فوراً (2.2ث) ثم توجيه الإيداع بعد 900ms
+     (9ث) لحساب جديد فارغ؛ تذكير تصدير المفتاح يُؤجَّل لأول إيداع ناجح
+     (account.js:doDeposit) لحساب جديد، ويظهر فوراً هنا لحساب مموَّل.
+   • State._identityReady تُضبط متزامناً بأول سطر بكل مسار اتصال (يستهلكها
+     lastplace.js). قفل PIN يُفحص أول سطر بإقلاع app.js — لا نسخة مؤجَّلة هنا.
+   • زر الاتصال مدمج بالـappbar (updateConnectBtn)، والعنوان الكامل بـpopover.
+   • c.js (التقويم) يبدأ زحفه الهادئ بعد الاتصال؛ OM.resumePendingWatch()
+     تستأنف مراقبة أوامر الإيقاف المعلّقة.
 
-   ✅ FIX — زر "🔌 قطع الاتصال" المستقل حُذف نهائياً واندمج بزر "اتصال"
-      نفسه (انتقل للشريط العلوي — راجع index.html/app.js/components.css).
-   ✅ FIX — c.js (تقويم التداول) يبدأ زحفه الهادئ تلقائياً بعد استقرار
-      initAccountFeeds بدل انتظار فتح "التقويم" يدوياً.
+   ✅ جديد — جلسة رابط الوكيل الدائمة (راجع agentlink.js v2):
+      1) _onWalletConnected: كان يحرس بـ"نفس العنوان ← return"، وعنوان جلسة
+         الرابط هو عنوان المحفظة الرئيسية نفسها — فالاتصال بالمحفظة الرئيسية
+         بعد رابط وكيل كان يُتجاهل بصمت ويبقى المستخدم بوضع الوكيل. الآن
+         جلسة الرابط تُستبدل صراحةً: AgentLink.release() + State.agent=null
+         (وإلا بقي مفتاح الوكيل القديم يوقّع الصفقات).
+      2) wallet:accountChanged/externalDisconnect لا تُنهي جلسة رابط الوكيل
+         (أحداث محافظ متصفح لا علاقة لها بمفتاح الرابط).
+      3) doLogout تمسح الجلسة المحفوظة (إلغاء يدوي = الإنهاء الوحيد الإرادي)؛
+         وتقبل {silent:true} (مسار حذف الوكيل يعرض إشعاره الخاص). ⚠️ تُربط
+         كمعالج onclick مباشرة (يمرّر Event) — لذا الفحص opts.silent===true.
+      4) _onAgentLinkConnected: يبدأ مراقبة صلاحية الوكيل، ورسالة "وضع رابط
+         وكيل" تظهر فقط عند أول فتح من الرابط لا بكل إقلاع لاحق.
 
-   ✅ FIX (2026-08) — رسالة "لا توجد محفظة مكتشَفة" كانت نهاية مسدودة
-      بلا أي مخرج للمستخدم الذي لا يملك أي محفظة أصلاً. أُضيف زر صغير
-      أسفل الرسالة يفتح https://ethereum.org/wallets/find-wallet/
-      (دليل رسمي محايد لاختيار محفظة) بتبويب جديد.
-
-   ✅ FIX (2026-08) — إعادة ترتيب جوهرية لتسلسل toasts أول اتصال، بعد
-      ملاحظة أن مستخداً جديداً كلياً (بريد Privy، رصيد $0) كان يشاهد
-      ثلاث رسائل متتالية بلا أي فاصل زمني حقيقي: "مرحباً" ثم فوراً
-      "أودع USDC أولاً" ثم بعد 2.5 ثانية "صدّر مفتاح محفظتك" — وبما أن
-      toast() تستبدل نفس عنصر DOM في كل نداء، الرسالتان الأوليان كانتا
-      تتصادمان بصمت بنفس الجزء من الثانية، فتضيع "أودع USDC أولاً" —
-      الرسالة الوحيدة المهمة فعلياً لمستخدم جديد لا يملك أي فكرة عن
-      الخطوة التالية. الآن:
-      1) "مرحباً" يظهر فوراً عند تعيين State.wallet (قبل جلب بيانات
-         الحساب — لا يعتمد عليها)، بمدة قصيرة مقصودة (2200ms).
-      2) رسالة التوجيه للإيداع (لحساب جديد غير مموَّل تحديداً) تُؤجَّل
-         900ms فتظهر بعد أن "مرحباً" أخذ وقته، وبمدة أطول (9 ثوانٍ)
-         لأنها الأهم فعلياً بهذي اللحظة.
-      3) تذكير تصدير المفتاح (_maybePromptExportBackup) لم يعد يُستدعى
-         هنا لحساب جديد فارغ — لا شيء يستحق "نسخة احتياطية" بعد. يبقى
-         يُستدعى فوراً هنا فقط لحساب *مموَّل بالفعل* (إعادة اتصال مثلاً).
-         للحساب الجديد، الاستدعاء انتقل لـdoDeposit بaccount.js بعد أول
-         إيداع ناجح — عندها فقط يصبح التذكير منطقياً وذا معنى فعلي.
-
-   ✅ جديد (إعادة هيكلة UI) —
-      1) _showGuestBanner كانت تُدرِج قبل ".footer" (عنصر لم يعد موجوداً
-         بعد استبدال الفوتر بـtabbar سفلي) — كانت ستسقط لـappendChild
-         بآخر #appScreen (بعد tabbar نفسها بالـDOM)، فتظهر البانر تحت
-         الشريط السفلي بدل مكانها الصحيح. الآن تُدرَج داخل شاشة الرئيسية
-         (#screenHome .screen-scroll) في أعلاها، قبل بطاقة الرصيد —
-         نفس الفكرة الأصلية (أول عنصر يراه من ليس متصلاً) بمكان صحيح.
-      2) doLogout يستدعي _renderBalanceFromState() صراحة بعد ضبط
-         isGuest=true — البطاقة الدائمة الجديدة تعرض "—" تلقائياً
-         بفضل شرط isGuest بداخل الدالة (راجع account.js)، فلا حاجة
-         لتصفير State.balance يدوياً؛ فقط الاستدعاء كافٍ لتحديث العرض
-         فوراً بدل بقاء أرقام الجلسة السابقة ظاهرة بعد قطع الاتصال.
-
-   ✅ إصلاح توقيت (2026-08) — State._identityReady تُضبط الآن true بشكل
-      متزامن في كل من _onWalletConnected() و_onAgentLinkConnected()،
-      بأول سطر ممكن (قبل أي await فعلي) — إشارة دقيقة "قرار الهوية
-      اتُّخذ" (ضيف أم متصل) يستهلكها js/lastplace.js بدل الانتظار
-      الخاطئ سابقاً لـState._sessionTimer (لا يُضبط إلا بعد اكتمال جلب
-      بيانات الحساب الشبكي بالكامل — بطيء وغير ضروري لهذا الغرض تحديداً).
-      راجع state.js لتعريف الحقل، وjs/lastplace.js لكيفية استهلاكه.
-
-   ✅ جديد (صفحة واحدة) — _showGuestBanner/_hideGuestBanner حُذفتا
-      بالكامل مع كل مواضع استدعائهما الأربعة. بانر الضيف ("اربط
-      محفظتك…/اتصال ←") استُبدل بشريط دائم واحد أعلى الرئيسية:
-      "فتح صفقة جديدة" + زر "فتح" — يُبنى من js/order/bar.js ويُنسَّق
-      من css/order.css، فلا HTML ولا CSS له هنا ولا بـindex.html.
-      الضيف لا يفقد التوجيه: OrderModule.open() تستدعي _promptConnect()
-      (توست + نبض زر الاتصال) قبل أي شيء — نية المستخدم أولاً، ثم ما
-      يلزم لتحقيقها، بدل حاجز ثابت قبل أن يطلب شيئاً أصلاً.
-
-   ✅ جديد — connectWallet(): الدرج المنبثق القديم (openDrawer) استُبدل
-      بالدوك الدائم الجديد (openDock) — راجع app.js لسبب هذا التغيير
-      بالكامل (الدرج لم يعد موجوداً إطلاقاً بالمشروع).
-
-   ✅ جديد (منصة "فتح صفقة جديدة") — OM.resumePendingWatch() تُستدعى بعد
-      استقرار initAccountFeeds: لو كان المستخدم قد وضع "أمر إيقاف" مع
-      TP/SL بجلسة سابقة ولم يُفعَّل بعد، يستأنف المراقب إلحاق TP/SL
-      تلقائياً فور تفعيله فعلاً — بلا حاجة لأن يفتح المستخدم شاشة
-      "فتح صفقة جديدة" مجدداً. راجع js/order/index.js:_tickPendingWatch.
+   ✅ جديد — زر "تصدير المحفظة" (#optExportWallet) يظهر فقط حين تكون المحفظة
+      المتصلة محفظة بريد (Privy): updateConnectBtn تبدّل الصنف .show
+      (قاعدة CSS الافتراضية "مخفي" بـcss/agentlink.css فلا وميض بالإقلاع).
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -118,7 +63,7 @@ function _loadPrivyBridge() {
 
 function initGuestMode() {
   State.isGuest = true;
-  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. متزامن، أول سطرين بالدالة. */
+  /* إشارة قرار الهوية — متزامنة، أول سطرين بالدالة (راجع lastplace.js) */
   State._identityReady = true;
   $('loginScreen')?.classList.add('hidden');
   $('appScreen')?.classList.remove('hidden');
@@ -139,12 +84,10 @@ function _stopWalletListWatch() {
   if (typeof Wallets !== 'undefined') Wallets.onListChanged(null);
 }
 
-let _extConnecting = false; /* ✅ قفل بسيط يمنع نداءين متزامنين لنفس eth_requestAccounts */
+let _extConnecting = false; /* قفل يمنع نداءين متزامنين لنفس eth_requestAccounts */
 
-/* ✅ FIX — كانت تفحص Wallets.list() مرة واحدة متزامنة فقط عند فتح
-   النافذة، بينما إعلانات EIP-6963 غير متزامنة وقد تصل بعد جزء من
-   الثانية. الآن: لأول ~1.2 ثانية من فتح النافذة، قائمة فارغة تُعرَض
-   كـ"يتم الاكتشاف..." هادئة بدل رسالة "غير موجودة" القطعية. */
+/* إعلانات EIP-6963 غير متزامنة وقد تصل بعد جزء من الثانية: لأول ~1.2 ثانية
+   من فتح النافذة، القائمة الفارغة تُعرَض كـ"يتم الاكتشاف..." لا "غير موجودة". */
 let _walletListOpenedAt = 0;
 
 function _renderExtWalletList() {
@@ -159,8 +102,7 @@ function _renderExtWalletList() {
       if (!box._detectTimer) box._detectTimer = setTimeout(() => { box._detectTimer = null; _renderExtWalletList(); }, 300);
       return;
     }
-    /* ✅ FIX (2026-08) — زر صغير لدليل ethereum.org الرسمي لاختيار محفظة،
-       لمن لا يملك أي محفظة أصلاً بهذا المتصفح. */
+    /* دليل ethereum.org الرسمي لمن لا يملك أي محفظة بهذا المتصفح */
     box.innerHTML = `
       <div style="text-align:center;color:var(--text-muted);font-size:var(--fs-sm);padding:8px 4px;">لا توجد محفظة مكتشَفة بهذا المتصفح — افتح الموقع من داخل تطبيق محفظتك (مثل Trust Wallet) أو من متصفح فيه إضافة محفظة.</div>
       <div style="text-align:center;margin-top:10px;">
@@ -194,7 +136,7 @@ async function connectEmail() {
 }
 
 async function _connectExternal(entry) {
-  if (_extConnecting) return; /* نداء ثانٍ وصل قبل انتهاء الأول — تجاهله بدل فتح eth_requestAccounts مرتين */
+  if (_extConnecting) return; /* نداء ثانٍ قبل انتهاء الأول — تجاهله */
   _extConnecting = true;
   _renderExtWalletList(); /* عطّل كل الأزرار بصرياً أثناء المحاولة */
   _stopWalletListWatch();
@@ -223,8 +165,8 @@ window.addEventListener('privy:update', function (e) {
   }
   if (!d.wallet) return;
 
-  /* حارس زمني: أي حدث يصل خلال ثانية ونصف من إلغاء اتصال صريح هو
-     على الأغلب صدى متأخر من عملية logout() نفسها، لا اتصالاً جديداً حقيقياً */
+  /* حارس زمني: أي حدث خلال ثانية ونصف من إلغاء اتصال صريح هو على الأغلب
+     صدى متأخر من logout() نفسها، لا اتصالاً جديداً حقيقياً */
   if (Date.now() - (State._logoutAt || 0) < 1500) return;
 
   const meta = d.wallet;
@@ -238,32 +180,41 @@ window.addEventListener('privy:update', function (e) {
   });
 });
 
+/* أحداث مزوّد محفظة المتصفح لا تخص جلسة رابط الوكيل (لا مزوّد ولا مفتاح رئيسي) */
 window.addEventListener('wallet:accountChanged', function () {
-  if (State.wallet && State.wallet.walletClientType !== 'privy') {
+  if (State.wallet && State.wallet.walletClientType !== 'privy' && !State.wallet.isAgentLink) {
     toast('🔄 تغيّر حساب المحفظة — سجّل الدخول بالحساب الجديد', 'info', 5000);
     doLogout();
   }
 });
 window.addEventListener('wallet:externalDisconnect', function () {
-  if (State.wallet && State.wallet.walletClientType !== 'privy') {
+  if (State.wallet && State.wallet.walletClientType !== 'privy' && !State.wallet.isAgentLink) {
     toast('🔌 انقطع الاتصال من داخل المحفظة', 'info', 4000);
     doLogout();
   }
 });
 
 /* ════════════════════════════════════════════════
-   نقطة إنهاء موحّدة — تُستدعى من أي مسار اتصال (بريد/محفظة خارجية/
-   استرجاع جلسة عند الإقلاع).
-   ✅ FIX (2026-08) — راجع تعليق رأس الملف: "مرحباً" الآن أول شيء يظهر
-   (فور تعيين State.wallet، قبل أي جلب شبكة)، وتوجيه "أودع USDC أولاً"
-   لحساب جديد فارغ يُؤجَّل قليلاً بدل التصادم البصري معه.
+   نقطة إنهاء موحّدة — تُستدعى من أي مسار اتصال بمحفظة رئيسية (بريد/
+   خارجية/استرجاع جلسة عند الإقلاع).
 ════════════════════════════════════════════════ */
 async function _onWalletConnected(walletObj) {
-  if (State.wallet && State.wallet.address === walletObj.address) return;
+  const wasAgentLink = !!(State.wallet && State.wallet.isAgentLink);
+
+  /* نفس العنوان = حدث مكرر → تجاهل. لكن عنوان جلسة رابط الوكيل هو عنوان
+     المحفظة الرئيسية نفسها، والاتصال بها يجب أن يستبدل جلسة الوكيل. */
+  if (State.wallet && !wasAgentLink && State.wallet.address === walletObj.address) return;
+
+  /* اتصال بمحفظة رئيسية ينهي جلسة رابط الوكيل المحفوظة ويُسقط إشعار حذفه */
+  if (typeof AgentLink !== 'undefined') { AgentLink.release(); AgentLink.dismissNotice(); }
+  if (wasAgentLink) {
+    State.agent = null;            // مفتاح الوكيل القديم لا يوقّع بعد الآن
+    State.positions = []; State.openOrders = []; State.fillsCache = [];
+    State.referrerSet = false;
+  }
 
   State.wallet = walletObj;
   State.isGuest = false;
-  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. متزامن، قبل أي await هنا. */
   State._identityReady = true;
 
   if (walletObj.walletClientType === 'privy') {
@@ -280,24 +231,19 @@ async function _onWalletConnected(walletObj) {
   closeModal('modalLogin');
   loadQuickState();
 
-  /* ✅ يظهر فوراً — لا يعتمد على أي بيانات حساب، فلا داعي لانتظارها */
+  /* يظهر فوراً — لا يعتمد على أي بيانات حساب */
   updateConnectBtn();
   toast('مرحباً 🤝', 'ok', 2200);
 
-  /* ✅ لقطة الحساب أولاً — تُعبّئ State.balance/positions/fillsCache
-     قبل أي قرار بخصوص تفويض الوكيل (راجع تعليق رأس الملف). initAccountFeeds
-     نفسها ترسم بطاقة الرصيد الدائمة فور اكتمال اللقطة (راجع account.js). */
+  /* لقطة الحساب أولاً — تُعبّئ balance/positions/fillsCache قبل قرار الوكيل */
   try { await initAccountFeeds(); } catch (e) { console.warn('[initAccountFeeds]', e); }
 
-  /* ✅ جديد — استئناف مراقبة أوامر الإيقاف المعلّقة (TP/SL بانتظار
-     التفعيل) من أي جلسة سابقة — راجع تعليق رأس الملف + order/index.js.
-     يعمل بعد initAccountFeeds لأنه يعتمد على State.openOrders/fillsCache/
-     positions المُعبّأة للتو. */
+  /* استئناف مراقبة أوامر الإيقاف المعلّقة (TP/SL بانتظار التفعيل) */
   if (typeof OM !== 'undefined' && typeof OM.resumePendingWatch === 'function') {
     try { OM.resumePendingWatch(); } catch (e) { console.warn('[order] resumePendingWatch', e); }
   }
 
-  /* ✅ تحميل تقويم التداول تدريجياً بصمت — بلا انتظار فتح "التقويم" يدوياً */
+  /* تحميل تقويم التداول تدريجياً بصمت */
   setTimeout(() => { if (typeof preloadCalendarData === 'function') preloadCalendarData(); }, 3000);
 
   const hasValidLocalAgent = (typeof Agents !== 'undefined') && !!Agents.getInfo(State.wallet.address)?.valid;
@@ -314,45 +260,36 @@ async function _onWalletConnected(walletObj) {
         toast('⚠️ فشل تفويض محفظة التداول: ' + errToAr(e.message), 'err');
       }
     }
-    /* ✅ حساب فيه رصيد/مركز/سجل فعلاً (إعادة اتصال مثلاً) — تذكير
-       النسخ الاحتياطي منطقي هنا فوراً، فعلاً يوجد شيء يستحق الحماية. */
+    /* حساب فيه رصيد/مركز/سجل — تذكير النسخ الاحتياطي منطقي هنا فوراً */
     _maybePromptExportBackup(walletObj);
   } else {
-    /* ✅ حساب جديد فارغ تماماً — التذكير يُؤجَّل لأول إيداع ناجح
-       (doDeposit بaccount.js). التأخير هنا (900ms) يمنع تصادم "أودع
-       USDC أولاً" مع "مرحباً" أعلاه — راجع تعليق رأس الملف. */
+    /* حساب جديد فارغ — التذكير يُؤجَّل لأول إيداع ناجح؛ التأخير (900ms)
+       يمنع تصادم "أودع USDC أولاً" مع "مرحباً" أعلاه */
     setTimeout(() => {
       toast('💵 أودع USDC أولاً لتفعيل حسابك — اضغط ☰ القائمة ← 💵 إيداع', 'warn', 9000);
     }, 900);
   }
-
-  /* ✅ إصلاح توقيت (2026-08) — نسخة القفل المؤجَّلة هنا (كانت
-     setTimeout(...,300) بلا داعٍ حقيقي) حُذفت. القفل الآن يحدث مرة
-     واحدة فقط، فوراً، بأول سطر بتسلسل إقلاع app.js — قبل حتى بدء أي
-     مسار اتصال (بما فيها هذه الدالة نفسها) — فلا حاجة لمحاولة ثانية
-     هنا إطلاقاً؛ لو كان القفل مطلوباً، يكون قد فتح شاشته بالفعل قبل
-     وصولنا لهذه النقطة أصلاً. راجع app.js لمكان الفحص الوحيد الآن. */
 }
 
 /* ════════════════════════════════════════════════
-   ✅ جديد — وضع "رابط وكيل" (js/agentlink.js): AgentLink.tryConsume()
-   يضبط State.wallet/State.agent مباشرة بلا أي توقيع (المفتاح المرفق
-   بالرابط هو أصلاً وكيل مُصرَّح مسبقاً). مسار إقلاع مبسّط عمداً —
-   بلا Agents.ensure (الوكيل جاهز أصلاً)، بلا أعلام PRIVY/EXTWALLET
-   (جلسة الرابط لا تُحفظ محلياً — أمان: لا يبقى مفتاح وكيل بجهاز غريب
-   بعد إغلاق التبويب)، بلا تذكير تصدير/إيداع (لا معنى لهما هنا).
+   وضع "رابط وكيل" (js/agentlink.js): AgentLink.tryConsume() يضبط
+   State.wallet/State.agent مباشرة بلا أي توقيع (من الرابط أو من الجلسة
+   المحفوظة). مسار إقلاع مبسّط عمداً — بلا Agents.ensure، بلا أعلام
+   PRIVY/EXTWALLET، بلا تذكير تصدير/إيداع.
 ════════════════════════════════════════════════ */
 async function _onAgentLinkConnected() {
-  /* ✅ إصلاح توقيت — راجع تعليق رأس الملف. AgentLink.tryConsume() (يُستدعى
-     قبل هذه الدالة بـapp.js) يضبط State.isGuest=false بالفعل بشكل
-     متزامن؛ هذا السطر يُثبّت الإشارة صراحة هنا أيضاً كأول شيء تفعله هذه
-     الدالة، قبل أي await، لضمان دقتها بصرف النظر عن أي تغيير مستقبلي
-     بترتيب agentlink.js. */
-  State._identityReady = true;
+  State._identityReady = true; /* أول شيء، قبل أي await */
 
   updateAddrPopoverText();
   updateConnectBtn();
-  toast('🔗 وضع رابط وكيل — تداول فقط، بلا صلاحية سحب أو تعديل إعدادات', 'info', 6000);
+
+  /* الرسالة التعريفية عند أول فتح من الرابط فقط — لا بكل إقلاع لاحق */
+  if (typeof AgentLink !== 'undefined' && AgentLink.source() === 'url')
+    toast('🔗 وضع رابط وكيل — تداول فقط، بلا صلاحية سحب. الجلسة محفوظة بهذا المتصفح حتى حذف الوكيل أو إلغاء الاتصال', 'info', 7000);
+
+  /* مراقبة صلاحية الوكيل عند Hyperliquid — لا تعتمد على اكتمال لقطة الحساب */
+  if (typeof AgentLink !== 'undefined') { try { AgentLink.startWatch(); } catch (e) { console.warn('[agentlink watch]', e); } }
+
   try { await initAccountFeeds(); } catch (e) { console.warn('[agentlink]', e); }
   if (typeof OM !== 'undefined' && typeof OM.resumePendingWatch === 'function') {
     try { OM.resumePendingWatch(); } catch (e) {}
@@ -360,8 +297,7 @@ async function _onAgentLinkConnected() {
   setTimeout(() => { if (typeof preloadCalendarData === 'function') preloadCalendarData(); }, 3000);
 }
 
-/* ════ روابط المستكشف الخارجية — تُبنى ديناميكياً من عنوان المحفظة
-   الحالي عند كل فتح للـpopover (راجع app.js:_toggleAddrPopover). ════ */
+/* روابط المستكشف الخارجية — تُبنى من عنوان المحفظة عند كل فتح للـpopover */
 function _updateExplorerLinks() {
   const addr = State.wallet?.address;
   const ex = $('addrPopoverExplorer'), st = $('addrPopoverStatus');
@@ -391,12 +327,14 @@ async function exportWallet() {
   }
 }
 
-/* ════ إلغاء الاتصال (سابقاً "تغيير المحفظة"/logout) — الأسعار تبقى
-   حيّة، فقط اشتراكات الحساب تُفكّك. الوكيل المحفوظ محلياً لا يُحذف هنا
-   (راجع تعليق رأس الملف) — Agents.clearSession() تمسح فقط النسخة
-   الحيّة بالذاكرة. ملاحظة: رمز PIN المحلي (إن وُجد) يُحذف كجزء من هذا
-   الإجراء. ════ */
-function doLogout() {
+/* ════ إلغاء الاتصال — الأسعار تبقى حيّة، فقط اشتراكات الحساب تُفكّك.
+   الوكيل المحفوظ محلياً (Agents) لا يُحذف هنا؛ Agents.clearSession() تمسح
+   فقط النسخة الحيّة. جلسة رابط الوكيل المحفوظة تُمسح (إلغاء اتصال = إنهاء
+   إرادي). رمز PIN المحلي يُحذف كجزء من هذا الإجراء.
+   opts.silent===true: بلا toast "تم إلغاء الاتصال" (مسار حذف الوكيل). ════ */
+function doLogout(opts) {
+  const silent = !!(opts && opts.silent === true);
+
   State.timers.forEach(clearInterval);
   clearInterval(State.priceTimer);
   clearInterval(State._balTimer);
@@ -404,9 +342,7 @@ function doLogout() {
   clearInterval(State._sessionTimer);
   teardownAccountFeeds();
   if (typeof teardownCalendarPreload === 'function') teardownCalendarPreload();
-  /* ✅ جديد — أغلق شاشة "فتح صفقة جديدة" لو كانت مفتوحة، وأوقف مراقبها
-     (يتوقف ذاتياً بأول نبضة بعد تصفير State.wallet أدناه، لكن الإغلاق
-     الصريح هنا يمنع بقاء شاشة تداول ظاهرة فوق واجهة زائر). */
+  /* أغلق شاشة "فتح صفقة جديدة" لو كانت مفتوحة */
   if (typeof OrderModule !== 'undefined' && typeof OrderModule.close === 'function') {
     try { OrderModule.close(); } catch (e) {}
   }
@@ -415,6 +351,7 @@ function doLogout() {
     try { State.wallet._teardownListeners(); } catch {}
   }
 
+  if (typeof AgentLink !== 'undefined') AgentLink.release();
   if (typeof Agents !== 'undefined') Agents.clearSession();
 
   localStorage.removeItem(LS_KEY);
@@ -437,7 +374,7 @@ function doLogout() {
   State.isGuest    = true;
   State._lastOptimisticClose = 0;
   State._emptyPosCount       = 0;
-  State._logoutAt  = Date.now(); /* ✅ حارس ضد أحداث privy:update متأخرة */
+  State._logoutAt  = Date.now(); /* حارس ضد أحداث privy:update متأخرة */
 
   closeModal('modalLogout');
   closeModal('modalPIN');
@@ -448,21 +385,23 @@ function doLogout() {
   if (typeof _toggleAddrPopover === 'function') _toggleAddrPopover(false);
   resetPosFingerprint();
   renderPositions();
-  /* ✅ جديد — يعيد بطاقة الرصيد الدائمة إلى حالة "—" فوراً (بدل بقاء
-     أرقام الجلسة السابقة ظاهرة) — الشرط isGuest داخل الدالة نفسها
-     (account.js) يكفي، لا حاجة لتصفير State.balance يدوياً. */
+  /* يعيد بطاقة الرصيد إلى "—" فوراً (الشرط isGuest داخل الدالة نفسها) */
   if (typeof _renderBalanceFromState === 'function') _renderBalanceFromState();
-  toast('🔌 تم إلغاء الاتصال', 'info');
+  if (!silent) toast('🔌 تم إلغاء الاتصال', 'info');
   startSessionPolling();
 }
 
 function openLoginModal() { connectWallet(); }
 
-/* ✅ الزر الآن مدمج بالـappbar — متصل: يعرض العنوان المختصر ويفتح
-   .addr-popover عند النقر (راجع app.js:_toggleAddrPopover)؛ ضيف: يعرض
-   "اتصال" ويفتح modalLogin مباشرة. updateConnectBtn تكتفي بتلوين/
-   تسمية #btnConnect فقط. */
+/* زر الاتصال مدمج بالـappbar — متصل: العنوان المختصر + popover؛ ضيف: "اتصال".
+   ✅ زر "تصدير المحفظة": يظهر فقط مع محفظة بريد (Privy) — راجع تعليق الرأس. */
 function updateConnectBtn() {
+  const canExport = !!(State.wallet && !State.isGuest && State.wallet.walletClientType === 'privy');
+  ['optExportWallet', 'dockExport'].forEach(function (id) {
+    const b = $(id);
+    if (b) b.classList.toggle('show', canExport);
+  });
+
   const btn = $('btnConnect');
   if (btn) {
     const hasWallet = !!State.wallet;
@@ -484,9 +423,7 @@ function updateConnectBtn() {
   }
 }
 
-/* ✅ العنوان الكامل الآن يُعرَض بداخل .addr-popover بالـappbar (نسخ +
-   إلغاء اتصال) بدل بطاقة الدرج المحذوفة — العنوان المختصر بالزر نفسه
-   يُدار من updateConnectBtn أعلاه. */
+/* العنوان الكامل داخل .addr-popover بالـappbar (نسخ + إلغاء اتصال) */
 function updateAddrPopoverText() {
   if (!State.wallet) return;
   setTxt('addrPopoverTxt', State.wallet.address);
