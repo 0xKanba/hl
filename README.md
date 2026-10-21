@@ -14,7 +14,6 @@
 │   ├── orders.css
 │   └── themes.css
 ├── icons
-│   ├── .c
 │   ├── favicon.ico
 │   ├── icon-128x128.png
 │   ├── icon-144x144.png
