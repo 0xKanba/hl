@@ -4,20 +4,17 @@
    ✅ hlExchange يضمن وجود وكيل صالح ذاتياً (Agents.ensure) قبل التوقيع —
       بدل الفشل الفوري لو انتهت صلاحية الوكيل أو أُلغيت الموافقة الأولى؛
       يفتح نافذة تفويض عند الحاجة الفعلية فقط (أول صفقة تحتاجها).
-   ✅ FIX — tradeErr(): المسار الافتراضي (لأي خطأ لا يطابق الكلمات
-      المفتاحية الأربع أدناه) كان يعرض msg.slice(0,150) بالإنجليزية
-      الخام مباشرة بالواجهة. الآن يمر عبر errToAr() المركزية (utils.js)
-      بدل تسريب النص الأجنبي.
-   ✅ FIX — autoSetReferrer(): كانت تستدعي hlExchange بلا أي شرط على
-      وجود وكيل مسبق، وhlExchange نفسها تحتوي مساراً كسولاً يفتح نافذة
-      "تفويض محفظة التداول" تلقائياً لو State.agent فارغ. النتيجة: على
-      حساب جديد غير ممول، auth.js يحاول Agents.ensure() صراحة أولاً
-      (يفشل لأن Hyperliquid يرفض approveAgent على حساب غير مموَّل) ثم
-      autoSetReferrer تُعيد نفس المحاولة تلقائياً وبصمت تام (catch فارغة)
-      خلال نفس اللحظة — نافذة توقيع ثانية غير متوقعة فوراً بعد فشل
-      الأولى. الآن autoSetReferrer لا تحاول إطلاقاً إنشاء وكيل جديد
-      بنفسها؛ فقط تضبط الإحالة لو وُجد وكيل صالح أصلاً (سواء من التخزين
-      المحلي أو من نجاح تفويض حقيقي بنفس الجلسة — راجع auth.js).
+   ✅ tradeErr(): المسار الافتراضي يمر عبر errToAr() المركزية (utils.js)
+      بدل تسريب النص الإنجليزي الخام للواجهة.
+   ✅ autoSetReferrer(): لا تحاول إطلاقاً إنشاء وكيل جديد بنفسها؛ فقط تضبط
+      الإحالة لو وُجد وكيل صالح أصلاً (تفادياً لنافذة توقيع ثانية صامتة
+      فور فشل الأولى على حساب غير ممول — راجع auth.js).
+   ✅ جديد (وضع رابط الوكيل) — خطأ "User or API Wallet ... does not exist"
+      بهذا الوضع يعني غالباً أن الوكيل حُذف/انتهى عند Hyperliquid:
+      hlExchange تستدعي AgentLink.verify() (يؤكد بقراءة extraAgents قبل أي
+      قطع للجلسة — راجع agentlink.js)، وtradeErr تعرض رسالة صحيحة بدل
+      "الحساب غير مفعّل — أودع USDC" المضلِّلة هنا.
+   ✅ لا تغيير إطلاقاً بمنطق الحد الأدنى لقيمة الأمر ولا بأي مسار تنفيذ.
 ═══════════════════════════════════════ */
 'use strict';
 
@@ -35,6 +32,11 @@ async function hlInfo(body) {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const text = await r.text();
   return JSON.parse(text.replace(/"oid":\s*(\d{15,})/g, '"oid":"$1"'));
+}
+
+/* وضع رابط الوكيل: هل هذا الخطأ يعني أن الوكيل نفسه لم يعد معروفاً للخادم؟ */
+function _isAgentGoneErr(msg) {
+  return !!(State.wallet && State.wallet.isAgentLink) && /api wallet/i.test(msg || '');
 }
 
 /* ════ Exchange (توقيع EIP-712 بمحفظة الوكيل) — WS post أولاً، REST كبديل ════ */
@@ -79,7 +81,9 @@ async function hlExchange(action) {
 
   if (data.status !== 'ok') {
     const err = data.response?.data?.statuses?.[0] || data.response || JSON.stringify(data).slice(0, 200);
-    throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
+    const msg = typeof err === 'string' ? err : JSON.stringify(err);
+    if (_isAgentGoneErr(msg) && typeof AgentLink !== 'undefined') { try { AgentLink.verify(); } catch (_) {} }
+    throw new Error(msg);
   }
   return data;
 }
@@ -95,7 +99,7 @@ async function _restExchange(body) {
 }
 
 /* ════ إحالة تلقائية ════
-   ✅ لا تحاول إنشاء وكيل جديد بنفسها إطلاقاً (راجع تعليق رأس الملف) —
+   لا تحاول إنشاء وكيل جديد بنفسها إطلاقاً (راجع تعليق رأس الملف) —
    تكتفي بالتحقق والضبط لو وكيل صالح متوفر أصلاً. */
 async function autoSetReferrer() {
   if (!State.wallet || State.referrerSet || !State.agent) return;
@@ -110,6 +114,8 @@ async function autoSetReferrer() {
 /* ════ ترجمة أخطاء API الخاصة بالتداول ════ */
 function tradeErr(msg) {
   const m = (msg || '').toLowerCase();
+  if (_isAgentGoneErr(msg))
+    return '⚠️ محفظة الوكيل لم تعد صالحة (حُذفت أو انتهت) — جارٍ التحقق';
   if (m.includes('does not exist') || m.includes('not found')) return '⚠️ الحساب غير مفعّل — أودع USDC أولاً';
   if (m.includes('insufficient')   || m.includes('margin'))    return '❌ رصيد غير كافٍ';
   if (m.includes('halted')         || m.includes('no fill'))   return '❌ السوق مغلق الآن';

@@ -1,9 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════
-   agentlink.css — إضافة صغيرة مستقلة (لا تلمس components.css):
-   روابط "المستكشف/الحالة" أسفل زر "إلغاء الاتصال" بـaddr-popover.
-   تستهلك نفس متغيّرات الألوان المُعرَّفة أصلاً بـbase.css/themes.css.
+   agentlink.css — إضافة مستقلة (لا تلمس components.css):
+   1) روابط "المستكشف/الحالة" أسفل زر "إلغاء الاتصال" بـaddr-popover.
+   2) إشعار "حُذفت محفظة الوكيل" وسط الشاشة (يبنيه js/agentlink.js).
+   3) زر "تصدير المحفظة": مخفي افتراضياً ويظهر فقط مع محفظة بريد (Privy) —
+      auth.js:updateConnectBtn تضيف .show. القاعدة هنا (لا بـJS) كي لا يومض
+      الزر لحظة الإقلاع قبل اتصال المحفظة. #optExportWallet بالرئيسي و
+      #dockExport بمشروع /oc.
+   تستهلك نفس متغيّرات الألوان المُعرَّفة بـbase.css/themes.css.
 ═══════════════════════════════════════════════════════════════ */
 @layer components {
+
 .addr-popover-link {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   font-size: var(--fs-sm, 12px); font-weight: var(--fw-bold, 800);
@@ -13,4 +19,63 @@
 }
 .addr-popover-link:hover  { color: var(--ac, #8b5cf6); }
 .addr-popover-link:active { opacity: .7; }
+
+/* ── تصدير المحفظة: بريد فقط ── */
+#optExportWallet, #dockExport { display: none; }
+#optExportWallet.show, #dockExport.show { display: flex; }
+
+/* ── إشعار حذف/انتهاء الوكيل ──
+   z-index 400: فوق النوافذ (300) وتحت المؤشر (9999) والتوست (10000) */
+.al-notice-ov {
+  position: fixed; inset: 0; z-index: 400;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-4, 14px);
+  background: rgba(0,0,0,.62);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  animation: alFade var(--dur-base, 180ms) var(--ease-standard, ease);
+}
+@keyframes alFade { from { opacity: 0; } to { opacity: 1; } }
+
+.al-notice-card {
+  width: 100%; max-width: 380px; overflow: hidden; position: relative;
+  background: var(--bg-card, #1e293b);
+  border: 1.5px solid var(--warn, #f59e0b);
+  border-radius: var(--r-xl, 22px);
+  box-shadow: var(--shadow, 0 10px 25px -5px rgba(0,0,0,.4)), 0 0 24px var(--warn-dim, rgba(245,158,11,.18));
+  padding: var(--space-6, 22px) var(--space-5, 18px) calc(var(--space-5, 18px) + 4px);
+  text-align: center; direction: rtl;
+  animation: alPop var(--dur-slow, 260ms) var(--ease-bounce, cubic-bezier(.34,1.56,.64,1));
+}
+@keyframes alPop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+
+.al-notice-ic    { font-size: 38px; line-height: 1; margin-bottom: var(--space-2, 6px); }
+.al-notice-title { margin: 0 0 var(--space-3, 10px); font-size: var(--fs-2xl, 18px); color: var(--warn, #f59e0b); }
+.al-notice-txt   { margin: 0 0 var(--space-3, 10px); font-size: var(--fs-md, 13px); line-height: var(--lh-loose, 1.75); color: var(--text-secondary, #94a3b8); }
+.al-notice-txt b { color: var(--text-primary, #f1f5f9); }
+.al-notice-addr  {
+  display: inline-block; margin-bottom: var(--space-3, 10px);
+  padding: 3px 12px; border-radius: var(--r-pill, 999px);
+  font-family: var(--font-mono, monospace); font-size: var(--fs-xs, 11px);
+  color: var(--text-muted, #64748b); background: var(--bg-input, #334155); direction: ltr;
+}
+.al-notice-btns { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-2, 6px); }
+.al-notice-btn {
+  padding: 11px 6px; border-radius: var(--r-pill, 999px);
+  border: 1.5px solid var(--border-strong, #334155);
+  background: var(--bg-elev, #334155); color: var(--text-primary, #f1f5f9);
+  font-size: var(--fs-md, 13px); font-weight: var(--fw-bold, 800);
+  transition: transform var(--dur-fast, 120ms) var(--ease-standard, ease);
+}
+.al-notice-btn.pri { border-color: var(--ac, #8b5cf6); background: var(--ac-dim, rgba(139,92,246,.22)); color: var(--ac, #8b5cf6); }
+.al-notice-btn:active { transform: scale(.95); }
+
+/* شريط العدّ التنازلي — مدته تُضبط من JS (NOTICE_MS) */
+.al-notice-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--bg-input, #334155); }
+.al-notice-bar i {
+  display: block; height: 100%; background: var(--warn, #f59e0b);
+  transform-origin: right center;
+  animation: alCount linear forwards;
+}
+@keyframes alCount { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
 }
