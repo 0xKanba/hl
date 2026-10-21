@@ -28,7 +28,8 @@
 │   ├── icon-512x512-maskable.png
 │   ├── icon-512x512.png
 │   ├── icon-64x64.png
-│   └── icon-96x96.png
+│   ├── icon-96x96.png
+│   └── siyulati.svg
 ├── images
 │   ├── 100.png
 │   ├── apple-touch-icon.png
