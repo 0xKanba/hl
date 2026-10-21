@@ -13,6 +13,8 @@
 │   ├── order.css
 │   ├── orders.css
 │   └── themes.css
+├── icons
+│   └── .c
 ├── images
 │   ├── 100.png
 │   ├── apple-touch-icon.png
