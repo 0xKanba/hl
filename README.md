@@ -120,11 +120,9 @@
 │   ├── build.mjs
 │   ├── package-lock.json
 │   └── package.json
-├── CHANGES.md
 ├── index.html
 ├── manifest.json
 ├── md.html
-├── seo.json
 └── sw.js
 ```
 <!-- TREE END -->
