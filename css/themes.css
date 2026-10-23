@@ -1,41 +1,37 @@
 /* ═══════════════════════════════════════════════════════════════
-   themes.css — HL / سيولة · Color System
-   ✅ إعادة تلوين كاملة (2026-08) — استُبدلت كل الألوان بالنظام الجديد:
-      بنفسجي (#8b5cf6) أساس الواجهة بالكامل بدل البرتقالي القديم.
-      خلفيات/نصوص/حدود من لوحة slate (0f172a/1e293b/334155/f1f5f9/
-      94a3b8/e2e8f0)، success=#10b981، danger=#ef4444، warning=#f59e0b.
-      الأسماء (--ac, --up, --dn, --bg-app...) بقيت كما هي عمداً —
-      كل ملف آخر بالمشروع يستهلكها بـvar()، فتغيير القيم هنا فقط يكفي
-      لإعادة تلوين التطبيق بأكمله بلا لمس أي ملف CSS/JS آخر يشير إليها.
-      accent/success/danger/warning ثابتة بين الوضعين الفاتح والغامق
-      (نفس نهج اللوحة الجديدة نفسها) — فقط الخلفيات/النصوص/الحدود
-      تتغيّر بين الوضعين. أي تدرّج داكن/فاتح غير مُعطى صراحة بالنظام
-      الجديد (ac-2، border-strong، sb-thumb-hover...) يُشتق عبر
-      color-mix() من نفس ألوان اللوحة — لا لون جديد يُستحدث بأي مكان.
-      --logo-grad-1/2 وglow اللوجو تطابق حرفياً "تدرج اللوجو" الموثّق
-      (أزرق→بنفسجي) لعنصري .login-icon/.drawer-logo-icon فقط.
+   themes.css — سيولتي (Siyulati) · Color System
+   ✅ الوضع الداكن الآن أسود كلاسيكي صرف (#000000) بدرجات رمادية محايدة
+      (بدل أزرق slate السابق): bg-app #000 · bg-card #0a0a0a ·
+      bg-elev/input #141414 · border #262626 · نصوص #f4f4f5/#a1a1aa/#71717a.
+      البنفسجي (#8b5cf6) يبقى لون التمييز؛ الأخضر/الأحمر/الأصفر للدلالات.
+      الأسماء (--ac, --up, --dn, --bg-app...) لم تتغيّر — كل ملف يستهلكها
+      بـvar() فيكفي تغيير القيم هنا.
+   ✅ الوضع الافتراضي داكن دائماً (سكربت <head> بـindex.html يضبطه) —
+      الزر ☀️/🌙 يبدّل يدوياً ويحفظ الاختيار.
+   ✅ أسماء مستعارة (--bg/--card/--text/--accent/--green/--red) لأن
+      oc/css/oc.css يقرأ هذه الأسماء مع ألوان احتياطية زرقاء قديمة —
+      تعريفها هنا يوحّد مظهر /oc مع باقي التطبيق بلا لمس oc.css.
    تبديل ديناميكي عبر [data-theme="dark|light"] على <html>.
-   لا @media (prefers-color-scheme) — التبديل يدوي فقط عبر الزر.
 ═══════════════════════════════════════════════════════════════ */
 
 @layer themes {
 
 /* ════════════════════════════════════
-   DARK — الافتراضي (من hl.css :root)
+   DARK — الافتراضي (أسود كلاسيكي)
 ════════════════════════════════════ */
 :root,
 [data-theme="dark"] {
-  --bg-app:        #0f172a;
-  --bg-card:       #1e293b;
-  --bg-elev:       #334155;
-  --bg-input:      #334155;
-  --bg-overlay:    rgba(15,23,42,.85);
+  --bg-app:        #000000;
+  --bg-card:       #0a0a0a;
+  --bg-elev:       #141414;
+  --bg-input:      #141414;
+  --bg-overlay:    rgba(0,0,0,.88);
 
-  --border:         #334155;
-  --border-strong:  color-mix(in srgb, #334155, #94a3b8 35%);
-  --border-subtle:  rgba(255,255,255,.06);
+  --border:         #262626;
+  --border-strong:  color-mix(in srgb, #262626, #a1a1aa 30%);
+  --border-subtle:  rgba(255,255,255,.07);
 
-  /* Accent — بنفسجي (أساسي للواجهة بالكامل) */
+  /* Accent — بنفسجي */
   --ac:      #8b5cf6;
   --ac-2:    color-mix(in srgb, #8b5cf6 70%, black);
   --ac-dim:  rgba(139,92,246,.22);
@@ -58,13 +54,13 @@
   --sl-dim:   rgba(245,158,11,.18);
 
   /* Text */
-  --text-primary:   #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted:     #64748b;
+  --text-primary:   #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted:     #71717a;
 
   /* Shadows */
-  --shadow:    0 10px 25px -5px rgba(0,0,0,.4);
-  --shadow-sm: 0 4px 14px -4px rgba(0,0,0,.3);
+  --shadow:    0 10px 25px -5px rgba(0,0,0,.7);
+  --shadow-sm: 0 4px 14px -4px rgba(0,0,0,.6);
 
   /* Glows */
   --glow-ac:  0 0 16px var(--ac-dim), 0 0 32px rgba(139,92,246,.10);
@@ -75,8 +71,8 @@
   --tglow-dn: 0 0 12px rgba(239,68,68,.5);
 
   /* Scrollbar */
-  --sb-thumb:       #334155;
-  --sb-thumb-hover: color-mix(in srgb, #334155, #f1f5f9 20%);
+  --sb-thumb:       #262626;
+  --sb-thumb-hover: color-mix(in srgb, #262626, #f4f4f5 20%);
   --sb-track-hover: rgba(139,92,246,.12);
 
   /* Legacy aliases (inline JS يستخدمها) */
@@ -87,7 +83,15 @@
   --hc-tp:   var(--tp);
   --hc-sl:   var(--sl);
 
-  /* اللوجو فقط — تدرج أزرق→بنفسجي موثّق صراحة، منفصل عن accent العام */
+  /* أسماء مستعارة لـ oc/css/oc.css */
+  --bg:     var(--bg-app);
+  --card:   var(--bg-card);
+  --text:   var(--text-primary);
+  --accent: var(--ac);
+  --green:  var(--up);
+  --red:    var(--dn);
+
+  /* اللوجو فقط — تدرج أزرق→بنفسجي */
   --logo-grad-1: #3b82f6;
   --logo-grad-2: #8b5cf6;
   --logo-glow:   rgba(59,130,246,.4);
@@ -153,6 +157,13 @@
   --hc-warn: var(--warn);
   --hc-tp:   var(--tp);
   --hc-sl:   var(--sl);
+
+  --bg:     var(--bg-app);
+  --card:   var(--bg-card);
+  --text:   var(--text-primary);
+  --accent: var(--ac);
+  --green:  var(--up);
+  --red:    var(--dn);
 
   --logo-grad-1: #3b82f6;
   --logo-grad-2: #8b5cf6;
