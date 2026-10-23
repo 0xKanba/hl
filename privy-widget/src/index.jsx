@@ -120,7 +120,7 @@ createRoot(mountNode).render(
         name: 'سيولتي',
         theme: 'dark',
         accentColor: '#8b5cf6',
-        logo: 'https://s.kanba.pw/icons/icon-192x192.png',
+        logo: '/icons/icon-192x192.png',
       },
     }}
   >
