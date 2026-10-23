@@ -1,18 +1,15 @@
 'use strict';
 
 /* Version strings below are rewritten automatically on every push by
-   .github/workflows/sw.yml — never edit by hand, never needs to be
-   remembered. A stale value here only ever means "the cache tag didn't
-   change"; it never blocks a real deploy, because the app shell below
-   is network-first, not stale-while-revalidate.
-   ✅ رُفعت يدوياً هذه المرة (إعادة هيكلة صفحة واحدة: css/order.css
-   وjs/order/bar.js جديدان، وindex.html صار مُحمِّلاً فقط) — الـAction سيرفعها
-   تلقائياً مجدداً بأول push فعلي، هذا فقط ضمان لأول تحميل مباشر بعد
-   نسخ هذي الملفات. */
+   .github/workflows/sw.yml — never edit by hand. A stale value here only
+   means "the cache tag didn't change"; it never blocks a real deploy,
+   because the app shell below is network-first.
+   سيولتي (Siyulati) — prefix siyulati-* ; old hltrade-* caches are
+   deleted automatically on activate (not in CURRENT). */
 
-const CACHE_APP   = 'hltrade-app-202610232111-334131b';
-const CACHE_IMGS  = 'hltrade-img-202610232111-334131b';
-const CACHE_FONTS = 'hltrade-fnt-202610232111-334131b';
+const CACHE_APP   = 'siyulati-app-202610210927-c3fa954';
+const CACHE_IMGS  = 'siyulati-img-202610210927-c3fa954';
+const CACHE_FONTS = 'siyulati-fnt-202610210927-c3fa954';
 
 const APP_SHELL = [
   '/',
@@ -21,6 +18,7 @@ const APP_SHELL = [
   '/css/themes.css',
   '/css/components.css',
   '/css/order.css',
+  '/css/orders.css',
   '/css/agentlink.css',
   '/manifest.json',
   '/js/config.js',
@@ -54,25 +52,21 @@ const APP_SHELL = [
   '/js/c.js',
   '/js/app.js',
   '/js/lastplace.js',
+  '/js/orders.js',
   '/images/oil.svg',
   '/images/gold.svg',
   '/images/silver.svg',
   '/images/100.png',
-  '/images/btc21.png',
-  '/images/icon-192x192.png',
-  '/images/icon-512x512.png'
+  '/favicon.ico',
+  '/icons/icon-180x180.png',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png'
 ];
 
 /* Note: js/privy-bridge.js (~1.4MB gzip, email-login only) is
    deliberately NOT in APP_SHELL — it's lazy-loaded by auth.js only
-   when a user picks email login, so guests and external-wallet users
-   never pay for it. The generic same-origin handler below still
-   caches it after first real use, so offline works fine after that. */
-
-/* App-shell file types — always network-first so a fresh deploy is
-   visible on the very next load while online. Cache is the offline
-   fallback, never the first stop. */
-const SHELL_EXT = /\.(html|css|js|json)$/;
+   when a user picks email login. The generic same-origin handler below
+   still caches it after first real use. */
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -108,23 +102,16 @@ self.addEventListener('fetch', e => {
     e.respondWith(cacheFirst(e.request, CACHE_FONTS));
     return;
   }
-  /* Images — rarely change, cache aggressively */
+  /* Images/icons — rarely change, cache aggressively */
   if (/\.(png|jpg|jpeg|gif|svg|webp|ico)(\?.*)?$/.test(url.pathname)) {
     e.respondWith(cacheFirst(e.request, CACHE_IMGS));
     return;
   }
-  /* Everything same-origin (navigations + the html/css/js/json app shell,
-     including js/privy-bridge.js the one time it's actually fetched)
-     — network-first with a fast timeout. Online, you always get the
-     live file; offline or slow, you fall back to whatever was last
-     cached. This is what makes deploys show up immediately instead of
-     needing a second reload. */
+  /* Everything same-origin (navigations + html/css/js/json app shell) —
+     network-first with a fast timeout so deploys show up immediately. */
   e.respondWith(networkFirstWithTimeout(e.request, CACHE_APP, 3000));
 });
 
-/* ── Straight network-first (with a generous timeout) — used for
-   trading API calls, where a slow-but-real response beats a stale
-   cached one every time. ── */
 async function networkFirst(req, cacheName, timeoutMs) {
   try {
     const res = await withTimeout(fetch(req), timeoutMs);
@@ -141,10 +128,6 @@ async function networkFirst(req, cacheName, timeoutMs) {
   }
 }
 
-/* ── Network-first, raced against a short timeout, for the app shell.
-   Falls back fast on slow connections, but the network response still
-   lands in cache in the background for next time even if we already
-   answered from cache. ── */
 async function networkFirstWithTimeout(req, cacheName, timeoutMs) {
   const cache = await caches.open(cacheName);
   const netPromise = fetch(req).then(res => {
