@@ -1,33 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════
    privy-bridge — React island مستقل، بدون واجهة مرئية خاصة به.
-   يفتح مودال Privy الجاهز (بريد + محافظ خارجية) ويعرض واجهة برمجية
-   بسيطة على window.PrivyBridge يستدعيها auth.js (vanilla JS).
+   يفتح مودال Privy الجاهز (بريد) ويعرض واجهة برمجية بسيطة على
+   window.PrivyBridge يستدعيها auth.js (vanilla JS).
 
-   لا تعدّل هذا الملف مباشرة بالمتصفح — عدّل src/index.jsx وأعد البناء:
-     cd privy-widget && npm run build
-   الناتج ينسخ يدوياً إلى /js/privy-bridge.js بمشروع سيولة.
-   (على Cloudflare Pages هذا يحدث تلقائياً عند كل push — لا حاجة لبناء
-   يدوي محلي في الاستخدام العادي.)
+   لا تعدّل الناتج js/privy-bridge.js مباشرة — عدّل هذا الملف؛
+   Cloudflare Pages يبنيه تلقائياً عند كل push (راجع build.mjs).
 
-   ✅ إصلاح: useEffect كان يُعيد إرسال privy:update عند أي تغيّر بمرجع
-      مصفوفة wallets حتى لو الحالة الفعلية (ready/authenticated/العنوان
-      النشط) لم تتغيّر إطلاقاً — بعض تطبيقات hooks لا تُثبِّت مرجع
-      المصفوفة بين كل تصيير. كان هذا يُشعِّل auth.js's listener بشكل
-      متكرر بلا داعٍ (محمي بفحص العنوان المتطابق هناك، فلا خلل وظيفي،
-      لكنه إهدار وسبب احتمالي لسباقات مستقبلية لو تغيّر ذاك الفحص).
-      الآن نقارن بصمة الحالة المؤثرة فعلياً فقط قبل الإرسال.
-   ✅ إصلاح: فشل تبديل الشبكة لـArbitrum بمحفظة Privy المدمجة كان
-      يُبتلع بصمت (catch فاضي) — أي فشل حقيقي هنا يجب أن يظهر بالسجل
-      بدل الاختفاء، لتسهيل تشخيص أي فشل إيداع لاحق ناتج عنه.
-   ✅ حُذف useSetWalletRecovery/setupRecovery بالكامل — "استرداد
-      المحفظة" أُزيل من التطبيق (راجع auth.js/index.html)، فـ"تصدير
-      المحفظة" (useExportWallet أدناه) يكفي وحده كنسخة احتياطية حقيقية
-      (يعرض المفتاح الخاص/العبارة السرية مباشرة)، وكان وجود الاثنين
-      تكراراً بلا فائدة إضافية حقيقية للمستخدم.
-   ✅ إعادة تلوين (2026-08) — accentColor مودال Privy كان #00ccff
-      (سماوي)، بلا أي علاقة بلوحة التطبيق. الآن #8b5cf6 (نفس البنفسجي
-      الأساسي بكل مكان آخر) — نافذة الدخول بالبريد تطابق هوية التطبيق
-      بصرياً بدل الظهور بلون غريب منفصل.
+   • useEffect لا يُعيد إرسال privy:update إلا عند تغيّر بصمة الحالة الفعلية.
+   • فشل switchChain(42161) يُسجَّل بدل ابتلاعه بصمت.
+   • "تصدير المحفظة" (useExportWallet) هو النسخ الاحتياطي الوحيد.
+   • ✅ سيولتي — اسم التطبيق بمودال Privy "سيولتي" وشعاره من /icons/.
+     ⚠️ لازم إضافة https://s.kanba.pw إلى Allowed origins بلوحة Privy،
+     وضبط PRIVY_APP_ID / PRIVY_CLIENT_ID بمتغيّرات بيئة مشروع Pages الجديد.
 ═══════════════════════════════════════════════════════════════ */
 import React, { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -39,9 +23,7 @@ import {
   useExportWallet,
 } from '@privy-io/react-auth';
 
-/* App ID + Client ID يُحقنان وقت البناء من متغيّرات بيئة (راجع build.mjs) —
-   على Cloudflare Pages: Settings → Environment variables → PRIVY_APP_ID, PRIVY_CLIENT_ID.
-   لا حاجة لتعديل هذا الملف يدوياً أبداً. */
+/* App ID + Client ID يُحقنان وقت البناء من متغيّرات بيئة (راجع build.mjs) */
 const PRIVY_APP_ID    = process.env.PRIVY_APP_ID;
 const PRIVY_CLIENT_ID = process.env.PRIVY_CLIENT_ID;
 
@@ -55,7 +37,7 @@ function Bridge() {
   const live = useRef({ ready, authenticated, wallets });
   live.current = { ready, authenticated, wallets };
 
-  /* ✅ بصمة آخر إرسال — تمنع privy:update المتكرر بلا فائدة (راجع تعليق الرأس) */
+  /* بصمة آخر إرسال — تمنع privy:update المتكرر بلا فائدة */
   const lastDispatchSig = useRef('');
 
   useEffect(() => {
@@ -65,7 +47,7 @@ function Bridge() {
       return {
         address: w.address,
         walletClientType: w.walletClientType,
-        name: w.meta?.name || w.walletClientType,   // "Brave Wallet" / "Trust Wallet" / "Rabby" مباشرة من EIP-6963
+        name: w.meta?.name || w.walletClientType,
         icon: w.meta?.icon || null,
       };
     }
@@ -74,14 +56,13 @@ function Bridge() {
       get ready()          { return live.current.ready; },
       get authenticated()  { return live.current.authenticated; },
 
-      /* يفتح مودال Privy الرسمي (بريد أولاً، محافظ خارجية تحته) */
+      /* يفتح مودال Privy الرسمي (بريد) */
       connect: () => login(),
       logout:  () => logout(),
 
       getActiveWallet: activeWallet,
 
-      /* توقيع EIP-712 — يطابق توقيع ethers.Wallet.signTypedData(domain, types, value)
-         بحيث api.js و account.js ما يحتاجون يتغيروا إذا صار State.wallet = هذا الجسر */
+      /* توقيع EIP-712 — يطابق ethers.Wallet.signTypedData(domain, types, value) */
       signTypedData: async (domain, types, value, address) => {
         const primaryType = Object.keys(types)[0];
         const target = address || activeWallet()?.address;
@@ -92,8 +73,7 @@ function Bridge() {
         return signature;
       },
 
-      /* يفتح مودال Privy الآمن لتصدير المفتاح/الـ seed phrase —
-         المسار الوحيد الآن للنسخ الاحتياطي (راجع تعليق رأس الملف) */
+      /* يفتح مودال Privy الآمن لتصدير المفتاح/الـ seed phrase */
       exportWallet: (address) => exportWallet(address ? { address } : undefined),
 
       /* Signer متصل بـArbitrum جاهز لعقود USDC/الجسر (يستخدم doDeposit) */
@@ -122,7 +102,7 @@ function Bridge() {
     }));
   }, [ready, authenticated, wallets, login, logout, signTypedData, exportWallet]);
 
-  return null; /* headless تماماً — modalLogin بتاع سيولة يبقى هو الواجهة */
+  return null; /* headless تماماً — modalLogin بالتطبيق هو الواجهة */
 }
 
 const mountNode = document.getElementById('privyRoot');
@@ -131,18 +111,16 @@ createRoot(mountNode).render(
     appId={PRIVY_APP_ID}
     clientId={PRIVY_CLIENT_ID}
     config={{
-      /* ✅ Privy الآن خاص بالبريد الإلكتروني فقط — الاتصال بمحافظ خارجية
-         (Trust/Brave/أي محفظة) صار بملف wallets.js منفصل تماماً، بلا
-         أي اعتماد على Privy أو WalletConnect. */
+      /* Privy خاص بالبريد الإلكتروني فقط — المحافظ الخارجية عبر wallets.js */
       loginMethods: ['email'],
       embeddedWallets: {
         createOnLogin: 'users-without-wallets',
       },
       appearance: {
-        name: 'ماركت ليك',
+        name: 'سيولتي',
         theme: 'dark',
         accentColor: '#8b5cf6',
-        logo: 'https://hl.kanba.pw/images/icon-192x192.png',
+        logo: 'https://s.kanba.pw/icons/icon-192x192.png',
       },
     }}
   >
