@@ -8,6 +8,8 @@ on:
       - "**.html"
       - "css/**"
       - "js/**"
+      - "icons/**"
+      - "favicon.ico"
       - "manifest.json"
       - "!sw.js"
       - "!.github/workflows/**"
@@ -62,15 +64,15 @@ jobs:
 
             perl -0pi -e '
               s/(CACHE_APP\s*=\s*\x27)[^\x27]*(\x27)/
-                $1 . "hltrade-app-$ENV{TAG}" . $2
+                $1 . "siyulati-app-$ENV{TAG}" . $2
               /eg;
 
               s/(CACHE_IMGS\s*=\s*\x27)[^\x27]*(\x27)/
-                $1 . "hltrade-img-$ENV{TAG}" . $2
+                $1 . "siyulati-img-$ENV{TAG}" . $2
               /eg;
 
               s/(CACHE_FONTS\s*=\s*\x27)[^\x27]*(\x27)/
-                $1 . "hltrade-fnt-$ENV{TAG}" . $2
+                $1 . "siyulati-fnt-$ENV{TAG}" . $2
               /eg;
             ' sw.js
           }
