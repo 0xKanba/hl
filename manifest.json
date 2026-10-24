@@ -1,59 +1,109 @@
 {
-  "name": "ماركت ليك",
-  "short_name": "ماركت ليك",
-  "description": "اسواق: نفط وذهب وفضة وغيرها",
+  "name": "سيولتي",
+  "short_name": "Siyulati",
+  "description": "سيولتي - للاسواق المالية اللامركزية. تداول النفط والذهب والفضة وناسداك برافعة مالية، توقيع وتنفيذ مباشر من متصفحك بلا وسيط.",
   "name_localized": {
     "en": {
-      "name": "Market Liq",
-      "short_name": "Market Liq",
-      "description": "Markets: oil, gold, silver, and more"
+      "name": "Siyulati",
+      "short_name": "Siyulati"
     }
   },
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0f172a",
-  "theme_color": "#8b5cf6",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "lang": "ar",
   "dir": "rtl",
   "icons": [
     {
-      "src": "https://hl.kanba.pw/images/icon-192x192.png",
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-180x180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://hl.kanba.pw/images/icon-512x512.png",
+      "src": "/icons/icon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-48x48.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512-maskable.png",
       "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-64x64.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
       "type": "image/png",
       "purpose": "any"
     }
   ],
-  "screenshots": [
-    {
-      "src": "https://hl.kanba.pw/images/x1.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "ماركت ليك - تداول"
-    },
-    {
-      "src": "https://hl.kanba.pw/images/x2.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "ماركت ليك - رسم"
-    },
-    {
-      "src": "https://hl.kanba.pw/images/x3.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "ماركت ليك - محفظة"
-    }
+  "categories": [
+    "finance"
   ],
-  "categories": ["finance"],
   "prefer_related_applications": false
 }

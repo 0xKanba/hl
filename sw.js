@@ -7,9 +7,9 @@
    سيولتي (Siyulati) — prefix siyulati-* ; old hltrade-* caches are
    deleted automatically on activate (not in CURRENT). */
 
-const CACHE_APP   = 'siyulati-app-202610210927-c3fa954';
-const CACHE_IMGS  = 'siyulati-img-202610210927-c3fa954';
-const CACHE_FONTS = 'siyulati-fnt-202610210927-c3fa954';
+const CACHE_APP   = 'siyulati-app-202610240005-v1';
+const CACHE_IMGS  = 'siyulati-img-202610240005-v1';
+const CACHE_FONTS = 'siyulati-fnt-202610240005-v1';
 
 const APP_SHELL = [
   '/',
@@ -57,10 +57,22 @@ const APP_SHELL = [
   '/images/gold.svg',
   '/images/silver.svg',
   '/images/100.png',
-  '/favicon.ico',
+  '/icons/favicon.ico',
+  '/icons/icon-128x128.png',
+  '/icons/icon-144x144.png',
+  '/icons/icon-152x152.png',
+  '/icons/icon-16x16.png',
   '/icons/icon-180x180.png',
+  '/icons/icon-192x192-maskable.png',
   '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icons/icon-32x32.png',
+  '/icons/icon-384x384.png',
+  '/icons/icon-48x48.png',
+  '/icons/icon-512x512-maskable.png',
+  '/icons/icon-512x512.png',
+  '/icons/icon-64x64.png',
+  '/icons/icon-96x96.png',
+  '/icons/siyulati.svg'
 ];
 
 /* Note: js/privy-bridge.js (~1.4MB gzip, email-login only) is
