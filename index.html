@@ -10,20 +10,21 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="سيولتي">
+  <meta name="application-name" content="سيولتي">
   <meta name="theme-color" content="#000000">
-  <meta name="description" content="سيولتي - للاسواق المالية اللامركزية. تداول النفط والذهب والفضة وناسداك برافعة مالية، توقيع وتنفيذ مباشر من متصفحك بلا وسيط.">
-  <meta name="keywords" content="سيولتي, Siyulati, اسواق مالية لامركزية, تداول لامركزي, نفط, ذهب, فضة, ناسداك, رافعة مالية, تداول">
-  <meta name="robots" content="index,follow">
-  <link rel="canonical" href="/">
-  <title>سيولتي</title>
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="سيولتي واجهة عربية لاستكشاف الأسواق المالية، ومتابعة الأسعار، وإدارة المراكز الاستثمارية والتداولية بمرونة عبر ربط المحفظة.">
+  <meta name="keywords" content="سيولتي, Siyulati, استثمار, تداول, الأسواق المالية, واجهة استثمار عربية, العقود الدائمة, إدارة المراكز">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://s.kanba.pw/">
+  <title>سيولتي - للأسواق المالية اللامركزية</title>
 
-<link rel="icon" href="/icons/favicon.ico" sizes="any">
-<link rel="icon" type="image/svg+xml" href="/icons/siyulati.svg">
-<link rel="icon" type="image/png" sizes="96x96" href="/icons/icon-96x96.png">
-<link rel="apple-touch-icon" href="/icons/icon-180x180.png">
-  
-<link rel="manifest" href="/manifest.json">
-
+  <!-- PWA / Icons (مجلد /icons/ + /favicon.ico في جذر الموقع) -->
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="/icons/icon-192x192.png" type="image/png" sizes="192x192">
+  <link rel="icon" href="/icons/icon-512x512.png" type="image/png" sizes="512x512">
+  <link rel="apple-touch-icon" href="/icons/icon-180x180.png">
+  <link rel="manifest" href="/manifest.json">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -31,83 +32,62 @@
   <link rel="stylesheet" href="/css/themes.css">
   <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/order.css">
+  <link rel="stylesheet" href="/css/orders.css">
   <link rel="stylesheet" href="/css/agentlink.css">
 
   <link rel="preload" as="image" href="/images/oil.svg">
   <link rel="preload" as="image" href="/images/gold.svg">
   <link rel="preload" as="image" href="/images/silver.svg">
   <link rel="preload" as="image" href="/images/100.png">
-  <link rel="preload" as="image" href="/images/btc21.png">
 
   <script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebSite",
-      "name": "سيولتي",
-      "alternateName": "Siyulati",
-      "url": "/",
-      "inLanguage": "ar",
-      "description": "سيولتي - للاسواق المالية اللامركزية. تداول النفط والذهب والفضة وناسداك برافعة مالية، توقيع وتنفيذ مباشر من متصفحك بلا وسيط."
-    },
-    {
-      "@type": "Organization",
-      "name": "سيولتي",
-      "alternateName": "Siyulati",
-      "url": "/",
-      "logo": "/icons/siyulati.svg"
-    },
-    {
-      "@type": "WebApplication",
-      "name": "سيولتي",
-      "alternateName": "Siyulati",
-      "url": "/",
-      "image": "/icons/icon-512x512.png",
-      "inLanguage": "ar",
-      "applicationCategory": "FinanceApplication",
-      "operatingSystem": "Any (Web/PWA)",
-      "description": "سيولتي - للاسواق المالية اللامركزية. تداول النفط والذهب والفضة وناسداك برافعة مالية، توقيع وتنفيذ مباشر من متصفحك بلا وسيط.",
-      "publisher": {
-        "@type": "Organization",
-        "name": "سيولتي"
-      }
-    }
-  ]
-}
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "سيولتي",
+    "alternateName": "Siyulati",
+    "url": "https://s.kanba.pw/",
+    "image": "https://s.kanba.pw/icons/icon-512x512.png",
+    "inLanguage": "ar",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Any (Web/PWA)",
+    "description": "سيولتي واجهة عربية لاستكشاف الأسواق المالية، ومتابعة الأسعار، وإدارة المراكز الاستثمارية والتداولية بمرونة عبر ربط المحفظة.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "publisher": { "@type": "Organization", "name": "سيولتي" }
+  }
   </script>
   <meta property="og:site_name" content="سيولتي">
-  <meta property="og:description" content="سيولتي - للاسواق المالية اللامركزية. تداول النفط والذهب والفضة وناسداك برافعة مالية، توقيع وتنفيذ مباشر من متصفحك بلا وسيط.">
-  <meta property="og:image" content="/icons/icon-512x512.png">
+  <meta property="og:title" content="سيولتي | الأسواق والاستثمار">
+  <meta property="og:description" content="استكشف الأسواق المالية وتابع الأسعار وأدر مراكزك الاستثمارية والتداولية من واجهة عربية بسيطة.">
+  <meta property="og:image" content="https://s.kanba.pw/icons/icon-512x512.png">
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
   <meta property="og:image:type" content="image/png">
-  <meta property="og:url" content="/">
+  <meta property="og:url" content="https://s.kanba.pw/">
   <meta property="og:locale" content="ar_AR">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:description" content="سيولتي - للاسواق المالية اللامركزية. تداول النفط والذهب والفضة وناسداك برافعة مالية، توقيع وتنفيذ مباشر من متصفحك بلا وسيط.">
-  <meta name="twitter:image" content="/icons/icon-512x512.png">
   <meta property="og:type" content="website">
+  <!-- ⚠️ عند رفع غلاف 1200×630 (/og/siyulati-cover.png) بدّل og:image وغيّر twitter:card إلى summary_large_image -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="سيولتي | الأسواق والاستثمار">
+  <meta name="twitter:description" content="واجهة عربية بسيطة لاستكشاف الأسواق ومتابعة الأسعار وإدارة المراكز.">
+  <meta name="twitter:image" content="https://s.kanba.pw/icons/icon-512x512.png">
 
-  <!-- Apply theme before paint — prevents flash of wrong theme -->
+  <!-- المظهر قبل أول رسم: الافتراضي داكن (أسود) دائماً، لا يتبع نظام الجهاز.
+       الاختيار اليدوي (☀️/🌙) يُحفظ بنفس المفتاح hl_theme ويُحترم لاحقاً. -->
   <script>
     (function(){
-      var t=localStorage.getItem('hl_theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-      document.documentElement.setAttribute('data-theme',t);
+      try {
+        var t = localStorage.getItem('hl_theme');
+        if (t !== 'dark' && t !== 'light') { t = 'dark'; localStorage.setItem('hl_theme', t); }
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(e) { document.documentElement.setAttribute('data-theme', 'dark'); }
     })();
   </script>
 
-  <!-- ✅ جديد — يمنع أي وميض لواجهة التداول خلف شاشة قفل PIN عند
-       الإقلاع. يعمل قبل تحليل <body>
-<h1 style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0">سيولتي</h1> إطلاقاً (نفس أسلوب سكربت المظهر
-       أعلاه بالضبط) — يقرأ نفس القيمتين المحليتين اللتين تفحصهما
-       أول سطر بمعالج DOMContentLoaded بـjs/app.js (PIN_KEY/LOCKED_KEY
-       من js/config.js)، لكن هنا حرفياً كسلسلتين نصيتين مباشرة لأن
-       config.js نفسه لم يُحمَّل بعد بهذي المرحلة المبكرة جداً. ⚠️ لو
-       غُيِّر اسم أيٍّ من المفتاحين بـconfig.js مستقبلاً، حدّث هذا
-       السطر أيضاً (لا رابط تلقائي بينهما، تكرار مقصود وموثَّق). راجع
-       css/base.css (قاعدة data-boot-lock) وjs/pin.js:unlockApp
-       (يُزيل الخاصية عند فتح القفل فعلياً) لبقية الآلية. -->
+  <!-- يمنع أي وميض لواجهة التداول خلف شاشة قفل PIN عند الإقلاع (متزامن قبل
+       تحليل <body>). المفتاحان حرفيان لأن config.js لم يُحمَّل بعد — لو غُيِّر
+       PIN_KEY/LOCKED_KEY بـconfig.js حدّث هذا السطر أيضاً. راجع css/base.css
+       وjs/pin.js:unlockApp. -->
   <script>
     (function(){
       try {
@@ -177,26 +157,10 @@
     </div>
   </div>
 
-  <!-- ✅ DOCK — يحل محل الدرج القديم (drawerOverlay/.drawer) بالكامل،
-       وأيضاً بديل النسخة العائمة السابقة (position:fixed منتصف الشاشة)
-       التي كانت تُصاب أحياناً بخطأ موضع بصري (تصادم transform مع قاعدة
-       أداء عامة لاحقة بـcomponents.css كانت تُلغي توسيط translateY(-50%)
-       فيظهر الدوك "بالأسفل" بدل المنتصف — جذر الشكوى الأخيرة). الآن
-       #dock عنصر تخطيط flex حقيقي داخل .content-row (يمين الشاشة، نفس
-       جهة زر ☰ بالـappbar بحكم RTL) — "عمود كامل" بمعنى حرفي: يمتد
-       تلقائياً بكامل ارتفاع منطقة المحتوى (بين الرأس والتذييل) عبر
-       flexbox نفسه، لا حساب بكسلات يدوي هش قد ينكسر لو تغيّر ارتفاع
-       الـappbar/tabbar لاحقاً — يعمل بنفس الدقة بأي حجم/اتجاه شاشة
-       (موبايل/سطح مكتب، عمودي/أفقي) لأن الارتفاع مُشتق من التخطيط
-       نفسه لا من قيمة مفترَضة. عرضه الخارجي (52px) ثابت دائماً — لا
-       "قفزة" بالتخطيط عند التمدد؛ التمدد (.expanded) يحدث فقط بالعنصر
-       الداخلي #dockScroll (position:absolute نسبةً لـ#dock، يفيض فوق
-       .screens-viewport كطبقة عائمة خفيفة، بلا خلفية معتمة كاملة —
-       راجع app.js:_initDock). كل زر (dock-item) له onclick واحد يعمل
-       فوراً بالنقر المباشر على أيقونته، طيّاً كان الدوك أو متمدداً —
-       لا تكرار عناصر بين الحالتين. نفس الـIDs القديمة تماماً لعناصر
-       الإجراءات. زر تبديل المظهر زر واحد (dockTheme) بدل الزرَّين
-       المنفصلَين السابقَين — الأيقونة والعنوان يعكسان المظهر الحالي. -->
+  <!-- DOCK — عنصر flex حقيقي داخل .content-row (يمين الشاشة بحكم RTL)، عرضه
+       الخارجي 52px ثابت؛ التمدد (.expanded) بالعنصر الداخلي #dockScroll فقط
+       (طافٍ فوق .screens-viewport). كل .dock-item له onclick واحد يعمل طيّاً
+       كان الدوك أو متمدداً. راجع css/components.css وjs/app.js:_initDock. -->
   <div class="content-row" id="contentRow">
     <aside class="dock" id="dock">
       <div class="dock-scroll" id="dockScroll">
@@ -252,12 +216,11 @@
     <section class="app-screen hidden" data-screen="home" id="screenHome">
       <div class="screen-scroll">
 
-        <!-- ⚠️ لا تضف أي عنصر واجهة هنا. شريط "فتح صفقة جديدة" (.om-bar)
-             يُدرَج بأعلى هذه الشاشة وقت التشغيل من js/order/bar.js، ويُنسَّق
-             من css/order.css. القاعدة بهذا المشروع: index.html مُحمِّل فقط
-             (link/script + الصدفة الثابتة)، وأي واجهة جديدة = js + css. -->
+        <!-- ⚠️ لا تضف أي عنصر واجهة هنا. شريط "فتح صفقة جديدة" (.om-bar) يُدرَج
+             بأعلى هذه الشاشة وقت التشغيل من js/order/bar.js (تنسيق css/order.css).
+             index.html مُحمِّل فقط: أي واجهة جديدة = js + css. -->
 
-        <!-- ✅ بطاقة الرصيد الدائمة — تُغذّى من account.js:_renderBalanceFromState -->
+        <!-- بطاقة الرصيد الدائمة — تُغذّى من account.js:_renderBalanceFromState -->
         <div class="balance-card" id="balanceCard">
           <div class="bc-primary">
             <span class="bc-primary-label">الرصيد الإجمالي</span>
@@ -293,7 +256,7 @@
       </div>
     </section>
 
-    <!-- ══ شاشة الأسواق (الافتراضية عند الإقلاع الآن) ══ -->
+    <!-- ══ شاشة الأسواق (الافتراضية عند الإقلاع) ══ -->
     <section class="app-screen" data-screen="markets" id="screenMarkets">
       <div class="screen-scroll">
         <div class="markets-list" id="marketsList">
@@ -372,16 +335,13 @@
       </div>
     </section>
 
-    <!-- ══ شاشة الرسم البياني — تُبنى ديناميكياً بواسطة js/chart/*.js داخل
-         هذا العنصر بالضبط (نفس أسلوب ChartModule القديم). الفرق الوحيد
-         الآن: شاشة ثالثة تشارك appbar/tabbar عبر switchScreen('chart')
-         بدل overlay منفصل كامل الشاشة يغطيهما ══ -->
+    <!-- ══ شاشة الرسم البياني — تُبنى ديناميكياً بواسطة js/chart/*.js ══ -->
     <section class="app-screen hidden" data-screen="chart" id="chartScreen"></section>
 
   </main>
   </div>
 
-  <!-- ✅ TABBAR — ترتيب DOM [رسم، رئيسية، أسواق] → RTL يعطي يمين=رسم/وسط=رئيسية/يسار=أسواق -->
+  <!-- TABBAR — ترتيب DOM [رسم، رئيسية، أسواق] → RTL: يمين=رسم/وسط=رئيسية/يسار=أسواق -->
   <nav class="tabbar">
     <button class="tab-btn" data-tab="chart" id="tabChart">
       <span class="tab-btn-icon-wrap"><span class="tab-btn-icon">📈</span></span>
@@ -401,10 +361,9 @@
 
 <div class="screen hidden" id="loginScreen">
   <div class="login-brand">
-    <div class="login-icon"><img src="/icons/siyulati.svg" alt="سيولتي" width="48" height="48"></div>
+    <div class="login-icon">💧</div>
     <div class="login-title">سيولتي</div>
   </div>
-  <p>سيولتي - الأسواق المالية اللامركزية بين يديك</p>
 </div>
 
 <!-- ══ MODALS ══ -->
@@ -413,10 +372,9 @@
   <div class="modal" style="max-width:440px;">
     <div class="modal-handle"></div>
     <div class="login-brand" style="justify-content:center;margin-bottom:16px;">
-      <div class="login-icon"><img src="/icons/siyulati.svg" alt="سيولتي" width="48" height="48"></div>
+      <div class="login-icon">💧</div>
       <div class="login-title">سيولتي</div>
     </div>
-    <p>سيولتي - الأسواق المالية اللامركزية بين يديك</p>
 
     <button class="login-btn" id="connectEmailBtn" style="margin-bottom:14px;">📧 الدخول بالبريد الإلكتروني ←</button>
 
@@ -510,11 +468,8 @@
   </div>
 </div>
 
-<!--
-  modalAssetInfo — نافذة معلومات مختصرة لكل أصل بشاشة الأسواق، تُفتح من
-  زر "؟" بجانب اسم كل بطاقة (راجع app.js:openAssetInfoModal +
-  ASSET_INFO_DESC). الترتيب المطلوب: صورة ← رافعة ← شرح مختصر.
--->
+<!-- modalAssetInfo — معلومات مختصرة لكل أصل (زر "؟" بشاشة الأسواق):
+     صورة ← رافعة ← شرح (راجع app.js:openAssetInfoModal) -->
 <div class="modal-overlay" id="modalAssetInfo">
   <div class="modal" style="max-width:380px;">
     <div class="modal-handle"></div>
@@ -543,12 +498,9 @@
   </div>
 </div>
 
-<!--
-  modalDeposit يعرض عنوان محفظة المستخدم المتصلة مباشرة (بريد Privy أو
-  خارجية — نفس المنطق للاثنين: الإيداع تحويل USDC من هذا العنوان بالذات
-  للجسر). depositAddrTxt/depositAddrCopy يُملآن ويُوصَلان عبر
-  _fillDepositAddr() بapp.js، تُستدعى فور فتح النافذة من الدوك.
--->
+<!-- modalDeposit يعرض عنوان محفظة المستخدم المتصلة (الإيداع تحويل USDC من
+     هذا العنوان للجسر). depositAddrTxt/depositAddrCopy تُملآن عبر
+     _fillDepositAddr() بـapp.js. -->
 <div class="modal-overlay" id="modalDeposit">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -586,7 +538,7 @@
     </div>
     <div class="withdraw-preview hidden" id="withdrawPreview">
       <div class="wp-row"><span>📤 المبلغ المُرسَل</span><span class="wp-val" id="wpSend">—</span></div>
-      <div class="wp-row"><span>💸 رسوم الشبكة</span><span class="wp-val red" id="wpFee">- $1.00</span></div>
+      <div class="wp-row"><span>💸 رسوم السحب</span><span class="wp-val red" id="wpFee">- $1.00</span></div>
       <div class="wp-row wp-net"><span>✅ يصلك صافي</span><span class="wp-val green" id="wpNet">—</span></div>
     </div>
     <div class="form-group">
@@ -601,10 +553,7 @@
   </div>
 </div>
 
-<!--
-  modalLogout — "إلغاء الاتصال"، يُفتح من زر "اتصال" بالـappbar (حالة
-  الاتصال). النص يشرح كل احتمالات النتيجة بوضوح تام.
--->
+<!-- modalLogout — "إلغاء الاتصال"، يُفتح من زر الحساب بالـappbar -->
 <div class="modal-overlay" id="modalLogout">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -613,7 +562,7 @@
       <h3 class="modal-title">إلغاء الاتصال</h3>
       <p class="logout-text">
         سيُحذف مفتاح الجلسة من هذا الجهاز، وستحتاج لتسجيل الدخول مجدداً.<br><br>
-        ✅ صفقاتك المفتوحة <strong>تبقى نشطة وآمنة</strong> على الشبكة ولا تتأثر إطلاقاً.<br>
+        ✅ صفقاتك المفتوحة <strong>تبقى نشطة وآمنة</strong> ولا تتأثر إطلاقاً.<br>
         ✅ محفظة التنفيذ (الوكيل) تبقى صالحة لنفس العنوان عند إعادة الاتصال — بلا حاجة لتوقيع جديد.<br>
         ⚠️ رمز PIN المحلي (إن كان مفعَّلاً) سيُحذف أيضاً — ستحتاج تعيين رمز جديد لاحقاً لو أردت القفل مجدداً.
       </p>
@@ -704,9 +653,8 @@
   </div>
 </div>
 
-<!-- ✅ نقطة تثبيت React الخاصة بـ Privy — headless بالكامل، لا واجهة مرئية
-     خاصة به. يُحمَّل js/privy-bridge.js كسولاً من auth.js عند أول اتصال
-     فعلي — لا سطر <script> ثابت هنا عمداً. -->
+<!-- نقطة تثبيت React الخاصة بـ Privy — headless بالكامل. js/privy-bridge.js
+     يُحمَّل كسولاً من auth.js عند أول اتصال بالبريد (لا <script> ثابت هنا). -->
 <div id="privyRoot" style="display:none"></div>
 
 <div id="cornerStatus"></div>
@@ -725,9 +673,8 @@
 
 <!-- 2. TradingView Advanced Charts (private licensed library)
         MUST load before js/chart/*.js — makes window.TradingView available -->
-  
 <script src="https://chart.kanba.pw/charting_library/charting_library.standalone.js"></script>
-  
+
 <!-- 3. App modules — order matters -->
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
