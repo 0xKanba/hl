@@ -7,9 +7,9 @@
    سيولتي (Siyulati) — prefix siyulati-* ; old hltrade-* caches are
    deleted automatically on activate (not in CURRENT). */
 
-const CACHE_APP   = 'siyulati-app-202610241206-1b8a740';
-const CACHE_IMGS  = 'siyulati-img-202610241206-1b8a740';
-const CACHE_FONTS = 'siyulati-fnt-202610241206-1b8a740';
+const CACHE_APP   = 'siyulati-app-202610241530-9bdeaac';
+const CACHE_IMGS  = 'siyulati-img-202610241530-9bdeaac';
+const CACHE_FONTS = 'siyulati-fnt-202610241530-9bdeaac';
 
 const APP_SHELL = [
   '/',
