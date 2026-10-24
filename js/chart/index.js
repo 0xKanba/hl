@@ -8,17 +8,14 @@
       TradingView (العلوي/الجانبي/السفلي). الأطر الزمنية من سطر عربي
       خاص بنا (ui.js). لغة المكتبة 'ar'.
    ✅ applyOverrides بعد الجاهزية بالوضع النظيف: saved_data (الخطة
-      المحفوظة) تستعيد خصائص قديمة فوق overrides — هذا كان سبب بقاء
-      الشبكة/خط السعر عند بعض المستخدمين. الآن تُفرض النظافة دائماً.
-   ✅ وضع الأدوات المتقدّمة: نفس الودجت لكن بأشرطة TradingView الكاملة
-      (رسم/مؤشرات/قوالب)، وخصائص المستخدم تُحترم بلا فرض.
-   ✅ خطة واحدة عامة (layout_v2) لكل الأصول: الرسومات مرتبطة برمز كل أصل
-      داخل TradingView نفسها، والرمز/الإطار يُزامَنان بعد الاستعادة بدل
-      إسقاط الخطة كلما اختلف الأصل (السلوك القديم).
-   ✅ تبديل الثيم الحيّ (☀️/🌙) ينعكس على الرسم فوراً (كان يحتاج إعادة بناء).
-   ✅ فشل تحميل المكتبة/انتهاء المهلة → رسالة عربية + زر إعادة المحاولة
-      (كانت شاشة فارغة بلا تفسير).
-   ✅ حفظ فوري عند إخفاء التبويب/مغادرة الصفحة (لا فقدان لآخر 3 ثوانٍ).
+      المحفوظة) تستعيد خصائص قديمة فوق overrides — الآن تُفرض النظافة دائماً.
+   ✅ وضع الأدوات المتقدّمة: نفس الودجت لكن بأشرطة TradingView الكاملة.
+   ✅ خطة واحدة عامة (layout_v2) لكل الأصول؛ الرمز/الإطار يُزامَنان بعد الاستعادة.
+   ✅ تبديل الثيم الحيّ (☀️/🌙) ينعكس على الرسم فوراً.
+   ✅ فشل تحميل المكتبة/انتهاء المهلة → رسالة عربية + زر إعادة المحاولة.
+   ✅ حفظ فوري عند إخفاء التبويب/مغادرة الصفحة.
+   ✅ سيولتي — خلفية الرسم الداكن أسود صرف (#000000) ليطابق التطبيق؛
+      المقياس/الخطوط بدرجات رمادية محايدة (#a1a1aa / #262626).
 ═══════════════════════════════════════════════════════════════ */
 'use strict';
 var CM = window.__cm = window.__cm || {};
@@ -27,7 +24,7 @@ var CM = window.__cm = window.__cm || {};
 
   /* ══════════ OVERRIDES ══════════ */
   CM.baseOverrides = function (dark, clean) {
-    var bg = dark ? '#0f172a' : '#f8fafc';
+    var bg = dark ? '#000000' : '#f8fafc';
     var o = {
       'paneProperties.background': bg,
       'paneProperties.backgroundType': 'solid',
@@ -35,7 +32,7 @@ var CM = window.__cm = window.__cm || {};
       'paneProperties.vertGridProperties.color': 'rgba(0,0,0,0)',
       'paneProperties.horzGridProperties.color': 'rgba(0,0,0,0)',
       'paneProperties.gridLinesMode': 'none',
-      'paneProperties.crossHairProperties.color': '#64748b',
+      'paneProperties.crossHairProperties.color': '#71717a',
       'paneProperties.crossHairProperties.style': 2,
       'paneProperties.crossHairProperties.width': 1,
       /* شموع يابانية */
@@ -56,8 +53,8 @@ var CM = window.__cm = window.__cm || {};
       'scalesProperties.showSeriesLastValue': true,
       'scalesProperties.showSymbolLabels': false,
       'scalesProperties.fontSize': window.innerWidth >= 600 ? 13 : 12,
-      'scalesProperties.textColor': dark ? '#94a3b8' : '#64748b',
-      'scalesProperties.lineColor': dark ? '#334155' : '#e2e8f0',
+      'scalesProperties.textColor': dark ? '#a1a1aa' : '#64748b',
+      'scalesProperties.lineColor': dark ? '#262626' : '#e2e8f0',
       'scalesProperties.backgroundColor': bg,
       'symbolWatermarkProperties.transparency': 100,
       'symbolWatermarkProperties.color': 'rgba(0,0,0,0)'
@@ -131,17 +128,17 @@ var CM = window.__cm = window.__cm || {};
       locale: 'ar',
       timezone: 'Asia/Kuwait',            // عرض فقط — البيانات UTC دائماً
       theme: dark ? 'Dark' : 'Light',
-      toolbar_bg: dark ? '#1e293b' : '#ffffff',
+      toolbar_bg: dark ? '#0a0a0a' : '#ffffff',
       overrides: CM.baseOverrides(dark, clean),
       studies_overrides: {},
       disabled_features: disabled,
       enabled_features: enabled,
       save_load_adapter: CM.buildSLA(),
       loading_screen: {
-        backgroundColor: dark ? '#0f172a' : '#f8fafc',
+        backgroundColor: dark ? '#000000' : '#f8fafc',
         foregroundColor: '#8b5cf6'
       },
-      client_id: 'suyula_hl', user_id: 'trader',
+      client_id: 'siyulati', user_id: 'trader',
       charts_storage_api_version: '1.1',
       fullscreen: false, debug: false
     };
