@@ -3,10 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
-<title>أسواق التوقعات — Hyperliquid</title>
-<meta name="description" content="تصفّح أسواق التوقعات على Hyperliquid: الأسعار الحيّة ودفتر الأوامر، واشترِ أو بِع «نعم» و«لا» مباشرة.">
-<meta name="theme-color" content="#0b0e11">
-<link rel="icon" href="../favicon.ico">
+<title>سيولتي - أسواق التوقعات</title>
+<meta name="description" content="تصفّح أسواق التوقعات: الأسعار الحيّة ودفتر الأوامر، واشترِ أو بِع «نعم» و«لا» مباشرة.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="../favicon.ico" sizes="48x48">
+<link rel="icon" href="../icons/icon-192x192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="../icons/icon-180x180.png">
 <link rel="stylesheet" href="./css/base.css">
 <link rel="stylesheet" href="./css/themes.css">
 <link rel="stylesheet" href="./css/components.css">
@@ -18,7 +20,7 @@
 <div class="screen hidden" id="loginScreen">
   <div class="login-brand">
     <div class="login-icon">💧</div>
-    <div class="login-title">ماركت ليك</div>
+    <div class="login-title">سيولتي</div>
   </div>
 </div>
 
@@ -28,7 +30,7 @@
   <!-- ══ الشريط العلوي ══ -->
   <header class="oc-appbar">
     <button class="oc-ico-btn" id="btnMenu" title="القائمة">☰</button>
-    <div class="oc-brand">أسواق التوقعات<small>Hyperliquid · تسوية USDC</small></div>
+    <div class="oc-brand">سيولتي<small>أسواق التوقعات · تسوية USDC</small></div>
     <button class="oc-ico-btn" id="btnTheme" title="المظهر">🌙</button>
     <button class="oc-ico-btn" id="btnLock" title="قفل">🔐</button>
     <div style="position:relative;">
@@ -176,7 +178,7 @@
     <div class="modal-handle"></div>
     <div class="login-brand" style="justify-content:center;margin-bottom:16px;">
       <div class="login-icon">💧</div>
-      <div class="login-title">ماركت ليك</div>
+      <div class="login-title">سيولتي</div>
     </div>
 
     <button class="login-btn" id="connectEmailBtn" style="margin-bottom:14px;">📧 الدخول بالبريد الإلكتروني ←</button>
@@ -211,7 +213,7 @@
       <label>المبلغ (USDC)</label>
       <input type="number" class="form-input" id="depositAmount" placeholder="10" min="5" inputmode="decimal">
     </div>
-    <p class="form-note">الإيداع عبر جسر Hyperliquid الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال أقل من دقيقة · يتطلب أيضاً القليل من ETH بمحفظتك لرسوم الشبكة.</p>
+    <p class="form-note">الإيداع عبر الجسر الرسمي من شبكة Arbitrum.<br>الحد الأدنى $5 · يصل خلال أقل من دقيقة · يتطلب أيضاً القليل من ETH بمحفظتك لرسوم الشبكة.</p>
     <div class="deposit-addr-note">
       <span class="deposit-addr-lbl">⚠️ فقط شبكة Arbitrum One — أرسل USDC لهذا العنوان (اختر Arbitrum عند السحب من Binance أو أي منصة):</span>
       <div class="ag-addr-box">
@@ -240,7 +242,7 @@
     </div>
     <div class="withdraw-preview hidden" id="withdrawPreview">
       <div class="wp-row"><span>📤 المبلغ المُرسَل</span><span class="wp-val" id="wpSend">—</span></div>
-      <div class="wp-row"><span>💸 رسوم Hyperliquid</span><span class="wp-val red" id="wpFee">- $1.00</span></div>
+      <div class="wp-row"><span>💸 رسوم السحب</span><span class="wp-val red" id="wpFee">- $1.00</span></div>
       <div class="wp-row wp-net"><span>✅ يصلك صافي</span><span class="wp-val green" id="wpNet">—</span></div>
     </div>
     <div class="form-group">
@@ -263,7 +265,7 @@
       <h3 class="modal-title">إلغاء الاتصال</h3>
       <p class="logout-text">
         سيُحذف مفتاح الجلسة من هذا الجهاز، وستحتاج لتسجيل الدخول مجدداً.<br><br>
-        ✅ صفقاتك المفتوحة <strong>تبقى نشطة وآمنة</strong> على Hyperliquid ولا تتأثر إطلاقاً.<br>
+        ✅ صفقاتك المفتوحة <strong>تبقى نشطة وآمنة</strong> ولا تتأثر إطلاقاً.<br>
         ✅ محفظة التنفيذ (الوكيل) تبقى صالحة لنفس العنوان عند إعادة الاتصال — بلا حاجة لتوقيع جديد.<br>
         ⚠️ رمز PIN المحلي (إن كان مفعَّلاً) سيُحذف أيضاً — ستحتاج تعيين رمز جديد لاحقاً لو أردت القفل مجدداً.
       </p>
@@ -279,7 +281,7 @@
   <div class="lock-screen">
     <div class="lock-header">
       <div class="lock-icon">🔐</div>
-      <h3 class="lock-title">ماركت ليك</h3>
+      <h3 class="lock-title">سيولتي</h3>
       <p class="lock-subtitle">أدخل رمز PIN للمتابعة</p>
     </div>
     <div class="pin-dots" id="pinDots">
